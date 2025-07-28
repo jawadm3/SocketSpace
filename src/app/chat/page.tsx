@@ -1,26 +1,38 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import socket from '../lib/socket';
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState([
-    { text: 'Hi! 👋', sender: 'them' },
-    { text: 'Hey, who is this?', sender: 'me' },
-  ]);
+  const [messages, setMessages] = useState<{ text: string; sender: string }[]>([]);
   const [input, setInput] = useState('');
+
+  useEffect(() => {
+    socket.on('connect', () => {
+      console.log('Connected to socket server ✅');
+    });
+
+    socket.on('receive-message', (msg: string) => {
+      setMessages((prev) => [...prev, { text: msg, sender: 'them' }]);
+    });
+
+    return () => {
+      socket.off('receive-message');
+    };
+  }, []);
 
   const sendMessage = () => {
     if (input.trim() === '') return;
-    setMessages([...messages, { text: input, sender: 'me' }]);
+
+    socket.emit('send-message', input);
+    setMessages((prev) => [...prev, { text: input, sender: 'me' }]);
     setInput('');
   };
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-white">
-      {/* Header */}
       <div className="p-4 bg-gray-800 text-lg font-semibold shadow">SocketSpace Chat</div>
 
-      {/* Chat Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {messages.map((msg, i) => (
           <div
@@ -36,7 +48,6 @@ export default function ChatPage() {
         ))}
       </div>
 
-      {/* Input */}
       <div className="p-4 bg-gray-800 flex gap-2">
         <input
           type="text"
