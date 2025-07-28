@@ -174,9 +174,3 @@ Development:
 
 This project is open-source and available under the [MIT License](LICENSE).
 
----
-
-## 🙌 Acknowledgements
-
-Built with ❤ using Next.js, Tailwind, and Socket.IO
-
