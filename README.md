@@ -1,36 +1,138 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+---
 
-## Getting Started
+```markdown
+# ⚡ SocketSpace
 
-First, run the development server:
+**SocketSpace** is a real-time, anonymous one-to-one chat web application built using **Next.js**, **Tailwind CSS**, **TypeScript**, and **Socket.IO**. The goal is to create a clean, fast, and responsive chat interface with enforced **dark mode** and minimal UI distractions.
+
+---
+
+## 🚀 Features
+
+- 🔒 Anonymous 1-to-1 real-time chat
+- 🌙 Always-on dark mode UI
+- ⚡ Powered by WebSockets using Socket.IO
+- 🧩 Built with modern stack: Next.js 14, TypeScript, Tailwind CSS
+- 📦 Lightweight and modular frontend
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer     | Tech                             |
+|-----------|----------------------------------|
+| Frontend  | Next.js, React, TypeScript       |
+| Styling   | Tailwind CSS                     |
+| Backend   | Node.js, Express, Socket.IO      |
+| Realtime  | WebSocket (Socket.IO)            |
+
+---
+
+## 📁 Project Structure
+
+```
+
+/socketspace
+│
+├── /app               # Next.js 14 App Router
+│   ├── layout.tsx     # Global layout (with dark mode)
+│   ├── page.tsx       # Landing page
+│   └── /chat          # Main chat UI
+│       └── page.tsx
+│
+├── /lib
+│   └── socket.ts      # Socket.IO client
+│
+├── /public
+│   └── favicon.ico
+│
+├── /styles
+│   └── globals.css    # Tailwind and dark mode config
+│
+├── tailwind.config.js
+├── tsconfig.json
+├── next.config.js
+├── server.js          # Express + Socket.IO server
+└── README.md
+
+````
+
+---
+
+## 🧑‍💻 Getting Started
+
+### 1. Clone the Repo
+
+```bash
+git clone https://github.com/yourusername/socketspace.git
+cd socketspace
+````
+
+### 2. Install Dependencies
+
+```bash
+npm install
+```
+
+### 3. Run the Backend Server
+
+```bash
+node server.js
+# or
+npm run server
+```
+
+Make sure `express` and `socket.io` are installed:
+
+```bash
+npm install express socket.io
+```
+
+### 4. Run the Next.js Frontend
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Frontend runs at: `http://localhost:3000`
+Backend runs at: `http://localhost:8001` *(or the port defined in server.js)*
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🌑 Dark Mode
 
-## Learn More
+Dark mode is always **enabled by default**. Set using Tailwind's `darkMode: "class"` and applying `class="dark"` to `<html>`.
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🔧 To Do
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+* [ ] Add username or emoji-based identity
+* [ ] Introduce chat session expiration
+* [ ] Add "typing..." indicator
+* [ ] Add toast notifications
+* [ ] Deploy frontend + backend
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 📄 License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This project is open-source and available under the [MIT License](LICENSE).
+
+---
+
+## 🙌 Acknowledgements
+
+Built with ❤️ using Next.js, Tailwind, and Socket.IO
+
+```
+
+---
+
+Let me know if you'd like to:
+- Add screenshots or deployment links
+- Mention your name/contributors
+- Separate backend into a `/server` folder
+
+Want it in `.md` file format? I can generate and send it to you directly.
+```
