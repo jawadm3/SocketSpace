@@ -1,67 +1,108 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import socket from '@/lib/socket';
+import { useEffect, useState, useRef, KeyboardEvent } from 'react';
+import io, { Socket } from 'socket.io-client';
 
-type Message = {
-  text: string;
-  sender: string;
-};
+interface Message {
+  id: string;
+  message: string;
+  isMe: boolean;
+  timestamp: string;
+}
 
-export default function ChatPage() {
+let socket: Socket;
+
+export default function Chat() {
+  const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const sendMessage = () => {
-    if (input.trim() === '') return;
+  const getCurrentTimestamp = () => {
+    return new Date().toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
 
-    const newMessage: Message = {
-      text: input,
-      sender: 'You',
-    };
+  const handleSendMessage = () => {
+    if (message.trim() && socket?.id) {
+      const newMessage: Message = {
+        id: socket.id,
+        message,
+        isMe: true,
+        timestamp: getCurrentTimestamp(),
+      };
 
-    socket.emit('message', newMessage);
-    setMessages((prev) => [...prev, newMessage]);
-    setInput('');
+      setMessages((prevMessages) => [...prevMessages, newMessage]);
+      socket.emit('message', {
+        message,
+        timestamp: newMessage.timestamp, // send timestamp to backend
+      });
+      setMessage('');
+    }
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      handleSendMessage();
+    }
   };
 
   useEffect(() => {
-    socket.on('message', (data: Message) => {
-      setMessages((prev) => [...prev, { ...data, sender: 'Stranger' }]);
+    socket = io('http://localhost:8001'); // Make sure server is running on this port
+
+    socket.on('message', (data: { id: string; message: string; timestamp: string }) => {
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        {
+          id: data.id,
+          message: data.message,
+          isMe: false,
+          timestamp: data.timestamp,
+        },
+      ]);
     });
 
     return () => {
-      socket.off('message');
+      socket.disconnect();
     };
   }, []);
 
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
   return (
-    <div className="min-h-screen p-6 bg-gray-100">
-      <h1 className="text-2xl font-bold mb-4">💬 SocketSpace Chat</h1>
-      <div className="bg-white rounded shadow p-4 h-96 overflow-y-scroll mb-4">
-        {messages.map((msg, idx) => (
-          <div key={idx} className="mb-2">
-            <span className="font-semibold">{msg.sender}:</span> {msg.text}
+    <div className="container mx-auto p-4 h-[calc(100vh-8rem)] flex flex-col">
+      <div className="flex-grow overflow-y-auto p-4 bg-base-200 bg-opacity-50 rounded-lg shadow-inner space-y-4">
+        {messages.map((msg, index) => (
+          <div key={index} className={`chat ${msg.isMe ? 'chat-end' : 'chat-start'}`}>
+            <div className="chat-header text-sm text-base-content/70 mb-1 flex gap-2 items-center">
+              <span>{msg.isMe ? 'You' : 'Stranger'}</span>
+              <span className="text-xs opacity-60">{msg.timestamp}</span>
+            </div>
+            <div
+              className={`chat-bubble ${
+                msg.isMe ? 'chat-bubble-primary' : 'chat-bubble-neutral'
+              }`}
+            >
+              {msg.message}
+            </div>
           </div>
         ))}
+        <div ref={messagesEndRef} />
       </div>
-      <div className="flex gap-2">
+
+      <div className="mt-4 flex items-center gap-4">
         <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              sendMessage();
-            }
-          }}
-          className="flex-grow px-4 py-2 rounded border resize-none h-12"
-          placeholder="Type a message..."
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Type your message..."
+          className="textarea textarea-bordered w-full"
         />
-        <button
-          onClick={sendMessage}
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-        >
+        <button onClick={handleSendMessage} className="btn btn-primary">
           Send
         </button>
       </div>
