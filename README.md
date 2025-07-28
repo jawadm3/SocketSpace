@@ -143,9 +143,20 @@ Development:
 
 ## 📸 Screenshots
 
-### Home Page
+<h3 align="center">Home Page</h3>
+<p align="center">
+  <img src="screenshots/HomePage.png" alt="Home Page" />
+</p>
 
-### Chatting Page
+<h3 align="center">Chatting Page (My POV)</h3>
+<p align="center">
+  <img src="screenshots/my_pov.png" alt="Chat Page" />
+</p>
+
+<h3 align="center">Chatting Page (Strangers POV)</h3>
+<p align="center">
+  <img src="screenshots/strangers_pov.png" alt="Chat Page" />
+</p>
 
 ---
 
