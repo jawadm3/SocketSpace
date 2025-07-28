@@ -1,10 +1,10 @@
-# ⚡ SocketSpace
+# SocketSpace 🚀
 
 **SocketSpace** is a real-time anonymous 1-on-1 chat web app built with **Next.js 15**, **TypeScript**, **Socket.IO**, and **Express.js**. It allows users to chat instantly in a sleek and minimal UI powered by **Tailwind CSS** and **DaisyUI**. The project is structured for scalability and uses the latest versions of React and Next.js.
 
 ---
 
-## 🚀 Features
+## ⚡ Features
 
 - 🔒 Anonymous 1-to-1 real-time chat
 - 🌙 Always-on dark mode UI
