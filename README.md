@@ -1,9 +1,6 @@
----
-
-```markdown
 # ⚡ SocketSpace
 
-**SocketSpace** is a real-time, anonymous one-to-one chat web application built using **Next.js**, **Tailwind CSS**, **TypeScript**, and **Socket.IO**. The goal is to create a clean, fast, and responsive chat interface with enforced **dark mode** and minimal UI distractions.
+**SocketSpace** is a real-time anonymous 1-on-1 chat web app built with **Next.js 15**, **TypeScript**, **Socket.IO**, and **Express.js**. It allows users to chat instantly in a sleek and minimal UI powered by **Tailwind CSS** and **DaisyUI**. The project is structured for scalability and uses the latest versions of React and Next.js.
 
 ---
 
@@ -22,7 +19,7 @@
 | Layer     | Tech                             |
 |-----------|----------------------------------|
 | Frontend  | Next.js, React, TypeScript       |
-| Styling   | Tailwind CSS                     |
+| Styling   | Tailwind CSS , DaisyUI           |
 | Backend   | Node.js, Express, Socket.IO      |
 | Realtime  | WebSocket (Socket.IO)            |
 
@@ -34,20 +31,16 @@
 
 /socketspace
 │
-├── /app               # Next.js 14 App Router
-│   ├── layout.tsx     # Global layout (with dark mode)
-│   ├── page.tsx       # Landing page
-│   └── /chat          # Main chat UI
-│       └── page.tsx
-│
-├── /lib
-│   └── socket.ts      # Socket.IO client
-│
-├── /public
-│   └── favicon.ico
-│
-├── /styles
-│   └── globals.css    # Tailwind and dark mode config
+└── src/
+│   ├── app/
+│     ├── chat/
+│        └── page.tsx # chat page
+│   ├── favicon.ico # Custom app icon
+│   ├── globals.css # Tailwind & base styling
+│   ├── layout.tsx # Layout of page
+│   └── page.tsx # Entry page
+│   └── lib/ # Utility and config files
+│       └── socket.ts # connectivity
 │
 ├── tailwind.config.js
 ├── tsconfig.json
@@ -59,22 +52,41 @@
 
 ---
 
-## 🧑‍💻 Getting Started
 
-### 1. Clone the Repo
+## 🚀 Getting Started
+
+### 1. Clone the repository
 
 ```bash
-git clone https://github.com/yourusername/socketspace.git
+git clone https://github.com/jawadm3/socketspace-react.git
 cd socketspace
-````
-
-### 2. Install Dependencies
-
+```
+### 2. Install dependencies
+   
 ```bash
 npm install
 ```
 
-### 3. Run the Backend Server
+   Make sure to use compatible versions:
+
+        next@15.4.4
+
+        react@19.1.0
+
+        react-dom@19.1.0
+
+        express@5.1.0
+
+        socket.io@4.8.1
+
+        socket.io-client@4.8.1
+
+### 3. Start the development server
+Frontend (Next.js):
+```bash
+npm run dev
+```
+### 4. Run the Backend Server
 
 ```bash
 node server.js
@@ -87,21 +99,53 @@ Make sure `express` and `socket.io` are installed:
 ```bash
 npm install express socket.io
 ```
-
-### 4. Run the Next.js Frontend
-
-```bash
-npm run dev
-```
-
 Frontend runs at: `http://localhost:3000`
 Backend runs at: `http://localhost:8001` *(or the port defined in server.js)*
 
 ---
 
-## 🌑 Dark Mode
+## 🌐 Dependencies
 
-Dark mode is always **enabled by default**. Set using Tailwind's `darkMode: "class"` and applying `class="dark"` to `<html>`.
+Runtime:
+
+    next@15.4.4
+
+    react@19.1.0
+
+    react-dom@19.1.0
+
+    express@5.1.0
+
+    socket.io@^4.8.1
+
+    socket.io-client@^4.8.1
+
+    cors@^2.8.5
+
+Development:
+
+    typescript@^5
+
+    eslint@^9
+
+    tailwindcss@^3.4.17
+
+    daisyui@^4.12.24
+
+    postcss@^8.5.6
+
+    autoprefixer@^10.4.21
+
+    @types/node, @types/react, @types/react-dom, @types/express, @types/cors
+    
+
+---
+
+## 📸 Screenshots
+
+### Home Page
+
+### Chatting Page
 
 ---
 
@@ -123,16 +167,5 @@ This project is open-source and available under the [MIT License](LICENSE).
 
 ## 🙌 Acknowledgements
 
-Built with ❤️ using Next.js, Tailwind, and Socket.IO
+Built with ❤ using Next.js, Tailwind, and Socket.IO
 
-```
-
----
-
-Let me know if you'd like to:
-- Add screenshots or deployment links
-- Mention your name/contributors
-- Separate backend into a `/server` folder
-
-Want it in `.md` file format? I can generate and send it to you directly.
-```
