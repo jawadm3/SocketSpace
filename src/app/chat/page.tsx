@@ -46,10 +46,16 @@ export default function ChatPage() {
         ))}
       </div>
       <div className="flex gap-2">
-        <input
+        <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          className="flex-grow px-4 py-2 rounded border"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              sendMessage();
+            }
+          }}
+          className="flex-grow px-4 py-2 rounded border resize-none h-12"
           placeholder="Type a message..."
         />
         <button
