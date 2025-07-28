@@ -58,7 +58,7 @@
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/jawadm3/SocketSpace-react.git
+git clone https://github.com/jawadm3/SocketSpace.git
 cd socketspace
 ```
 ### 2. Install dependencies
