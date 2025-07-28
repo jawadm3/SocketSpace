@@ -1,65 +1,60 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import socket from '../lib/socket';
+import { useEffect, useState } from 'react';
+import socket from '@/lib/socket';
+
+type Message = {
+  text: string;
+  sender: string;
+};
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<{ text: string; sender: string }[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-
-  useEffect(() => {
-    socket.on('connect', () => {
-      console.log('Connected to socket server ✅');
-    });
-
-    socket.on('receive-message', (msg: string) => {
-      setMessages((prev) => [...prev, { text: msg, sender: 'them' }]);
-    });
-
-    return () => {
-      socket.off('receive-message');
-    };
-  }, []);
 
   const sendMessage = () => {
     if (input.trim() === '') return;
 
-    socket.emit('send-message', input);
-    setMessages((prev) => [...prev, { text: input, sender: 'me' }]);
+    const newMessage: Message = {
+      text: input,
+      sender: 'You',
+    };
+
+    socket.emit('message', newMessage);
+    setMessages((prev) => [...prev, newMessage]);
     setInput('');
   };
 
-  return (
-    <div className="flex flex-col h-screen bg-gray-900 text-white">
-      <div className="p-4 bg-gray-800 text-lg font-semibold shadow">SocketSpace Chat</div>
+  useEffect(() => {
+    socket.on('message', (data: Message) => {
+      setMessages((prev) => [...prev, { ...data, sender: 'Stranger' }]);
+    });
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`max-w-xs px-4 py-2 rounded-lg ${
-              msg.sender === 'me'
-                ? 'bg-blue-600 self-end ml-auto'
-                : 'bg-gray-700 self-start mr-auto'
-            }`}
-          >
-            {msg.text}
+    return () => {
+      socket.off('message');
+    };
+  }, []);
+
+  return (
+    <div className="min-h-screen p-6 bg-gray-100">
+      <h1 className="text-2xl font-bold mb-4">💬 SocketSpace Chat</h1>
+      <div className="bg-white rounded shadow p-4 h-96 overflow-y-scroll mb-4">
+        {messages.map((msg, idx) => (
+          <div key={idx} className="mb-2">
+            <span className="font-semibold">{msg.sender}:</span> {msg.text}
           </div>
         ))}
       </div>
-
-      <div className="p-4 bg-gray-800 flex gap-2">
+      <div className="flex gap-2">
         <input
-          type="text"
-          className="flex-1 px-4 py-2 rounded-lg bg-gray-700 text-white outline-none"
-          placeholder="Type your message..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+          className="flex-grow px-4 py-2 rounded border"
+          placeholder="Type a message..."
         />
         <button
           onClick={sendMessage}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg"
+          className="bg-blue-500 text-white px-4 py-2 rounded"
         >
           Send
         </button>

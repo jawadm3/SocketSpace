@@ -1,20 +1,20 @@
 'use client';
-import { useRouter } from 'next/navigation';
+
+import Link from 'next/link';
 
 export default function Home() {
-  const router = useRouter();
-
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center bg-gray-950 text-white">
-      <h1 className="text-4xl font-bold mb-6">Welcome to SocketSpace 💬</h1>
-      <p className="text-gray-400 mb-4">An anonymous one-on-one chat room</p>
-      <button
-        onClick={() => router.push('/chat')}
-        className="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition"
+    <main className="flex min-h-screen flex-col items-center justify-center bg-gray-100 p-6">
+      <h1 className="text-3xl font-bold mb-4">👋 Welcome to SocketSpace</h1>
+      <p className="mb-6 text-center text-gray-700">
+        Real-time anonymous one-to-one chat app built with Next.js & Socket.IO
+      </p>
+      <Link
+        href="/chat"
+        className="bg-blue-600 text-white px-6 py-3 rounded hover:bg-blue-700 transition"
       >
-        Start Chatting
-      </button>
+        Enter Chat
+      </Link>
     </main>
   );
 }
-
