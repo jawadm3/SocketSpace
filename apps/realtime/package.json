@@ -1,0 +1,7 @@
+{
+  "name": "@socketspace/realtime",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The long-running real-time server. Scaffolded in Stage C.",
+  "type": "module"
+}

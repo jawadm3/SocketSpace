@@ -1,0 +1,7 @@
+{
+  "name": "@socketspace/ui",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Design system: tokens and accessible components shared by the web app. Scaffolded in Stage C/F.",
+  "type": "module"
+}

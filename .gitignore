@@ -1,0 +1,39 @@
+# SocketSpace v2 root .gitignore
+# (v1 keeps its own rules in v1/.gitignore)
+
+# Dependencies and package-manager store (store is kept inside the project, on D:)
+node_modules/
+.pnpm-store/
+
+# Build output and tool caches
+.next/
+out/
+dist/
+build/
+.turbo/
+.cache/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# Tests
+coverage/
+playwright-report/
+test-results/
+blob-report/
+
+# Secrets: never commit real environment files. Only .env.example is allowed.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs
+*.log
+logs/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/

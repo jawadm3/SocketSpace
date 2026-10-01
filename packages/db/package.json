@@ -1,0 +1,7 @@
+{
+  "name": "@socketspace/db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Database schema, migrations and typed queries. Scaffolded in Stage C.",
+  "type": "module"
+}

@@ -1,0 +1,15 @@
+# SocketSpace v2 workspace.
+# v1/ is deliberately NOT listed: it is the archived original and is excluded from all v2 tooling.
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# Keep pnpm's package store and caches inside the project folder on the D: drive.
+# See docs/technical/storage.md for why, and for the few things that cannot be moved.
+storeDir: ./.pnpm-store
+cacheDir: ./.cache/pnpm
+
+# Supply-chain guard: only install package versions that have been public for at least 3 days
+# (4320 minutes). Most malicious releases are detected and removed within hours.
+# Do not add exemptions casually; record any exemption in docs/development/decisions.md.
+minimumReleaseAge: 4320
