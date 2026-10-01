@@ -34,6 +34,8 @@ was not really "1-to-1".
 flat shapes and is small and simple; WebGL uses the graphics card for 3D and is more powerful but
 heavier. _Example:_ a sketchpad versus a full animation studio.
 
+**CC0 licence**: A "no rights reserved" licence: anyone may use the work for anything, without asking or giving credit. _Example:_ a recipe pinned up in a public kitchen for anyone to cook. Our avatar styles are all CC0.
+
 **CI (Continuous Integration)**: A robot that checks every change automatically (tests, lint,
 builds) as soon as it is pushed. _Example:_ a spell-checker that reads every page as you finish it.
 SocketSpace uses GitHub Actions.
@@ -59,9 +61,17 @@ your hand to sign. Prevented with cookie settings and origin checks.
 **CU-hour (Neon)**: Neon's unit of database computing time: one "compute unit" running for one
 hour. _Example:_ kilowatt-hours on an electricity bill. The free plan includes 100 per month.
 
+**DiceBear**: A free, open-source (MIT) library that draws avatars from a few settings. _Example:_ a character creator in a video game. SocketSpace runs it inside the app, so no outside service is involved.
+
+**DNS records**: Settings attached to a domain that tell the internet where its website and email live and who may send email for it. _Example:_ the directory board in an office lobby.
+
 **Docker / Dockerfile**: Docker packages a program with everything it needs into a "container"
 that runs the same anywhere; a Dockerfile is the recipe. _Example:_ a shipping container that fits
 on any ship, train or lorry.
+
+**Domain**: A web address such as `socketspace.is-a.dev`. _Example:_ a street address for a website. Email services need one to prove that mail really comes from us.
+
+**Email delivery service (Resend)**: A service that sends emails on an app's behalf, such as "confirm your email" and "reset your password". _Example:_ a post office the app hands its letters to. SocketSpace uses Resend's free plan.
 
 **EXIF**: Hidden information stored inside photos, such as the camera model and sometimes the GPS
 location where it was taken. _Example:_ a postmark on a letter revealing where it was posted. We
@@ -89,11 +99,13 @@ _Example:_ opening more checkout tills instead of hiring one faster cashier.
 lift button again does not call a second lift. Re-sending a message with the same client ID never
 creates a duplicate.
 
-**JWT / signed token**: A small piece of text containing facts (such as "this is user 42, valid for
-5 minutes") plus a signature proving who issued it. _Example:_ a dated, stamped visitor pass.
+**is-a.dev**: A free service that gives developers a subdomain such as `name.is-a.dev`, requested through a GitHub pull request.
 
 **JWKS**: A published list of the public keys used to check JWT signatures. _Example:_ a public
 register of official stamps so anyone can check a pass is genuine.
+
+**JWT / signed token**: A small piece of text containing facts (such as "this is user 42, valid for
+5 minutes") plus a signature proving who issued it. _Example:_ a dated, stamped visitor pass.
 
 **LCP / TBT / Lighthouse**: Page-speed measures. LCP (Largest Contentful Paint) is how long until
 the main content appears; TBT (Total Blocking Time) is how long the page is too busy to respond;
@@ -113,10 +125,14 @@ _Example:_ checking what is actually inside a box rather than trusting the label
 **Migration (database)**: A small, versioned script that changes the database structure (for
 example, adds a table). _Example:_ numbered renovation plans applied to a house in order.
 
-**MoSCoW**: A way to prioritise: Must have, Should have, Could have, Won't have (this time).
-
 **Monorepo**: One repository holding several related projects. _Example:_ one toolbox with labelled
 trays instead of three separate toolboxes.
+
+**MoSCoW**: A way to prioritise: Must have, Should have, Could have, Won't have (this time).
+
+**OAuth / social sign-in**: Signing in with an account you already have elsewhere (Google, Facebook, GitHub...). The other site confirms who you are; we never see your password there. _Example:_ showing a passport issued by another country instead of filling in a new identity form.
+
+**Onboarding**: The short set-up steps right after sign-up (nickname, profile picture, theme). _Example:_ filling in your name badge at the door of an event.
 
 **Online Safety Act 2023 (UK)**: A UK law placing safety duties on services where users can talk to
 each other, including assessing risks to children and illegal content.
@@ -136,6 +152,8 @@ ready-made bricks instead of firing your own clay.
 
 **Package manager (pnpm)**: The tool that downloads and installs packages. _Example:_ a delivery
 service that fetches the bricks you list.
+
+**Passkey**: A way to sign in with your fingerprint, face or device PIN instead of a password. The secret never leaves your device, so it cannot be phished. _Example:_ a house key that only works in your hand.
 
 **PGlite**: A real PostgreSQL database compiled to run inside a program, with nothing to install.
 _Example:_ a pocket-sized practice version of the real thing. Used for tests.
@@ -185,6 +203,8 @@ disclosure, Denial of service, Elevation of privilege.
 **Supply-chain attack**: Sneaking harmful code into a package many projects install. _Example:_
 tampering with flour at the mill so every bakery's bread is affected. We wait 3 days before
 installing any newly published package version.
+
+**Theme / design tokens**: A theme is a complete look (colours, fonts, corner rounding, shadows); design tokens are the named values that make it up. Switching theme swaps the token values. _Example:_ repainting a room by changing only the paint labels, not the furniture.
 
 **Tombstone**: A placeholder kept where something was deleted, so the surrounding order still makes
 sense. _Example:_ "This message was deleted" in a chat.

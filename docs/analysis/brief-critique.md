@@ -86,12 +86,18 @@ planned; "Could" items are done if time allows and are otherwise listed as futur
 | **Could**      | Google sign-in; browser notifications; room-level word lists; Sentry; admin stats charts                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **Won't (v2)** | Voice and video; side-panel threads; end-to-end encryption; native mobile apps; preview images                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
-## 6. Summary of decisions needed from the owner
+**Owner additions (2026-10-01), added to the priorities:** _Must:_ three selectable themes
+(Airmail default), unique nicknames with optional private real names, a required profile picture
+(presets and a customiser), Google, Facebook and GitHub sign-in. _Should:_ avatar photo upload,
+Discord, Microsoft and LinkedIn sign-in, passkeys. Google sign-in moves from "Could" to "Must".
 
-1. Approve the stack in `docs/architecture/stack.md` (including the three changes from the brief's
-   defaults: no Redis on the free tier, Vercel Blob instead of R2, Canvas-first hero).
-2. Choose a visual direction: A Signal, B Airmail, C Aurora, or a mix
-   (`docs/design/visual-directions.md`).
-3. Email domain: free is-a.dev subdomain (recommended), own domain, or Gmail SMTP fallback.
-4. Guests in random mode: yes (recommended) or sign-in required.
-5. Approve the priorities above and the retention periods in `data-model.md`.
+## 6. Owner decisions (answered 2026-10-01)
+
+1. **Stack:** approved, including the changes from the brief's defaults (D-009 to D-020).
+2. **Visual direction:** all three become user-selectable themes; Airmail is the default (D-021).
+3. **Email:** free is-a.dev subdomain with Resend (D-014).
+4. **Guests in random mode:** allowed with stricter limits (D-025).
+5. **Priorities and retention periods:** not answered separately; work proceeds with the values in
+   section 5 and `data-model.md`, and the owner can change them at any time.
+6. **Added by the owner:** social sign-in options (D-022), required profile pictures (D-023),
+   nicknames (D-024).

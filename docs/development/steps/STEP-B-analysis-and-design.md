@@ -94,3 +94,25 @@ Stop and wait for the owner's approval of the plan and their decisions on: the s
 the changes from the brief's defaults), the visual direction (A, B, C or a mix), the email domain,
 guest access to random mode, and the priorities and retention periods. After approval: Stage C
 (foundations), starting with gitleaks, the database schema and the shared contracts.
+
+## Addendum: owner review (2026-10-01)
+
+The owner approved the stack and made these decisions and additions, now reflected in every
+document (decisions D-014 and D-021 to D-025; `docs/BRIEF_CHANGES.md`):
+
+- All three visual directions become user-selectable themes; **Airmail is the default**.
+- Social sign-in with Google, Facebook and GitHub first and more providers under a toggle. Apple
+  excluded because its developer programme costs US$99 per year (checked on developer.apple.com).
+  Facebook's email and public-profile permissions need no App Review (checked on
+  developers.facebook.com), but Better Auth's documentation warns that Facebook and Microsoft emails
+  are not trustworthy for automatic account linking, so those providers never auto-link.
+- Every account must pick a profile picture during onboarding (presets, builder, or photo). DiceBear
+  licences were checked on dicebear.com: the library is MIT and 42 styles are CC0; only CC0 styles
+  will be used.
+- Nicknames in chats; optional real name, private by default.
+- Email via Resend with a free is-a.dev subdomain; guests allowed in random mode.
+- The `gh` CLI, logged out at the start of the session, was logged in by the owner; the v1.0.0
+  GitHub Release was then published: https://github.com/jawadm3/SocketSpace/releases/tag/v1.0.0
+- Effort guidance was corrected against Anthropic's Claude Code documentation (see `PROGRESS.md`).
+
+Resulting counts: 177 requirements in the matrix, 13 acceptance journeys, 25 recorded decisions.

@@ -52,6 +52,13 @@ Payload limits are enforced twice: Socket.IO rejects any packet over **16 KB**
 (`maxHttpBufferSize`), and each schema has its own limits (for example 4,000 characters per
 message, 10 attachments, 20 interest tags).
 
+**People in payloads.** Every user object sent to a browser (message authors, members, presence,
+profiles) has the shape `{ id, nickname, avatar, realName? }`. `avatar` is either a preset/custom
+avatar config or a photo URL. `realName` is included **only** when the receiving viewer may see it
+(the person's visibility setting: nobody, contacts or everyone) and the person chose to show it in
+chats. Because one broadcast goes to many viewers, broadcasts carry nicknames only, and the client
+fetches real names it is allowed to see once per person over HTTP (cached). See `security.md` 3.12.
+
 ## Events: community mode
 
 ### Client → server (all acknowledged)

@@ -62,67 +62,106 @@ Status values: **Accepted** (in force), **Proposed** (waiting for owner approval
 
 ---
 
-## Stage B decisions (Proposed: waiting for owner approval)
+## Stage B decisions (accepted by the owner on 2026-10-01)
 
 Full reasoning and numbers: `docs/architecture/stack.md` and `docs/research/free-tier-research.md`.
 
 ## D-009: Real-time server is Node.js + Socket.IO in Docker on Render Free
 
-- **Stage:** B. **Status:** Proposed.
+- **Stage:** B. **Status:** Accepted (owner approved the stack, 2026-10-01).
 - **Alternatives:** Cloudflare Durable Objects (no cold start, but one busy object uses 83% of the daily free duration, hard daily cut-offs, own protocol, lock-in); Koyeb/Northflank/Fly.io (card required); Railway ($1 monthly credit, too fragile); managed real-time services.
 - **Why:** portable Docker image, mature acknowledgements/rooms/reconnection, matches the brief's Docker and CI requirements. Cold starts handled with a 5-minute pinger and a clear "waking up" screen.
 
 ## D-010: No Redis on the free deployment; Redis adapter behind `REDIS_URL`
 
-- **Stage:** B. **Status:** Proposed.
+- **Stage:** B. **Status:** Accepted (owner approved the stack, 2026-10-01).
 - **Why:** Upstash Free allows about 16,100 commands/day (presence for six users would use it all); Postgres LISTEN/NOTIFY would keep Neon awake (186% of free compute). One instance makes in-memory correct. Multi-instance fan-out is tested in CI with two instances and a Redis service.
 
 ## D-011: PostgreSQL on Neon with Drizzle ORM; PGlite for tests; portable Postgres for local runs
 
-- **Stage:** B. **Status:** Proposed.
+- **Stage:** B. **Status:** Accepted (owner approved the stack, 2026-10-01).
 - **Why:** Neon's free plan is permanent with no card; Drizzle is stable (0.45), thin, works everywhere we need, and Better Auth supports it. Rules to protect Neon's 100 CU-hours: no permanent connections, idle pools close within 60 s, keep-alive never touches the database.
 
 ## D-012: Better Auth, with 5-minute signed tokens for the realtime server
 
-- **Stage:** B. **Status:** Proposed.
+- **Stage:** B. **Status:** Accepted (owner approved the stack, 2026-10-01).
 - **Why:** self-hosted, maintained (and now also the home of Auth.js), Drizzle support, verification, reset, social sign-in, rate limiting, anonymous sessions and a JWT plugin. The web app and realtime server are on different domains, so the browser carries a short-lived signed token instead of a cookie.
 
 ## D-013: Vercel Blob for images (R2 and local drivers available)
 
-- **Stage:** B. **Status:** Proposed.
+- **Stage:** B. **Status:** Accepted (owner approved the stack, 2026-10-01).
 - **Why:** Cloudflare R2 requires a payment card even for its free tier. Vercel Blob is free on Hobby (1 GB, 2,000 uploads/month) in the same account as the web app. A driver interface keeps R2 one config change away.
 
 ## D-014: Resend for email, with a verified domain chosen by the owner
 
-- **Stage:** B. **Status:** Proposed (owner decision needed).
+- **Stage:** B. **Status:** Accepted (owner, 2026-10-01): free is-a.dev subdomain + Resend.
 - **Why:** Resend's free plan is generous (3,000/month, 100/day) but only sends to other people from a verified domain. Recommended: a free is-a.dev subdomain. Fallback: SMTP through a dedicated Gmail account. Development uses a local mail catcher.
 
 ## D-015: Canvas 2D first for the home-page hero
 
-- **Stage:** B. **Status:** Proposed.
+- **Stage:** B. **Status:** Accepted (owner approved the stack, 2026-10-01).
 - **Why:** the brief's example effect is 2D; Canvas costs a few kilobytes versus roughly 150 to 250 KB for Three.js + React Three Fiber. Working Canvas prototypes exist for all three visual directions. 3D only if a measured prototype proves it necessary.
 
 ## D-016: Messages are written only by the realtime server, with per-conversation sequence numbers
 
-- **Stage:** B. **Status:** Proposed.
+- **Stage:** B. **Status:** Accepted (owner approved the stack, 2026-10-01).
 - **Why:** one writer gives one order. The sequence number is assigned inside the same transaction that checks membership, so permission checks and writes cannot race. Client-generated IDs make re-sends harmless.
 
 ## D-017: Random-mode text is never stored
 
-- **Stage:** B. **Status:** Proposed.
+- **Stage:** B. **Status:** Accepted (owner approved the stack, 2026-10-01).
 - **Why:** the brief asks for ephemeral conversations. The server keeps the last 20 messages of a live session in memory only, so a report within 5 minutes of the end can include server-captured (not reporter-supplied) evidence. Metadata is kept 30 days.
 
 ## D-018: Inline replies instead of threads; text-only link previews
 
-- **Stage:** B. **Status:** Proposed.
+- **Stage:** B. **Status:** Accepted (owner approved the stack, 2026-10-01).
 - **Why:** both satisfy the brief ("replies or threads"; "link previews, server-side and safe") at lower cost and risk. Threads and preview images are listed as future improvements.
 
 ## D-019: Load testing with a Node harness using the real Socket.IO client
 
-- **Stage:** B. **Status:** Proposed.
+- **Stage:** B. **Status:** Accepted (owner approved the stack, 2026-10-01).
 - **Why:** k6 would need hand-written Socket.IO framing; the real client measures what users experience. Artillery is the fallback.
 
 ## D-020: Visual regression tests run only in CI
 
-- **Stage:** B. **Status:** Proposed.
+- **Stage:** B. **Status:** Accepted (owner approved the stack, 2026-10-01).
 - **Why:** fonts render differently on Windows and Linux, so local screenshots would never match CI baselines. Baselines are generated by a CI job and committed.
+
+---
+
+## Owner additions after the Stage B review (2026-10-01)
+
+The owner approved the stack and added the product changes below. They are also logged in `docs/BRIEF_CHANGES.md`.
+
+## D-021: Three user-selectable themes; Airmail is the default
+
+- **Stage:** B (owner). **Status:** Accepted.
+- **Decision:** instead of choosing one visual direction, all three (Signal, Airmail, Aurora) become themes people can pick, each with a light and a dark mode, plus "match my device". **Airmail (light) is the default** for first-time visitors and for the home page.
+- **How:** one set of design tokens per theme, switched with a `data-theme` attribute and a `data-mode` attribute on the page. The choice is saved per account (and in a cookie, so the server renders the right theme with no flash). The home page hero follows the active theme; only the active theme's Canvas hero is loaded.
+- **Cost:** three themes × two modes = six palettes to design, check for contrast and screenshot. Aurora gets a simplified, blur-free version on low-power and mobile devices.
+
+## D-022: Social sign-in with the best options first
+
+- **Stage:** B (owner). **Status:** Accepted.
+- **Decision:** top of the sign-in screen: "Continue with Google" (large), then Facebook and GitHub side by side. Under "More ways to sign in": Discord, Microsoft, LinkedIn and passkeys (fingerprint or face, no password). Email and password below. A "Last used" badge marks the method the person used before on that device.
+- **Not included:** Apple (needs a paid Apple Developer Program membership, US$99 per year, which breaks the free-only rule); X/Twitter (frequently changing developer rules; can be added later).
+- **Safety:** an account is only linked to an existing one automatically when the provider's email is trustworthy. Better Auth's documentation lists Google, Apple, Discord, GitHub and LinkedIn as trustworthy and warns that Facebook and Microsoft are not, so those two never auto-merge by email; the person signs in the original way and links them from settings.
+- **Real names from providers** (for example from Google or Facebook) are stored as the optional real name, hidden by default (see D-024).
+
+## D-023: Every account picks a profile picture during onboarding
+
+- **Stage:** B (owner). **Status:** Accepted.
+- **Decision:** no grey default avatar. Onboarding cannot finish until the person picks (1) one of the preset illustrated avatars, (2) a custom avatar built in an avatar builder (face, hair, accessories, colours), or (3) an uploaded photo.
+- **How:** presets and the builder use DiceBear (MIT-licensed library) with **CC0** styles only (no attribution needed, commercial use allowed), rendered inside our own app, so no third-party request reveals who is viewing. Presets and custom avatars are stored as a small settings object (style, seed, options), not as image files, so they cost no storage. Photos go through the image pipeline (type check, re-encode, metadata removed) and can be reported like any content.
+- **Random mode:** avatars and names stay hidden ("Stranger") until both people agree to share profiles.
+
+## D-024: Nicknames in chats; real name optional and private by default
+
+- **Stage:** B (owner). **Status:** Accepted.
+- **Decision:** everyone picks a **unique nickname** (used in chats and for @mentions; suggestions offered). A **real name is optional**. Each person chooses who can see their real name (nobody, contacts, everyone; default nobody) and what chats show (nickname, real name, or both; default nickname). The real name is only ever shown to people allowed to see it.
+- **Replaces:** the earlier separate "display name" and "username" fields in `data-model.md`.
+
+## D-025: Guests may use random mode
+
+- **Stage:** B (owner). **Status:** Accepted.
+- **Decision:** people without an account can use random mode through an anonymous guest session, with stricter limits (half the message rate), no contact exchange or profile sharing, and bans applied to the guest session and a hashed IP address. Guests are invited to create an account to keep a good contact.

@@ -17,8 +17,8 @@ Format: **Given** (starting situation), **When** (action), **Then** (observable 
 - Given a valid sign-up, when the account is created, then a verification email is captured (by the
   local mail catcher in tests), the app opens read-only with a "verify your email" banner, and
   attempts to post are refused with a clear message.
-- When the verification link is opened, then posting works; opening the same link again shows
-  "already verified".
+- When the verification link is opened, then the user continues to onboarding (J11) and can post
+  once it is complete; opening the same link again shows "already verified".
 
 ### J2. Two people chat in a room (ROOM-01/02, MSG-01, RT-03/04/05)
 
@@ -35,7 +35,7 @@ Format: **Given** (starting situation), **When** (action), **Then** (observable 
   report about it can see the previous version.
 - When Sam reacts with 👍 twice, then the reaction toggles on and off for both users.
 - When Sam replies to Ava's message, then the reply shows a quote that jumps to the original.
-- When Sam writes `@ava`, then Ava gets an in-app notification; a non-member with that username
+- When Sam writes `@ava`, then Ava gets an in-app notification; a non-member with that nickname
   gets nothing.
 - When Ava deletes her message, then both see "Message deleted" in its place and ordering is
   unchanged.
@@ -114,6 +114,39 @@ Format: **Given** (starting situation), **When** (action), **Then** (observable 
   everywhere, cannot sign in again, their profile disappears, and their messages show "Deleted user"
   (or are cleared, if they chose that).
 
+### J11. Onboarding: nickname, real name, profile picture (PROF-03 to PROF-08)
+
+- Given a newly signed-up user, when they try to open any app page, then they are taken to
+  onboarding until they have chosen a nickname and a profile picture; there is no "skip".
+- When they pick a nickname that is taken (in any letter case), then they see free suggestions.
+- When they choose a preset avatar, or build one with the customiser, then the same avatar appears
+  for other people on other devices, and rendering it makes no request to any third-party site.
+- When they upload a photo with GPS data, then the stored avatar is re-encoded and has no metadata.
+- Given a user who signed in with Google, then their Google name is stored as the optional real name
+  with visibility "nobody", and chats show only their nickname.
+- When Ava sets her real name visible to "contacts" and display to "both", then a contact sees
+  "Ava · Ava Chen" and a non-contact sees only "Ava", including in data sent over the socket.
+
+### J12. Themes (THEME-01 to THEME-04)
+
+- Given a first-time visitor, when they open the home page, then it shows the Airmail theme in the
+  device's light or dark mode, with the Airmail hero animation.
+- When they switch to Signal dark in the header, then the page and hero change without a reload, and
+  only the Signal hero script is downloaded.
+- Given a signed-in user who chose Aurora light, when they reload or sign in on another device, then
+  the first rendered frame already uses Aurora light (no flash of another theme).
+- With reduced motion turned on, every theme shows a still hero.
+
+### J13. Social sign-in (AUTH-04, AUTH-05, AUTH-10 to AUTH-13)
+
+- Given the sign-in page, then Google is the first and largest option, Facebook and GitHub follow,
+  and Discord, Microsoft, LinkedIn and passkeys appear only after "More ways to sign in" is opened.
+- When a person who previously signed in with GitHub returns, then GitHub shows a "Last used" badge.
+- Given an existing email-and-password account for `ava@example.com`, when someone signs in with a
+  Facebook account reporting the same email, then they do **not** get into Ava's account; Ava can
+  link Facebook from her settings after signing in the original way.
+- Given a provider that is not configured on the server, then its button is not shown.
+
 ## 2. Quality gates (measurable)
 
 | Area              | Gate                                                                                                               | How measured                           |
@@ -121,7 +154,7 @@ Format: **Given** (starting situation), **When** (action), **Then** (observable 
 | CI                | All jobs green on `main` at every stage end                                                                        | GitHub Actions status                  |
 | Unit/integration  | 0 failing tests; no skipped tests without a linked reason                                                          | Vitest report                          |
 | Coverage          | About 80% lines for `packages/shared`, `packages/db`, realtime handlers                                            | Vitest V8 coverage per package         |
-| E2E               | Journeys J1 to J10 automated and green in CI                                                                       | Playwright report                      |
+| E2E               | Journeys J1 to J13 automated and green in CI                                                                       | Playwright report                      |
 | Security          | 0 high/critical `pnpm audit` findings; CodeQL no open high alerts; gitleaks clean on full history                  | CI jobs                                |
 | Security review   | Every finding fixed, or documented with a reason and owner                                                         | Review report (Stage G)                |
 | Accessibility     | 0 serious/critical axe violations on key screens; full keyboard pass recorded                                      | axe in Playwright, manual notes        |
@@ -139,9 +172,9 @@ Format: **Given** (starting situation), **When** (action), **Then** (observable 
 | A     | Done (see STEP-A).                                                                                                                                                                                                                                                                                                      |
 | B     | Owner approves the plan; decisions recorded (stack, visual direction, email domain, guests, priorities).                                                                                                                                                                                                                |
 | C     | Database schema and migrations; auth journeys J1 work locally; shared Zod contracts; realtime server accepts only valid tokens and origins (v1's foreign-origin test now fails to connect); two-instance Redis test passes in CI; CI pipeline (lint, types, tests, build, Docker build, gitleaks, audit, CodeQL) green. |
-| D     | Journeys J2 to J6 and J9 pass locally as automated tests; virtualised list; search; notifications; uploads.                                                                                                                                                                                                             |
-| E     | Journeys J7, J8, J10 pass; word filter with tests; AI module with mock provider and fallback; legal pages; retention job.                                                                                                                                                                                               |
-| F     | Chosen design system in both themes; animated home page meeting HOME-03/04; screenshots at 3 widths × 2 themes inspected and fixed; Lighthouse numbers recorded.                                                                                                                                                        |
+| D     | Journeys J2 to J6, J9 and J11 pass locally as automated tests; virtualised list; search; notifications; uploads.                                                                                                                                                                                                        |
+| E     | Journeys J7, J8, J10 pass (J7 including guests); word filter with tests; AI module with mock provider and fallback; legal pages; retention job.                                                                                                                                                                         |
+| F     | Three themes (Airmail default, Signal, Aurora) in light and dark, with the theme picker (J12); animated home page meeting HOME-03/04; screenshots of key screens at 3 widths × 6 theme variants inspected and fixed; Lighthouse numbers recorded.                                                                       |
 | G     | All journeys automated in CI; coverage gates met; load test results recorded; independent security, accessibility and design reviews done with dispositions.                                                                                                                                                            |
 | H     | Owner checklist completed; app live; live smoke tests (J1, J2, J7, J8) recorded; free-tier limits measured and documented.                                                                                                                                                                                              |
 | I     | Code walkthrough, README with real screenshots, CHANGELOG, `v2.0.0` tag and GitHub Release; full-history secret scan clean; Definition of Done (brief section 11) checked item by item.                                                                                                                                 |

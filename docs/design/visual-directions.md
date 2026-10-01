@@ -1,7 +1,12 @@
-# Visual directions (choose one)
+# Visual directions
 
-_Stage B, 2026-10-01. The owner picks one direction (or asks for a mix). Stage F then turns the
-choice into the full design system in `packages/ui` with both themes._
+_Stage B, 2026-10-01._
+
+> **Owner decision (2026-10-01, D-021):** all three directions become **themes that users can
+> pick**, each with a light and a dark mode. **Airmail is the default** for first-time visitors
+> and for the home page. Stage F turns each direction into a complete token set in `packages/ui`
+> and fixes the contrast issues measured below. The recommendation further down was written
+> before this decision and is kept for the record.
 
 Each direction is a working HTML mockup with a **live Canvas 2D hero animation**, a feature strip,
 the app screen at desktop width, and its palette and type. All three show the same conversation so

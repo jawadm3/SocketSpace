@@ -1,7 +1,7 @@
-# Technology stack (proposed for approval)
+# Technology stack
 
-_Stage B, 2026-10-01. Status: **Proposed**. Becomes "Accepted" in `docs/development/decisions.md`
-once the owner approves. Versions are the newest releases that are at least 3 days old (our
+_Stage B, 2026-10-01. Status: **Accepted by the owner on 2026-10-01** (decisions D-009 to D-025 in
+`docs/development/decisions.md`). Versions are the newest releases that are at least 3 days old (our
 supply-chain rule), checked on the npm registry on 2026-10-01._
 
 The brief lists defaults and invites better options. For each layer: what we pick, what else we
@@ -9,29 +9,31 @@ considered, and why. Where the brief's default is kept, we say why it is still t
 
 ## Summary table
 
-| Layer                  | Choice                                                                                                                                                             | Brief default?                                        |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
-| Monorepo               | pnpm 12 workspaces + Turborepo 2                                                                                                                                   | Yes                                                   |
-| Language               | TypeScript 6.0 (strict), Node.js 22 LTS                                                                                                                            | Yes (version pinned, see D-004)                       |
-| Web app                | Next.js 16 (App Router, Turbopack), React 19                                                                                                                       | Yes                                                   |
-| Styling and components | Tailwind CSS 4, shadcn/ui (Radix primitives), Lucide icons                                                                                                         | Yes                                                   |
-| In-app motion          | Motion (formerly Framer Motion), CSS transitions                                                                                                                   | Yes                                                   |
-| Home-page hero         | **Canvas 2D** (hand-written, about 3 to 6 KB), lazy-loaded; Three.js / React Three Fiber only if a measured prototype proves Canvas cannot reach the chosen design | **Changed** (lighter tool, as the brief allows)       |
-| Real-time server       | Node.js 22 + Socket.IO 4.8, Docker                                                                                                                                 | Yes                                                   |
-| Shared contracts       | Zod 4 schemas in `packages/shared`                                                                                                                                 | Yes                                                   |
-| Database               | PostgreSQL 17 on Neon + Drizzle ORM 0.45 + drizzle-kit migrations                                                                                                  | Yes (Drizzle chosen over Prisma)                      |
-| Cache / pub-sub        | **None on the free deployment**; Socket.IO Redis adapter switched on by `REDIS_URL`                                                                                | **Changed** (decided with numbers)                    |
-| Auth                   | Better Auth 1.7 (email + password, verification, reset, GitHub and Google sign-in, JWT plugin for realtime tokens)                                                 | Yes                                                   |
-| Email                  | Resend (needs a verified domain), Nodemailer SMTP fallback, local mail catcher in development                                                                      | Yes, with a domain caveat                             |
-| File storage           | **Vercel Blob** by default behind a driver interface (R2/S3 and local drivers too); sharp for re-encoding                                                          | **Changed** (R2 needs a card)                         |
-| Search                 | PostgreSQL full-text search (tsvector + GIN index)                                                                                                                 | New (no extra service)                                |
-| AI moderation          | OpenAI-compatible client; Groq by default; mock provider for tests; off by default                                                                                 | Yes                                                   |
-| Logging and metrics    | pino (structured JSON, redaction), Prometheus-format `/metrics`, optional Sentry                                                                                   | Yes                                                   |
-| Unit/integration tests | Vitest 5, PGlite, real Socket.IO clients                                                                                                                           | Yes                                                   |
-| End-to-end tests       | Playwright 1.63 (two browser users)                                                                                                                                | Yes                                                   |
-| Load tests             | A Node.js harness using `socket.io-client` (speaks the real protocol), with Artillery as an alternative                                                            | Changed (k6 needs extra work for Socket.IO's framing) |
-| CI                     | GitHub Actions: lint, types, tests, e2e, build, Docker build and smoke test, gitleaks, `pnpm audit`, CodeQL                                                        | Yes                                                   |
-| Hosting                | Vercel Hobby (web), Render Free (realtime, Docker), Neon Free (Postgres), UptimeRobot (keep-awake)                                                                 | Yes (Render confirmed with numbers)                   |
+| Layer                  | Choice                                                                                                                                                                                                     | Brief default?                                        |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Monorepo               | pnpm 12 workspaces + Turborepo 2                                                                                                                                                                           | Yes                                                   |
+| Language               | TypeScript 6.0 (strict), Node.js 22 LTS                                                                                                                                                                    | Yes (version pinned, see D-004)                       |
+| Web app                | Next.js 16 (App Router, Turbopack), React 19                                                                                                                                                               | Yes                                                   |
+| Styling and components | Tailwind CSS 4, shadcn/ui (Radix primitives), Lucide icons                                                                                                                                                 | Yes                                                   |
+| Themes                 | Three themes (Airmail default, Signal, Aurora) × light/dark, as CSS custom-property token sets switched by `data-theme` and `data-mode`; saved per account and in a cookie for flash-free server rendering | New (owner)                                           |
+| Avatars                | DiceBear (MIT library) with CC0 styles only, rendered locally from a saved config; optional photo upload through the image pipeline                                                                        | New (owner)                                           |
+| In-app motion          | Motion (formerly Framer Motion), CSS transitions                                                                                                                                                           | Yes                                                   |
+| Home-page hero         | **Canvas 2D** (hand-written, about 3 to 6 KB), lazy-loaded; Three.js / React Three Fiber only if a measured prototype proves Canvas cannot reach the chosen design                                         | **Changed** (lighter tool, as the brief allows)       |
+| Real-time server       | Node.js 22 + Socket.IO 4.8, Docker                                                                                                                                                                         | Yes                                                   |
+| Shared contracts       | Zod 4 schemas in `packages/shared`                                                                                                                                                                         | Yes                                                   |
+| Database               | PostgreSQL 17 on Neon + Drizzle ORM 0.45 + drizzle-kit migrations                                                                                                                                          | Yes (Drizzle chosen over Prisma)                      |
+| Cache / pub-sub        | **None on the free deployment**; Socket.IO Redis adapter switched on by `REDIS_URL`                                                                                                                        | **Changed** (decided with numbers)                    |
+| Auth                   | Better Auth 1.7: email + password, verification, reset, passkeys; Google, Facebook, GitHub first, then Discord, Microsoft, LinkedIn; anonymous guests for random mode; JWT plugin for realtime tokens      | Yes                                                   |
+| Email                  | Resend with a free is-a.dev subdomain (owner choice); Nodemailer SMTP fallback; local mail catcher in development                                                                                          | Yes, with a domain caveat                             |
+| File storage           | **Vercel Blob** by default behind a driver interface (R2/S3 and local drivers too); sharp for re-encoding                                                                                                  | **Changed** (R2 needs a card)                         |
+| Search                 | PostgreSQL full-text search (tsvector + GIN index)                                                                                                                                                         | New (no extra service)                                |
+| AI moderation          | OpenAI-compatible client; Groq by default; mock provider for tests; off by default                                                                                                                         | Yes                                                   |
+| Logging and metrics    | pino (structured JSON, redaction), Prometheus-format `/metrics`, optional Sentry                                                                                                                           | Yes                                                   |
+| Unit/integration tests | Vitest 5, PGlite, real Socket.IO clients                                                                                                                                                                   | Yes                                                   |
+| End-to-end tests       | Playwright 1.63 (two browser users)                                                                                                                                                                        | Yes                                                   |
+| Load tests             | A Node.js harness using `socket.io-client` (speaks the real protocol), with Artillery as an alternative                                                                                                    | Changed (k6 needs extra work for Socket.IO's framing) |
+| CI                     | GitHub Actions: lint, types, tests, e2e, build, Docker build and smoke test, gitleaks, `pnpm audit`, CodeQL                                                                                                | Yes                                                   |
+| Hosting                | Vercel Hobby (web), Render Free (realtime, Docker), Neon Free (Postgres), UptimeRobot (keep-awake)                                                                                                         | Yes (Render confirmed with numbers)                   |
 
 ## Layer by layer
 
@@ -91,7 +93,7 @@ switched on by one environment variable. Details: research doc section 4.
 - **Why:** self-hosted (user data stays in our database), maintained, supports Drizzle,
   email/password with verification and reset, social sign-in, database sessions, built-in rate
   limiting (stricter on sign-in: 3 attempts per 10 seconds by default), an anonymous-session plugin
-  (for guests in random mode, if approved) and a JWT plugin (signed short-lived tokens for the
+  (for guests in random mode, approved in D-025) and a JWT plugin (signed short-lived tokens for the
   realtime server). The Auth.js project is now maintained by the Better Auth team, so this is also
   the "Auth.js" path.
 - **How the realtime server trusts users:** the web app and the realtime server live on different
@@ -100,10 +102,23 @@ switched on by one environment variable. Details: research doc section 4.
   browser hands it to the realtime server when connecting; the server checks the signature using
   the web app's public key (JWKS). Details in `docs/architecture/security.md`.
 
-### Email: Resend (kept, with an owner decision)
+### Email: Resend with a free is-a.dev subdomain (owner choice)
 
-Resend only emails people other than the account owner after a domain is verified. A free
-`is-a.dev` subdomain works; see research doc section 5. **Owner decision needed.**
+Resend only emails people other than the account owner after a domain is verified. The owner chose a
+free `is-a.dev` subdomain (requested through a GitHub pull request; exact steps come with the Stage H
+checklist). See research doc section 5.
+
+### Themes, avatars and names (owner additions)
+
+- **Themes (D-021):** each theme is a set of design tokens (colours, fonts, radii, shadows, motion).
+  Switching changes two attributes on the page, so there is no re-render cost. Only the active
+  theme's web fonts and hero script are loaded.
+- **Avatars (D-023):** DiceBear's library (MIT) generates SVG avatars from a small settings object.
+  Only CC0 styles are used (no attribution required). Rendering happens in our app, so no
+  third-party service sees who looks at which profile.
+- **Names (D-024):** a unique nickname plus an optional real name with its own visibility setting.
+  The server decides per viewer which name to send, so a hidden real name never reaches a browser
+  that may not show it.
 
 ### File storage: Vercel Blob (changed)
 

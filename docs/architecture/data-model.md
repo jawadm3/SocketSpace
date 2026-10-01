@@ -60,24 +60,30 @@ erDiagram
 
 **`user`**: one row per person (or per guest, if guest random mode is approved).
 
-| Column                                                                   | Type                                            | Notes                                               |
-| ------------------------------------------------------------------------ | ----------------------------------------------- | --------------------------------------------------- |
-| `id`                                                                     | uuid (v7)                                       | Primary key                                         |
-| `email`                                                                  | citext, unique                                  | Case-insensitive. Guests have none.                 |
-| `email_verified`                                                         | boolean                                         | Required before posting in community mode           |
-| `name`                                                                   | text (1 to 40 chars)                            | Display name                                        |
-| `username`                                                               | citext, unique (3 to 20, `a-z 0-9 _`)           | Used for @mentions                                  |
-| `image`                                                                  | text                                            | Avatar storage key                                  |
-| `bio`                                                                    | text (up to 160 chars)                          |                                                     |
-| `role`                                                                   | enum `user`, `admin`                            | Global role. Room roles are separate.               |
-| `status`                                                                 | enum `active`, `suspended`, `banned`, `deleted` | Checked on every connect and write                  |
-| `is_anonymous`                                                           | boolean                                         | Guest account (random mode only)                    |
-| `dm_policy`                                                              | enum `everyone`, `contacts`, `nobody`           | Who may start a DM                                  |
-| `show_presence`                                                          | boolean                                         | "Invisible" mode when false                         |
-| `read_receipts`                                                          | boolean                                         | Reciprocal: off means you neither send nor see them |
-| `adult_confirmed_at`, `random_terms_version`, `random_terms_accepted_at` | timestamptz, text, timestamptz                  | 18+ gate record                                     |
-| `last_seen_at`                                                           | timestamptz                                     | Rounded to the minute                               |
-| `created_at`, `updated_at`, `deleted_at`                                 | timestamptz                                     |                                                     |
+| Column                                                                   | Type                                                               | Notes                                                                                          |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `id`                                                                     | uuid (v7)                                                          | Primary key                                                                                    |
+| `email`                                                                  | citext, unique                                                     | Case-insensitive. Guests have none.                                                            |
+| `email_verified`                                                         | boolean                                                            | Required before posting in community mode                                                      |
+| `nickname`                                                               | citext, unique (3 to 24, letters, digits, `_`, `.`, `-`)           | Required. Shown in chats and used for @mentions (D-024)                                        |
+| `name`                                                                   | text (up to 60 chars), nullable                                    | Optional **real name** (Better Auth's `name` column; filled from Google/Facebook if available) |
+| `real_name_visibility`                                                   | enum `nobody`, `contacts`, `everyone`                              | Default `nobody`                                                                               |
+| `name_display`                                                           | enum `nickname`, `real_name`, `both`                               | What chats show; the real name only appears to people allowed to see it. Default `nickname`    |
+| `avatar_kind`                                                            | enum `preset`, `custom`, `photo`                                   | Required before onboarding completes (D-023)                                                   |
+| `avatar_config`                                                          | jsonb, nullable                                                    | For `preset`/`custom`: DiceBear style, seed and options (CC0 styles only)                      |
+| `image`                                                                  | text, nullable                                                     | For `photo`: storage key of the re-encoded image                                               |
+| `theme`, `color_mode`                                                    | enum `airmail`, `signal`, `aurora`; enum `system`, `light`, `dark` | Default `airmail` + `system` (D-021)                                                           |
+| `onboarded_at`                                                           | timestamptz, nullable                                              | Set once nickname and avatar are chosen; the app redirects to onboarding until then            |
+| `bio`                                                                    | text (up to 160 chars)                                             |                                                                                                |
+| `role`                                                                   | enum `user`, `admin`                                               | Global role. Room roles are separate.                                                          |
+| `status`                                                                 | enum `active`, `suspended`, `banned`, `deleted`                    | Checked on every connect and write                                                             |
+| `is_anonymous`                                                           | boolean                                                            | Guest account (random mode only)                                                               |
+| `dm_policy`                                                              | enum `everyone`, `contacts`, `nobody`                              | Who may start a DM                                                                             |
+| `show_presence`                                                          | boolean                                                            | "Invisible" mode when false                                                                    |
+| `read_receipts`                                                          | boolean                                                            | Reciprocal: off means you neither send nor see them                                            |
+| `adult_confirmed_at`, `random_terms_version`, `random_terms_accepted_at` | timestamptz, text, timestamptz                                     | 18+ gate record                                                                                |
+| `last_seen_at`                                                           | timestamptz                                                        | Rounded to the minute                                                                          |
+| `created_at`, `updated_at`, `deleted_at`                                 | timestamptz                                                        |                                                                                                |
 
 **`session`**, **`account`** (password hash or social login), **`verification`** (email and reset
 tokens), **`jwks`** (signing keys for realtime tokens): Better Auth's standard tables. Sessions
@@ -156,7 +162,7 @@ AND NOT EXISTS (room ban) AND author is active and not muted`. If the `WHERE` fa
 **`reaction`**: primary key (`message_id`, `user_id`, `emoji`). `emoji` must be in an allow-list
 (prevents arbitrary strings).
 
-**`mention`**: (`message_id`, `user_id`). Parsed on the server from `@username` tokens.
+**`mention`**: (`message_id`, `user_id`). Parsed on the server from `@nickname` tokens.
 
 **`attachment`**: `uploader_id`, `message_id` (null until the message is sent), `storage_key`,
 `thumb_key`, `mime` (always `image/webp` after re-encoding), `width`, `height`, `bytes`, `sha256`,

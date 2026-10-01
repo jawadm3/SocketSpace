@@ -37,7 +37,7 @@ previews; supply-chain attacks through npm packages.
   scrypt.
 - Email verification required before posting in community mode; password reset links single-use,
   expiring after 30 minutes; all sessions revoked after a password change.
-- Social sign-in: GitHub (and Google if configured). Account linking only to verified emails.
+- Social sign-in: Google, Facebook, GitHub, Discord, Microsoft, LinkedIn, plus passkeys (see 3.11 for linking rules).
 - Sign-in rate limit: 3 attempts per 10 seconds per IP (Better Auth default) plus our own
   per-account lockout with growing delays after 10 failures.
 - Generic error messages ("email or password is incorrect"), and the same response time and message
@@ -147,6 +147,31 @@ Server-side fetching is risky: a malicious link could make our server request
 - IP addresses are stored only where needed (sessions; HMAC-hashed for bans) with the retention
   periods in `data-model.md`.
 
+### 3.11 Social sign-in and account linking (ASVS V10 "OAuth and OIDC")
+
+- Providers (D-022): Google, Facebook, GitHub first; Discord, Microsoft, LinkedIn and passkeys under
+  "More ways to sign in". OAuth uses the authorisation-code flow with PKCE and `state`, handled by
+  Better Auth; callback URLs are exact matches registered with each provider.
+- **Automatic linking by email only for trusted providers.** Better Auth's documentation lists
+  Google, Apple, Discord, GitHub and LinkedIn as giving trustworthy email-verification signals and
+  warns that Facebook and Microsoft Entra ID do not. A Facebook or Microsoft sign-in whose email
+  matches an existing account therefore never logs into that account; the owner of the account can
+  link the provider from Settings after signing in the original way.
+- Providers whose credentials are not configured are hidden, never shown broken.
+- Only the minimum scopes are requested (identity and email). Provider access tokens are not used
+  after sign-in and are not shown to the browser.
+
+### 3.12 Profile privacy (names and avatars)
+
+- **Real names (D-024):** the server builds every user object for a specific viewer and leaves out
+  the real name unless that viewer is allowed to see it (owner's choice: nobody, contacts,
+  everyone). This applies to HTTP responses and socket payloads alike, and is covered by tests.
+  Real names imported from Google or Facebook start as "nobody".
+- **Avatars (D-023):** preset and custom avatars are generated locally from a settings object
+  (DiceBear, CC0 styles), so viewing a profile makes no third-party request. Uploaded photos use
+  the image rules in 3.7 and can be reported; a moderator can reset an offending avatar to a preset.
+- In random mode, names and avatars stay hidden until both people agree to share.
+
 ## 4. Safety features
 
 ### 4.1 Report and block everywhere
@@ -178,7 +203,7 @@ server-side snapshot as evidence. Reporters are told when their report is resolv
   hours → automatic 24-hour random-mode timeout and a flag for review; any high-severity filter hit
   → 1-hour timeout; repeated skips faster than 3 seconds each → 2-minute cooldown (anti-harvesting).
 - Partners are anonymous ("Stranger") unless **both** agree to share profiles or add each other.
-- Guests (if approved): stricter limits (half the message rate), cannot exchange contacts, banned by
+- Guests (approved, D-025): stricter limits (half the message rate), cannot exchange contacts, banned by
   guest account and hashed IP.
 - Ephemeral: no message text stored; minimal metadata kept 30 days; evidence only through reports.
 

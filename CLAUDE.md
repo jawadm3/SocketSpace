@@ -20,6 +20,17 @@ SocketSpace v2 is a production-grade real-time chat platform built at the reposi
 
 It must run on free hosting tiers only.
 
+## Owner decisions to remember (2026-10-01; details in `docs/development/decisions.md`)
+
+- **Themes:** Airmail (default), Signal and Aurora, each light or dark, user-selectable (D-021).
+- **Sign-in:** Google, Facebook, GitHub first; Discord, Microsoft, LinkedIn, passkeys under "More ways
+  to sign in"; no Apple. Facebook/Microsoft never auto-link by email (D-022).
+- **Profile picture required** at onboarding: presets, builder (DiceBear CC0 styles, rendered
+  locally) or photo upload (D-023).
+- **Names:** unique nickname in chats and @mentions; optional real name, private by default; the
+  server never sends a real name to a viewer who may not see it (D-024).
+- **Email:** Resend with a free is-a.dev subdomain (D-014). **Random mode:** guests allowed (D-025).
+
 ## Folder map
 
 ```
