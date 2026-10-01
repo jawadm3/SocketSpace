@@ -53,3 +53,76 @@ Status values: **Accepted** (in force), **Proposed** (waiting for owner approval
 - **Stage:** A. **Status:** Accepted.
 - **Decision:** Put pnpm settings in `pnpm-workspace.yaml`, not `.npmrc`.
 - **Why:** Tested on pnpm 12.8.1: the workspace file's `storeDir` takes precedence over `.npmrc`. One settings file is simpler. Note: pnpm 12 ignores `stateDir` in this file (it is a machine-wide setting), so it is listed as an exception in `docs/technical/storage.md`.
+
+## D-008: Turborepo's auto-generated `AGENTS.md` switched off
+
+- **Stage:** A. **Status:** Accepted.
+- **Decision:** `"agentGuidance": false` in `turbo.json`; the generated `AGENTS.md` was deleted.
+- **Why:** turbo 2.11 writes an `AGENTS.md` block when it detects an AI agent. `CLAUDE.md` is our single agent guide; two guides would drift apart. The option was confirmed in the installed turbo's own `schema.json` before use.
+
+---
+
+## Stage B decisions (Proposed: waiting for owner approval)
+
+Full reasoning and numbers: `docs/architecture/stack.md` and `docs/research/free-tier-research.md`.
+
+## D-009: Real-time server is Node.js + Socket.IO in Docker on Render Free
+
+- **Stage:** B. **Status:** Proposed.
+- **Alternatives:** Cloudflare Durable Objects (no cold start, but one busy object uses 83% of the daily free duration, hard daily cut-offs, own protocol, lock-in); Koyeb/Northflank/Fly.io (card required); Railway ($1 monthly credit, too fragile); managed real-time services.
+- **Why:** portable Docker image, mature acknowledgements/rooms/reconnection, matches the brief's Docker and CI requirements. Cold starts handled with a 5-minute pinger and a clear "waking up" screen.
+
+## D-010: No Redis on the free deployment; Redis adapter behind `REDIS_URL`
+
+- **Stage:** B. **Status:** Proposed.
+- **Why:** Upstash Free allows about 16,100 commands/day (presence for six users would use it all); Postgres LISTEN/NOTIFY would keep Neon awake (186% of free compute). One instance makes in-memory correct. Multi-instance fan-out is tested in CI with two instances and a Redis service.
+
+## D-011: PostgreSQL on Neon with Drizzle ORM; PGlite for tests; portable Postgres for local runs
+
+- **Stage:** B. **Status:** Proposed.
+- **Why:** Neon's free plan is permanent with no card; Drizzle is stable (0.45), thin, works everywhere we need, and Better Auth supports it. Rules to protect Neon's 100 CU-hours: no permanent connections, idle pools close within 60 s, keep-alive never touches the database.
+
+## D-012: Better Auth, with 5-minute signed tokens for the realtime server
+
+- **Stage:** B. **Status:** Proposed.
+- **Why:** self-hosted, maintained (and now also the home of Auth.js), Drizzle support, verification, reset, social sign-in, rate limiting, anonymous sessions and a JWT plugin. The web app and realtime server are on different domains, so the browser carries a short-lived signed token instead of a cookie.
+
+## D-013: Vercel Blob for images (R2 and local drivers available)
+
+- **Stage:** B. **Status:** Proposed.
+- **Why:** Cloudflare R2 requires a payment card even for its free tier. Vercel Blob is free on Hobby (1 GB, 2,000 uploads/month) in the same account as the web app. A driver interface keeps R2 one config change away.
+
+## D-014: Resend for email, with a verified domain chosen by the owner
+
+- **Stage:** B. **Status:** Proposed (owner decision needed).
+- **Why:** Resend's free plan is generous (3,000/month, 100/day) but only sends to other people from a verified domain. Recommended: a free is-a.dev subdomain. Fallback: SMTP through a dedicated Gmail account. Development uses a local mail catcher.
+
+## D-015: Canvas 2D first for the home-page hero
+
+- **Stage:** B. **Status:** Proposed.
+- **Why:** the brief's example effect is 2D; Canvas costs a few kilobytes versus roughly 150 to 250 KB for Three.js + React Three Fiber. Working Canvas prototypes exist for all three visual directions. 3D only if a measured prototype proves it necessary.
+
+## D-016: Messages are written only by the realtime server, with per-conversation sequence numbers
+
+- **Stage:** B. **Status:** Proposed.
+- **Why:** one writer gives one order. The sequence number is assigned inside the same transaction that checks membership, so permission checks and writes cannot race. Client-generated IDs make re-sends harmless.
+
+## D-017: Random-mode text is never stored
+
+- **Stage:** B. **Status:** Proposed.
+- **Why:** the brief asks for ephemeral conversations. The server keeps the last 20 messages of a live session in memory only, so a report within 5 minutes of the end can include server-captured (not reporter-supplied) evidence. Metadata is kept 30 days.
+
+## D-018: Inline replies instead of threads; text-only link previews
+
+- **Stage:** B. **Status:** Proposed.
+- **Why:** both satisfy the brief ("replies or threads"; "link previews, server-side and safe") at lower cost and risk. Threads and preview images are listed as future improvements.
+
+## D-019: Load testing with a Node harness using the real Socket.IO client
+
+- **Stage:** B. **Status:** Proposed.
+- **Why:** k6 would need hand-written Socket.IO framing; the real client measures what users experience. Artillery is the fallback.
+
+## D-020: Visual regression tests run only in CI
+
+- **Stage:** B. **Status:** Proposed.
+- **Why:** fonts render differently on Windows and Linux, so local screenshots would never match CI baselines. Baselines are generated by a CI job and committed.

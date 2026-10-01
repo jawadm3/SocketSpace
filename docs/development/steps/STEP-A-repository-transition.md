@@ -1,7 +1,7 @@
 # Step A: Environment check, repository transition and monorepo skeleton
 
 - **Date:** 2026-10-01
-- **Status:** Done locally. Pushing to GitHub is waiting for the owner (see "Problems and fixes").
+- **Status:** Done and pushed to GitHub (`main` at `5eda2ec`, tag `v1.0.0`).
 
 ## Goal
 
@@ -39,11 +39,11 @@ redecorating. Nothing is thrown away, and a photo (the tag) records exactly how 
 1. **Checked the starting point.** The working tree was clean and local `main` matched GitHub
    (both at `f7a75a3`).
 2. **Remote URL.** The brief asks to point `origin` at `https://github.com/jawadm3/SocketSpace.git`
-   (the repository was renamed from `SocketSpace-react`). This step was **blocked** by the
-   assistant's safety system and has been left for the owner. See "Problems and fixes".
+   (the repository was renamed from `SocketSpace-react`). This step was first **blocked** by the
+   assistant's safety system; after the owner said "Try again" it succeeded. See "Problems and fixes".
 3. **Tag.** Created an _annotated tag_ `v1.0.0` on commit `f7a75a3`, with a message describing it
    as the original mini-project version. (An annotated tag is a permanent, named bookmark with a
-   note attached.) It exists locally and will be pushed once the remote question is settled.
+   note attached.) Pushed to GitHub after the remote was updated.
    A GitHub Release was **not** created: the `gh` tool is not logged in, and logging in would
    need new credentials. The owner's steps are in `PROGRESS.md`.
 4. **Deleted regenerable folders**: `node_modules`, `.next`, plus the generated `next-env.d.ts`
@@ -93,14 +93,14 @@ Recorded in full in `docs/development/decisions.md`:
 
 ## Problems and fixes
 
-| Problem                                                     | What happened                                                                                                          | Fix or status                                                                                       |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Changing the git remote URL was blocked                     | The assistant's automatic safety check refused `git remote set-url origin https://github.com/jawadm3/SocketSpace.git`. | Not worked around. Left for the owner. No pushes have been made, so nothing has gone to GitHub yet. |
-| GitHub Release for v1.0.0                                   | `gh` is not logged in; logging in needs credentials.                                                                   | Owner steps are in `PROGRESS.md`.                                                                   |
-| Root `.gitignore` would have lost v1 history                | Creating a new root `.gitignore` in the move commit made git treat the old one as edited, not moved.                   | Removed the new file from the move commit; added it in the next commit (D-001).                     |
-| pnpm auto-exempted brand-new packages from its safety guard | Asking for exact newest versions (published hours earlier) made pnpm add exemptions.                                   | Removed the exemptions, set the guard explicitly to 3 days, used loose version ranges, reinstalled. |
-| `stateDir` ignored                                          | pnpm 12 only accepts this setting machine-wide.                                                                        | Removed from the project file; documented as a 1 KB C: exception in `docs/technical/storage.md`.    |
-| TypeScript 7 incompatible with lint tooling                 | `typescript-eslint` peer range is `<6.1.0`.                                                                            | Pinned TypeScript 6.0.x (D-004).                                                                    |
+| Problem                                                     | What happened                                                                                                          | Fix or status                                                                                                                                                     |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Changing the git remote URL was blocked                     | The assistant's automatic safety check refused `git remote set-url origin https://github.com/jawadm3/SocketSpace.git`. | Not worked around. The owner replied "Try again"; the retry succeeded. Then `main` and `v1.0.0` were pushed (fast-forward, no secrets found by a pre-push check). |
+| GitHub Release for v1.0.0                                   | `gh` is not logged in; logging in needs credentials.                                                                   | Owner steps are in `PROGRESS.md`.                                                                                                                                 |
+| Root `.gitignore` would have lost v1 history                | Creating a new root `.gitignore` in the move commit made git treat the old one as edited, not moved.                   | Removed the new file from the move commit; added it in the next commit (D-001).                                                                                   |
+| pnpm auto-exempted brand-new packages from its safety guard | Asking for exact newest versions (published hours earlier) made pnpm add exemptions.                                   | Removed the exemptions, set the guard explicitly to 3 days, used loose version ranges, reinstalled.                                                               |
+| `stateDir` ignored                                          | pnpm 12 only accepts this setting machine-wide.                                                                        | Removed from the project file; documented as a 1 KB C: exception in `docs/technical/storage.md`.                                                                  |
+| TypeScript 7 incompatible with lint tooling                 | `typescript-eslint` peer range is `<6.1.0`.                                                                            | Pinned TypeScript 6.0.x (D-004).                                                                                                                                  |
 
 ## Tests run, with actual results
 

@@ -35,7 +35,8 @@ It must run on free hosting tiers only.
 ├── docs/             All documentation (plain English). BRIEF.md lives here.
 │   ├── analysis/     Stage B critical analysis of v1 and the brief.
 │   ├── architecture/ System design, data model, event contracts, diagrams.
-│   ├── design/       Product design, screens, visual directions.
+│   ├── design/       Product design, screens, visual directions (mockups/ = HTML prototypes + PNGs).
+│   ├── research/     Free-tier research with numbers and sources (re-check before deploying).
 │   ├── development/  decisions.md and per-stage step logs (steps/STEP-<letter>-<name>.md).
 │   ├── technical/    Technical notes (storage.md: what lives on which drive).
 │   └── glossary.md   Every technical term explained with an everyday example.
