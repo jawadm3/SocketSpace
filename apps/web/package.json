@@ -3,5 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "description": "The web app (marketing pages, community chat, random mode, admin). Scaffolded in Stage C.",
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@better-auth/passkey": "^1.7.6",
+    "better-auth": "^1.7.6"
+  }
 }

@@ -13,3 +13,12 @@ cacheDir: ./.cache/pnpm
 # (4320 minutes). Most malicious releases are detected and removed within hours.
 # Do not add exemptions casually; record any exemption in docs/development/decisions.md.
 minimumReleaseAge: 4320
+
+# Install scripts of dependencies are blocked unless listed here as true. Reviewed 2026-10-02:
+# - @embedded-postgres/windows-x64: its script only re-creates symlinks from a list that is empty
+#   on Windows, so it is not needed.
+# - esbuild: its script double-checks the platform binary, which pnpm already installs as an
+#   optional package (@esbuild/<platform>), so it is not needed.
+allowBuilds:
+  '@embedded-postgres/windows-x64': false
+  esbuild: false

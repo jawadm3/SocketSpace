@@ -165,3 +165,30 @@ The owner approved the stack and added the product changes below. They are also 
 
 - **Stage:** B (owner). **Status:** Accepted.
 - **Decision:** people without an account can use random mode through an anonymous guest session, with stricter limits (half the message rate), no contact exchange or profile sharing, and bans applied to the guest session and a hashed IP address. Guests are invited to create an account to keep a good contact.
+
+---
+
+## Stage C decisions
+
+## D-026: Local PostgreSQL from the `embedded-postgres` npm packages
+
+- **Stage:** C. **Status:** Accepted.
+- **Decision:** `pnpm db:start` runs PostgreSQL 17.9 from the `@embedded-postgres/<platform>` npm packages (official PostgreSQL builds, about 100 MB for Windows), managed with `initdb` and `pg_ctl`. Data lives in `.cache/postgres/17/` on D:. The server listens on `127.0.0.1:54329` only, with "trust" authentication, so the local connection string contains no password.
+- **Alternatives:** the EnterpriseDB Windows zip (about 300 MB, includes pgAdmin; a manual download with no lockfile); PGlite's socket server (one connection at a time, so the web app and realtime server would block each other); a free Neon development branch (needs the internet and an account).
+- **Why:** installed through pnpm, so it stays on D:, follows the 3-day release rule and is pinned by the lockfile's integrity hashes. No administrator rights, no Windows service. CI uses a real PostgreSQL service container instead.
+- **Windows detail:** `pg_ctl` passes every inheritable handle to the server it starts, which kept the caller's output pipe open forever. On Windows the script launches `pg_ctl` through PowerShell's `Start-Process` (ShellExecute, no inherited handles) and waits for `pg_ctl` alone.
+
+## D-027: Time checks in queries use the database clock
+
+- **Stage:** C. **Status:** Accepted.
+- **Decision:** mute, ban and sanction checks compare against PostgreSQL's `now()`, not the app server's clock. Tests can pass a fixed instant.
+- **Why:** found by running the test suite against real PostgreSQL. A sanction created a moment earlier looked "not started yet", because JavaScript dates have millisecond precision and PostgreSQL stores microseconds. The app server's clock (Render) and the database's (Neon) can also drift apart. One clock removes both problems.
+
+## D-028: Schema details that differ from the Stage B data model
+
+- **Stage:** C. **Status:** Accepted.
+- **Real name stored as an empty string, not NULL:** Better Auth 1.7 requires its `name` column. An empty string means "no real name".
+- **Case-insensitive uniqueness with `lower()` indexes instead of the `citext` extension:** unique indexes on `lower(nickname)` and `lower(slug)` give the same guarantee with no extension to install, so PGlite, local PostgreSQL and Neon behave identically. Better Auth already lower-cases emails.
+- **Audit log (`moderation_action`) has no foreign keys,** and its trigger refuses UPDATE always, and DELETE only for rows younger than 365 days. A foreign-key action (`SET NULL`) would need an UPDATE, which an append-only table must refuse, and a log entry must outlive what it describes. The 365-day rule lets the daily retention job remove expired rows without weakening the guarantee for recent ones. TRUNCATE is refused too.
+- **New table `auth_lockout`:** the per-account sign-in lockout from `security.md` 3.1, keyed by a hash of the email (no addresses stored).
+- **Sequence numbers without gaps:** `sendMessage` locks the conversation row, checks for a re-sent client ID **before** taking a number, and rolls back on any refusal. A re-send or a refused message never uses up a number, so a gap in `eventSeq` always means a missed event.

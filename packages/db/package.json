@@ -2,6 +2,40 @@
   "name": "@socketspace/db",
   "version": "0.0.0",
   "private": true,
-  "description": "Database schema, migrations and typed queries. Scaffolded in Stage C.",
-  "type": "module"
+  "description": "Database schema, migrations and typed queries, shared by the web app and the realtime server.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts",
+    "./testing": "./src/testing/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:migrate:local": "tsx scripts/migrate.ts --local",
+    "db:seed": "tsx scripts/seed.ts",
+    "db:seed:local": "tsx scripts/seed.ts --local",
+    "db:start": "node scripts/local-pg.mjs start",
+    "db:stop": "node scripts/local-pg.mjs stop",
+    "db:status": "node scripts/local-pg.mjs status"
+  },
+  "dependencies": {
+    "@socketspace/shared": "workspace:*",
+    "drizzle-orm": "^0.45.3",
+    "pg": "^8.23.0",
+    "uuid": "^14.0.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@socketspace/config": "workspace:*",
+    "@types/node": "^22.20.4",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
+    "embedded-postgres": "17.9.0-beta.17",
+    "tsx": "^4.23.15"
+  }
 }

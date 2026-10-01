@@ -5,7 +5,10 @@
   "description": "Shared contracts: the one typed definition of every real-time event and API payload, validated on both ends.",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./env": "./src/env.ts",
+    "./domain": "./src/domain.ts",
+    "./limits": "./src/limits.ts"
   },
   "scripts": {
     "lint": "eslint .",
