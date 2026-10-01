@@ -11,14 +11,18 @@
     "pnpm": ">=12.8.0"
   },
   "scripts": {
+    "prepare": "node scripts/setup-hooks.mjs",
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "lint": "turbo run lint",
+    "lint": "turbo run lint lint:root",
+    "lint:root": "eslint scripts eslint.config.mjs vitest.config.ts",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "check": "turbo run lint typecheck test",
+    "check": "turbo run lint lint:root typecheck test",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "secrets:scan": "node scripts/tools/gitleaks.mjs git --redact --no-banner -v .",
+    "secrets:staged": "node scripts/tools/gitleaks.mjs git --pre-commit --staged --redact --no-banner -v"
   },
   "devDependencies": {
     "@eslint/js": "^10",

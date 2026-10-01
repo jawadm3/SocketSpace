@@ -1,0 +1,45 @@
+# Changelog
+
+All notable changes to SocketSpace are recorded here, newest first.
+
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html): `MAJOR.MINOR.PATCH`, where a major
+change can break things, a minor change adds features, and a patch fixes bugs. Commit messages
+follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) (`feat:`, `fix:`,
+`docs:` and so on), which makes this file easy to keep up to date.
+
+Each entry is grouped as **Added**, **Changed**, **Fixed**, **Security** or **Removed**.
+
+## [Unreleased]: v2 development
+
+v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be released as
+`2.0.0` at the end of Stage I.
+
+### Added
+
+- **Stage C (foundations), in progress**
+  - Secret scanning: a pinned, checksum-verified gitleaks 8.30.1 (`scripts/tools/gitleaks.mjs`),
+    run by a git pre-commit hook (`.githooks/pre-commit`) and by `pnpm secrets:scan`.
+  - Environment validation helper (`packages/shared/src/env.ts`): programs stop at start-up with
+    a message naming each missing or malformed variable, never its value.
+- **Stage B (analysis and design), 2026-10-01**
+  - v1 analysis with runtime evidence, brief critique, free-tier research, architecture, data
+    model, real-time protocol, security design, product design, three visual directions,
+    requirements matrix (177 requirements), acceptance criteria and the stage plan.
+- **Stage A (repository transition), 2026-10-01**
+  - Monorepo skeleton: pnpm workspaces, Turborepo, TypeScript 6.0 strict, ESLint 10, Prettier,
+    Vitest 5.
+  - `CLAUDE.md`, `PROGRESS.md`, decision log, glossary and storage notes.
+
+### Changed
+
+- v1 moved into `v1/` with its history preserved, and excluded from all v2 tooling.
+
+## [1.0.0]: 2025 (the original mini project)
+
+The original university mini project: a Next.js page and a Socket.IO server that sent every
+message to everyone connected. Preserved in `v1/` and as the git tag `v1.0.0`
+([release page](https://github.com/jawadm3/SocketSpace/releases/tag/v1.0.0)).
+
+[Unreleased]: https://github.com/jawadm3/SocketSpace/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/jawadm3/SocketSpace/releases/tag/v1.0.0

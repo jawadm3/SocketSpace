@@ -11,6 +11,9 @@
       "dependsOn": ["^build"]
     },
     "lint": {},
+    "//#lint:root": {
+      "inputs": ["scripts/**", "eslint.config.mjs", "vitest.config.ts"]
+    },
     "test": {
       "dependsOn": ["^build"],
       "outputs": []

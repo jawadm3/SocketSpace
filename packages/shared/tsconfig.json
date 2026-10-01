@@ -1,4 +1,10 @@
 {
   "extends": "@socketspace/config/tsconfig.base.json",
+  "compilerOptions": {
+    // Shared code runs in browsers and in Node.js. The DOM library describes the web-standard
+    // globals both provide (URL, TextEncoder, crypto.subtle, AbortSignal). Node-only APIs such as
+    // Buffer or process are deliberately not available here.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
   "include": ["src"]
 }

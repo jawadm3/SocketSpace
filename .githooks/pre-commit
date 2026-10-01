@@ -1,0 +1,5 @@
+#!/bin/sh
+# SocketSpace pre-commit hook: refuse the commit if the staged changes contain anything that looks
+# like a secret (API key, token, private key). Uses the pinned gitleaks from scripts/tools/.
+# Installed automatically by `pnpm install` (scripts/setup-hooks.mjs sets core.hooksPath).
+exec node scripts/tools/gitleaks.mjs git --pre-commit --staged --redact --no-banner -v
