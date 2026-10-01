@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SocketSpace mockup B: Airmail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Direction B: "Airmail". Light-first, friendly, messages-as-letters: navy ink, airmail red and blue. Mockup only (Stage B). */
+  :root {
+    --paper: #f3f4ef; --paper-2: #e8ebe3; --card: #ffffff; --line: #d9ddd2; --ink: #172033; --ink-2: #2f3a52;
+    --muted: #5d6578; --faint: #8d94a3;
+    --tomato: #e2483d; --tomato-soft: #fde4e1; --sage: #2b59c3; --sage-soft: #e1e9fb; --butter: #ffd84d; --sky: #2b59c3;
+    --airmail: repeating-linear-gradient(135deg, #e2483d 0 14px, #ffffff 14px 22px, #2b59c3 22px 36px, #ffffff 36px 44px);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: Figtree, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .display { font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-weight: 800; }
+  .eyebrow { font-size: 13px; font-weight: 600; color: var(--tomato); letter-spacing: .02em; }
+
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 22px 56px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; letter-spacing: -.02em; }
+  .logo-mark { width: 30px; height: 26px; position: relative; }
+  .logo-mark i { position: absolute; border-radius: 9px 9px 9px 2px; }
+  .logo-mark i:first-child { width: 20px; height: 16px; background: var(--tomato); left: 0; top: 0; }
+  .logo-mark i:last-child { width: 18px; height: 14px; background: var(--sage); right: 0; bottom: 0; border-radius: 9px 9px 2px 9px; }
+  .nav-links { display: flex; gap: 30px; color: var(--ink-2); font-size: 15px; }
+  .nav-actions { display: flex; gap: 10px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 11px 20px; font-size: 15px; font-weight: 500; color: var(--ink); border: 1.5px solid var(--ink); background: transparent; }
+  .btn-primary { background: var(--ink); color: var(--paper); }
+  .btn-tomato { background: var(--tomato); border-color: var(--tomato); color: #fff; }
+  .btn-lg { padding: 15px 26px; font-size: 16px; }
+  .link { color: var(--ink-2); font-size: 15px; }
+
+  .hero { display: grid; grid-template-columns: 1.02fr 1fr; gap: 24px; padding: 40px 56px 40px; min-height: 640px; align-items: center; }
+  h1 { font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-weight: 800; font-size: 86px; line-height: .95; letter-spacing: -.045em; margin: 18px 0 24px; }
+  h1 em { font-style: normal; color: var(--sage); text-decoration: underline wavy var(--tomato) 4px; text-underline-offset: 12px; text-decoration-skip-ink: none; }
+  .lede { font-size: 19px; line-height: 1.6; color: var(--ink-2); max-width: 520px; margin-bottom: 32px; }
+  .ctas { display: flex; gap: 14px; align-items: center; }
+  .proof { display: flex; gap: 12px; align-items: center; margin-top: 38px; color: var(--muted); font-size: 14px; }
+  .faces { display: flex; }
+  .faces span { width: 34px; height: 34px; border-radius: 50%; border: 2.5px solid var(--paper); margin-left: -9px; display: grid; place-items: center; font-size: 12px; font-weight: 600; color: #fff; }
+  .faces span:first-child { margin-left: 0; }
+  .stage { position: relative; height: 580px; background: var(--paper-2); overflow: hidden; border: 10px solid transparent; border-image: var(--airmail) 10; box-shadow: 0 24px 50px rgba(23,32,51,.12); }
+  .stamp-badge { position: absolute; z-index: 2; right: 22px; top: 22px; width: 92px; height: 108px; background: var(--butter); border: 4px dotted var(--paper-2); outline: 2px solid var(--butter); display: grid; place-items: center; text-align: center; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 13px; line-height: 1.1; color: var(--ink); transform: rotate(6deg); }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  .features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; padding: 24px 56px 72px; }
+  .fcard { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 26px; }
+  .fcard .ic { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; font-size: 20px; margin-bottom: 18px; }
+  .fcard h3 { font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-weight: 700; font-size: 22px; line-height: 1.1; letter-spacing: -.02em; margin-bottom: 10px; }
+  .fcard p { color: var(--muted); font-size: 14.5px; line-height: 1.6; }
+
+  .section { padding: 64px 56px 72px; background: var(--paper-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .section-head { display: flex; justify-content: space-between; align-items: end; margin-bottom: 28px; }
+  .section-head h2 { font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-weight: 800; font-size: 46px; line-height: 1; letter-spacing: -.04em; }
+  .section-head h2 em { font-style: normal; color: var(--tomato); }
+  .meta-label { color: var(--muted); font-size: 13px; }
+
+  .window { background: var(--card); border: 1px solid var(--line); border-top: 8px solid transparent; border-image: var(--airmail) 8; overflow: hidden; display: grid; grid-template-columns: 270px 1fr 260px; height: 640px; box-shadow: 0 24px 60px rgba(61,54,45,.14); }
+  .sidebar { background: #fbf8f3; border-right: 1px solid var(--line); padding: 18px 14px; font-size: 14.5px; }
+  .me-row { display: flex; align-items: center; gap: 10px; padding: 4px 6px 16px; font-weight: 600; }
+  .search { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; color: var(--faint); font-size: 14px; margin-bottom: 16px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .tab { font-size: 13px; padding: 6px 12px; border-radius: 999px; color: var(--muted); }
+  .tab.active { background: var(--ink); color: var(--paper); }
+  .chat-item { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; padding: 9px 8px; border-radius: 14px; }
+  .chat-item.active { background: var(--tomato-soft); }
+  .chat-item .t { font-weight: 600; font-size: 14px; }
+  .chat-item .s { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+  .chat-item .n { background: var(--tomato); color: #fff; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 7px; }
+  .chat-item .time { color: var(--faint); font-size: 12px; }
+  .room-ic { width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; font-weight: 700; font-size: 16px; }
+  .av { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; font-size: 13px; color: #fff; position: relative; flex: none; }
+  .av.sm { width: 30px; height: 30px; font-size: 11px; }
+  .av .pr { position: absolute; right: 0; bottom: 0; width: 11px; height: 11px; border-radius: 50%; border: 2px solid #fbf8f3; }
+  .on { background: var(--sage); } .away { background: var(--butter); } .off { background: #c9c0b2; }
+
+  .convo { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+  .convo-head { display: flex; align-items: center; gap: 12px; padding: 16px 22px; border-bottom: 1px solid var(--line); }
+  .convo-head .title { font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-weight: 700; font-size: 22px; letter-spacing: -.02em; line-height: 1.1; }
+  .convo-head .sub { color: var(--muted); font-size: 13px; }
+  .convo-head .right { margin-left: auto; display: flex; gap: 8px; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 13px; color: var(--ink-2); background: var(--card); }
+  .messages { flex: 1; min-height: 0; padding: 18px 22px; display: flex; flex-direction: column; justify-content: flex-end; gap: 12px; overflow: hidden; background: linear-gradient(#fffdf9, #fff); }
+  .day { align-self: center; font-size: 12px; color: var(--muted); background: var(--paper); border-radius: 999px; padding: 4px 12px; }
+  .row { display: flex; gap: 10px; align-items: flex-end; max-width: 78%; }
+  .row.mine { align-self: flex-end; flex-direction: row-reverse; }
+  .bubble { background: var(--paper); border-radius: 20px 20px 20px 6px; padding: 10px 14px; font-size: 14.5px; line-height: 1.5; color: var(--ink-2); }
+  .bubble .who { font-size: 12.5px; font-weight: 600; margin-bottom: 2px; }
+  .row.mine .bubble { background: var(--tomato); color: #fff; border-radius: 20px 20px 6px 20px; }
+  .bubble code { font-family: ui-monospace, monospace; font-size: 12.5px; background: rgba(31,27,22,.07); border-radius: 6px; padding: 1px 5px; }
+  .quote { border-left: 3px solid var(--sage); background: rgba(63,125,92,.08); border-radius: 6px; padding: 4px 8px; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+  .reacts { display: flex; gap: 6px; margin: 4px 0 0 50px; }
+  .react { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; font-size: 12.5px; color: var(--ink-2); }
+  .react.mine { border-color: var(--tomato); background: var(--tomato-soft); }
+  .stamp { font-size: 11.5px; color: var(--faint); margin-top: 3px; text-align: right; }
+  .row.mine .stamp { color: rgba(255,255,255,.8); }
+  .sys { align-self: center; font-size: 13px; color: var(--muted); }
+  .typing { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 13px; padding: 0 22px 8px; }
+  .typing .dots { background: var(--paper); border-radius: 999px; padding: 7px 10px; display: flex; gap: 3px; }
+  .typing .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+  .composer { margin: 0 22px 18px; display: flex; gap: 10px; align-items: center; background: var(--paper); border-radius: 999px; padding: 8px 8px 8px 18px; color: var(--faint); font-size: 14.5px; }
+  .composer .send { margin-left: auto; width: 38px; height: 38px; border-radius: 50%; background: var(--tomato); color: #fff; display: grid; place-items: center; }
+
+  .details { border-left: 1px solid var(--line); padding: 20px 18px; background: #fbf8f3; }
+  .details .room-card { text-align: center; padding-bottom: 18px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+  .details .room-card .room-ic { width: 64px; height: 64px; border-radius: 20px; font-size: 26px; margin: 0 auto 10px; }
+  .details .room-card .n { font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-weight: 700; font-size: 20px; }
+  .details .room-card .d { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .details h4 { font-size: 12px; color: var(--muted); font-weight: 600; margin: 10px 0 8px; }
+  .member { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 14px; }
+  .member .role { margin-left: auto; font-size: 11px; color: var(--sage); background: var(--sage-soft); padding: 2px 8px; border-radius: 999px; }
+  .member.dim { opacity: .55; }
+
+  .tokens { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; padding: 56px 56px 64px; }
+  .tcard { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 26px; }
+  .swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 10px; margin-top: 16px; }
+  .sw { height: 64px; border-radius: 14px; border: 1px solid var(--line); }
+  .swn { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .big { font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-weight: 800; font-size: 50px; letter-spacing: -.04em; line-height: 1; margin-top: 12px; }
+  .big em { font-style: normal; color: var(--sage); }
+</style>
+</head>
+<body>
+  <nav>
+    <div class="logo"><span class="logo-mark"><i></i><i></i></span>SocketSpace</div>
+    <div class="nav-links"><span>Rooms</span><span>Meet someone new</span><span>Safety</span><span>How it works</span></div>
+    <div class="nav-actions"><span class="link">Sign in</span><a class="btn btn-primary">Try the demo</a></div>
+  </nav>
+
+  <header class="hero">
+    <div>
+      <div class="eyebrow">Real-time chat for communities and curious people</div>
+      <h1>Conversations worth <em>staying</em> for.</h1>
+      <p class="lede">Find your rooms, message your people, or say hello to someone new who shares your interests. Friendly by design, moderated by people who care.</p>
+      <div class="ctas"><a class="btn btn-tomato btn-lg">Try the demo</a><a class="btn btn-lg">Create an account</a></div>
+      <div class="proof"><div class="faces"><span style="background:#e2483d">AC</span><span style="background:#2b59c3">SO</span><span style="background:#172033">LP</span><span style="background:#c9a227">MN</span></div>Rooms for film, books, code, music and more</div>
+    </div>
+    <div class="stage"><div class="stamp-badge">SAY<br>HELLO<br>✉</div><canvas id="hero" aria-hidden="true"></canvas></div>
+  </header>
+
+  <section class="features">
+    <div class="fcard"><div class="ic" style="background:var(--tomato-soft)">💬</div><h3>Rooms that feel like a café</h3><p>Public and private rooms with friendly roles, invites and a room's own house rules.</p></div>
+    <div class="fcard"><div class="ic" style="background:var(--sage-soft)">✉️</div><h3>Messages to your people</h3><p>Direct messages with read receipts you control, replies, reactions and images.</p></div>
+    <div class="fcard"><div class="ic" style="background:#fdf1cf">🎲</div><h3>Hello, stranger</h3><p>Matched by shared interests. Text only, 18+, and you choose if you ever share who you are.</p></div>
+    <div class="fcard"><div class="ic" style="background:#e3ecfa">🛟</div><h3>Looked after</h3><p>Report and block in one tap. Real moderators, clear rules and a full audit trail.</p></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><div><div class="eyebrow">Inside the app</div><h2>Clear as a postcard, <em>quick</em> as a reply.</h2></div><div class="meta-label">Desktop · light theme</div></div>
+    <div class="window">
+      <div class="sidebar">
+        <div class="me-row"><div class="av sm" style="background:#c9a227">YO</div>You<span style="margin-left:auto;color:var(--faint)">⚙</span></div>
+        <div class="search">⌕ Search or jump to…</div>
+        <div class="tabs"><span class="tab active">All</span><span class="tab">Rooms</span><span class="tab">People</span><span class="tab">🎲</span></div>
+        <div class="chat-item active"><div class="room-ic" style="background:#fff;color:var(--tomato)">Aa</div><div><div class="t">design-talk</div><div class="s">Ava is typing…</div></div><div class="time">10:45</div></div>
+        <div class="chat-item"><div class="av" style="background:#172033">SO<span class="pr on"></span></div><div><div class="t">Sam Okafor</div><div class="s">See you at the meetup!</div></div><span class="n">1</span></div>
+        <div class="chat-item"><div class="room-ic" style="background:var(--sage-soft);color:var(--sage)">#</div><div><div class="t">general</div><div class="s">Noah: welcome everyone 👋</div></div><span class="n">3</span></div>
+        <div class="chat-item"><div class="av" style="background:#2b59c3">LP<span class="pr away"></span></div><div><div class="t">Lee Park</div><div class="s">You: thanks, that helped</div></div><div class="time">Tue</div></div>
+        <div class="chat-item"><div class="room-ic" style="background:#fdf1cf;color:#a67a12">♪</div><div><div class="t">vinyl-club</div><div class="s">Mia shared a photo</div></div><div class="time">Mon</div></div>
+      </div>
+      <div class="convo">
+        <div class="convo-head"><div><div class="title">design-talk</div><div class="sub">Type, colour and interfaces · 4 online</div></div><div class="right"><span class="chip">⌕ Search</span><span class="chip">Members</span></div></div>
+        <div class="messages">
+          <span class="day">Today</span>
+          <div class="row"><div class="av sm" style="background:#e2483d">AC</div><div class="bubble"><div class="who" style="color:#e2483d">Ava Chen</div>Has anyone tried variable fonts for UI text? Curious about performance on low-end phones.<div class="stamp">10:41</div></div></div>
+          <div class="row"><div class="av sm" style="background:#172033">SO</div><div class="bubble"><div class="who" style="color:#172033">Sam Okafor</div><div class="quote">Ava: Has anyone tried variable fonts…</div>We shipped one last month: about 40 KB smaller than two static weights. <b>No regressions</b> so far.<div class="stamp">10:42</div></div></div>
+          <div class="reacts"><span class="react mine">👍 4</span><span class="react">🔥 2</span></div>
+          <div class="row"><div class="av sm" style="background:#2b59c3">LP</div><div class="bubble"><div class="who" style="color:#2b59c3">Lee Park</div><code>font-display: swap</code> plus a preload made the biggest difference for us.<div class="stamp">10:44</div></div></div>
+          <div class="sys">Mia Novak joined the room</div>
+          <div class="row mine"><div class="bubble">Going to test it on our docs site this week 🙌<div class="stamp">10:45 · ✓ Sent</div></div></div>
+        </div>
+        <div class="typing"><span class="dots"><i></i><i></i><i></i></span>Ava is typing</div>
+        <div class="composer">＋ <span>Write a message…</span><span style="margin-left:auto">😊</span><span class="send" style="margin-left:0">➤</span></div>
+      </div>
+      <div class="details">
+        <div class="room-card"><div class="room-ic" style="background:#fff;color:var(--tomato);border:1px solid var(--line)">Aa</div><div class="n">design-talk</div><div class="d">Public room · 6 members</div></div>
+        <h4>Online · 4</h4>
+        <div class="member"><div class="av sm" style="background:#e2483d">AC</div>Ava Chen<span class="role">owner</span></div>
+        <div class="member"><div class="av sm" style="background:#172033">SO</div>Sam Okafor<span class="role">mod</span></div>
+        <div class="member"><div class="av sm" style="background:#2b59c3">LP</div>Lee Park</div>
+        <div class="member"><div class="av sm" style="background:#c9a227">YO</div>You</div>
+        <h4>Offline · 2</h4>
+        <div class="member dim"><div class="av sm" style="background:#9a9184">MN</div>Mia Novak</div>
+        <div class="member dim"><div class="av sm" style="background:#9a9184">NB</div>Noah Bell</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="tokens">
+    <div class="tcard"><div class="eyebrow">Palette · light first (dark theme: night-post navy)</div>
+      <div class="swatches">
+        <div><div class="sw" style="background:#f3f4ef"></div><div class="swn">paper</div></div>
+        <div><div class="sw" style="background:#e8ebe3"></div><div class="swn">paper 2</div></div>
+        <div><div class="sw" style="background:var(--airmail)"></div><div class="swn">airmail stripe</div></div>
+        <div><div class="sw" style="background:#5d6578"></div><div class="swn">muted</div></div>
+        <div><div class="sw" style="background:#172033"></div><div class="swn">navy ink</div></div>
+        <div><div class="sw" style="background:#e2483d"></div><div class="swn">airmail red</div></div>
+        <div><div class="sw" style="background:#2b59c3"></div><div class="swn">airmail blue</div></div>
+        <div><div class="sw" style="background:#ffd84d"></div><div class="swn">stamp yellow</div></div>
+      </div>
+    </div>
+    <div class="tcard"><div class="eyebrow">Type · Bricolage Grotesque + Figtree</div><div class="big">Hello, <em>stranger.</em></div><div style="color:var(--muted);font-size:14px;margin-top:10px">A friendly, slightly quirky grotesque for headlines and room names; Figtree for everything you read while chatting.</div></div>
+  </section>
+
+<script>
+/* Hero: speech bubbles drift upward, joined by hand-drawn ink threads; cursor gently pushes them. Canvas 2D. */
+(function () {
+  const canvas = document.getElementById('hero');
+  const ctx = canvas.getContext('2d');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let seed = 11; const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const LINES = ['hey! 👋', 'anyone into film photography?', 'yes! mostly 35mm', 'join #film-club?', 'that was brilliant 😄', 'same here', 'what are you reading?', 'just finished Piranesi', 'good morning ☀️', 'welcome in!', 'lol exactly', 'see you at 7?'];
+  const STYLES = [
+    { bg: '#ffffff', fg: '#2f3a52', stroke: '#d9ddd2' },
+    { bg: '#e2483d', fg: '#ffffff', stroke: null },
+    { bg: '#e1e9fb', fg: '#1d3f8f', stroke: null },
+    { bg: '#ffffff', fg: '#2f3a52', stroke: '#d9ddd2' },
+    { bg: '#ffd84d', fg: '#172033', stroke: null }
+  ];
+  const AV = ['#e2483d', '#2b59c3', '#172033', '#c9a227', '#7a5af8'];
+  let W = 0, H = 0, bubbles = [], mouse = { x: -9999, y: -9999 }, running = true, last = 0, n = 0;
+  function measure(text) { ctx.font = '500 15px Figtree, system-ui, sans-serif'; return ctx.measureText(text).width; }
+  function make(y) {
+    const text = LINES[n % LINES.length]; const style = STYLES[n % STYLES.length]; const left = n % 2 === 0; n++;
+    const w = measure(text) + 30, h = 40;
+    const x = left ? 40 + rand() * (W * .28) : W - w - 40 - rand() * (W * .28);
+    return { text, style, left, w, h, x, y, vy: -(.12 + rand() * .06), sway: rand() * Math.PI * 2, av: AV[Math.floor(rand() * AV.length)] };
+  }
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = canvas.clientWidth; H = canvas.clientHeight; canvas.width = W * dpr; canvas.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    bubbles = []; n = 0; for (let y = 40; y < H + 40; y += 72) bubbles.push(make(y));
+  }
+  function rr(x, y, w, h, r, left) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - (left ? r : 4)); ctx.quadraticCurveTo(x + w, y + h, x + w - (left ? r : 4), y + h);
+    ctx.lineTo(x + (left ? 4 : r), y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - (left ? 4 : r));
+    ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+  }
+  function frame(now) {
+    const dt = Math.min(48, now - last || 16); last = now;
+    ctx.clearRect(0, 0, W, H);
+    // dotted paper grid
+    ctx.fillStyle = 'rgba(23,32,51,.08)';
+    for (let gx = 16; gx < W; gx += 28) for (let gy = 16; gy < H; gy += 28) ctx.fillRect(gx, gy, 1.5, 1.5);
+    for (const b of bubbles) {
+      if (!reduce) { b.y += b.vy * dt; b.sway += dt * .0012; }
+      const cx = b.x + b.w / 2, cy = b.y + b.h / 2, d = Math.hypot(mouse.x - cx, mouse.y - cy);
+      if (d < 140 && !reduce) { b.x += (cx - mouse.x) / d * 1.2; }
+    }
+    if (bubbles.length && bubbles[0].y < -60) { bubbles.shift(); bubbles.push(make(bubbles[bubbles.length - 1].y + 72)); }
+    // ink threads between consecutive bubbles
+    ctx.setLineDash([2, 6]); ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(43,89,195,.45)'; ctx.lineCap = 'round';
+    for (let i = 0; i < bubbles.length - 1; i++) {
+      const a = bubbles[i], c = bubbles[i + 1];
+      const ax = a.x + (a.left ? 16 : a.w - 16) + Math.sin(a.sway) * 4, ay = a.y + a.h;
+      const cx2 = c.x + (c.left ? 16 : c.w - 16) + Math.sin(c.sway) * 4, cy2 = c.y;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.bezierCurveTo(ax, ay + 24, cx2, cy2 - 24, cx2, cy2); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    for (const b of bubbles) {
+      const x = b.x + Math.sin(b.sway) * 4, y = b.y;
+      // avatar
+      const ax = b.left ? x - 22 : x + b.w + 22;
+      ctx.fillStyle = b.av; ctx.beginPath(); ctx.arc(ax, y + b.h - 8, 11, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowColor = 'rgba(23,32,51,.14)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 6;
+      ctx.fillStyle = b.style.bg; rr(x, y, b.w, b.h, 18, b.left); ctx.fill();
+      ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+      if (b.style.stroke) { ctx.strokeStyle = b.style.stroke; ctx.lineWidth = 1; ctx.stroke(); }
+      ctx.fillStyle = b.style.fg; ctx.font = '500 15px Figtree, system-ui, sans-serif'; ctx.textBaseline = 'middle';
+      ctx.fillText(b.text, x + 15, y + b.h / 2 + 1);
+    }
+    // soft fade top and bottom
+    const g1 = ctx.createLinearGradient(0, 0, 0, 70); g1.addColorStop(0, '#e8ebe3'); g1.addColorStop(1, 'rgba(232,235,227,0)'); ctx.fillStyle = g1; ctx.fillRect(0, 0, W, 70);
+    const g2 = ctx.createLinearGradient(0, H - 70, 0, H); g2.addColorStop(0, 'rgba(232,235,227,0)'); g2.addColorStop(1, '#e8ebe3'); ctx.fillStyle = g2; ctx.fillRect(0, H - 70, W, 70);
+    if (running && !reduce) requestAnimationFrame(frame);
+  }
+  addEventListener('resize', resize);
+  canvas.addEventListener('pointermove', e => { const r = canvas.getBoundingClientRect(); mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top; });
+  canvas.addEventListener('pointerleave', () => { mouse.x = mouse.y = -9999; });
+  document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) requestAnimationFrame(frame); });
+  new IntersectionObserver(([e]) => { const was = running; running = e.isIntersecting && !document.hidden; if (running && !was) requestAnimationFrame(frame); }).observe(canvas);
+  (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => { resize(); requestAnimationFrame(frame); });
+})();
+</script>
+</body>
+</html>

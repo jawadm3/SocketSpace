@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SocketSpace mockup A: Signal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Direction A: "Signal". Dark-first, precise, technical. Mockup only (Stage B). */
+  :root {
+    --bg: #07090f; --bg-2: #0b0e18; --surface: #0e1220; --surface-2: #131829; --border: #1c2236;
+    --text: #e6e9f2; --muted: #8a93a8; --faint: #5a6278;
+    --teal: #2dd4bf; --violet: #8b5cf6; --pink: #f472b6; --amber: #fbbf24;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: Geist, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .mono { font-family: 'Geist Mono', ui-monospace, monospace; }
+  .label { font-family: 'Geist Mono', monospace; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+  nav { position: relative; z-index: 3; display: flex; align-items: center; justify-content: space-between; padding: 20px 48px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 18px; letter-spacing: -.01em; }
+  .logo-mark { width: 26px; height: 26px; border-radius: 7px; background: conic-gradient(from 200deg, var(--teal), var(--violet), var(--teal)); display: grid; place-items: center; }
+  .logo-mark::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--bg); }
+  .nav-links { display: flex; gap: 28px; color: var(--muted); font-size: 14px; }
+  .nav-actions { display: flex; gap: 10px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; border-radius: 8px; padding: 10px 16px; font-size: 14px; font-weight: 500; border: 1px solid var(--border); color: var(--text); background: var(--surface); text-decoration: none; }
+  .btn-primary { background: var(--text); color: var(--bg); border-color: transparent; }
+  .btn-lg { padding: 13px 22px; font-size: 15px; }
+
+  .hero { position: relative; height: 720px; overflow: hidden; border-bottom: 1px solid var(--border); margin-top: -70px; }
+  .hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
+  .hero::after { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: radial-gradient(ellipse 60% 55% at 50% 42%, rgba(7,9,15,.82) 0%, rgba(7,9,15,.35) 55%, transparent 75%), linear-gradient(transparent 70%, var(--bg)); }
+  .hero-content { position: relative; z-index: 2; max-width: 780px; margin: 0 auto; padding-top: 190px; text-align: center; }
+  .pill { display: inline-flex; gap: 8px; align-items: center; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: rgba(14,18,32,.75); font-size: 13px; color: var(--muted); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 10px var(--teal); }
+  h1 { font-size: 76px; line-height: 1.0; letter-spacing: -.048em; font-weight: 600; margin: 26px 0 22px; }
+  h1 .grad { background: linear-gradient(90deg, var(--teal), var(--violet)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lede { font-size: 19px; line-height: 1.55; color: var(--muted); max-width: 580px; margin: 0 auto 34px; }
+  .ctas { display: flex; gap: 12px; justify-content: center; }
+  .stats { display: flex; gap: 36px; justify-content: center; margin-top: 46px; color: var(--muted); font-size: 13px; }
+  .stats b { color: var(--text); font-weight: 500; }
+
+  .features { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--border); }
+  .feature { padding: 34px 32px; border-right: 1px solid var(--border); }
+  .feature:last-child { border-right: 0; }
+  .feature h3 { font-size: 17px; font-weight: 600; margin: 12px 0 8px; letter-spacing: -.01em; }
+  .feature p { color: var(--muted); font-size: 14px; line-height: 1.55; }
+  .ficon { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); display: grid; place-items: center; background: var(--surface); }
+
+  .section { padding: 64px 48px 72px; }
+  .section-head { display: flex; justify-content: space-between; align-items: end; margin-bottom: 26px; }
+  .section-head h2 { font-size: 34px; letter-spacing: -.03em; font-weight: 600; }
+
+  /* App window */
+  .window { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: var(--bg-2); box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(45,212,191,.04); display: grid; grid-template-columns: 60px 250px 1fr 250px; height: 640px; }
+  .rail { background: var(--bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 0; }
+  .rail-btn { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); position: relative; }
+  .rail-btn.active { background: var(--surface-2); color: var(--text); }
+  .rail-btn .badge { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: var(--pink); box-shadow: 0 0 0 2px var(--bg); }
+  .rail .me { margin-top: auto; }
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 14px 10px; font-size: 14px; }
+  .search { display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; color: var(--faint); font-size: 13px; margin-bottom: 18px; background: var(--bg-2); }
+  .kbd { font-family: 'Geist Mono', monospace; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; color: var(--muted); }
+  .group { font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .08em; color: var(--faint); margin: 14px 8px 6px; }
+  .item { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 7px; color: var(--muted); }
+  .item.active { background: var(--surface-2); color: var(--text); box-shadow: inset 2px 0 0 var(--teal); }
+  .item .hash { color: var(--faint); width: 14px; text-align: center; }
+  .item .count { margin-left: auto; font-size: 11px; font-weight: 600; background: var(--teal); color: var(--bg); border-radius: 999px; padding: 1px 7px; }
+  .item.unread { color: var(--text); font-weight: 500; }
+  .presence { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .on { background: var(--teal); } .away { background: var(--amber); } .off { border: 1.5px solid var(--faint); }
+
+  .convo { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+  .convo-head { height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; padding: 0 20px; }
+  .convo-head .name { font-weight: 600; }
+  .convo-head .topic { color: var(--muted); font-size: 13px; border-left: 1px solid var(--border); padding-left: 12px; }
+  .convo-head .right { margin-left: auto; display: flex; gap: 14px; color: var(--muted); font-size: 13px; align-items: center; }
+  .messages { flex: 1; min-height: 0; overflow: hidden; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .divider { display: flex; align-items: center; gap: 10px; color: var(--pink); font-size: 11px; font-family: 'Geist Mono', monospace; letter-spacing: .06em; }
+  .divider::before, .divider::after { content: ''; height: 1px; flex: 1; background: rgba(244,114,182,.35); }
+  .msg { display: grid; grid-template-columns: 36px 1fr; gap: 12px; }
+  .avatar { width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center; font-weight: 600; font-size: 13px; color: var(--bg); }
+  .meta { display: flex; gap: 8px; align-items: baseline; font-size: 14px; }
+  .meta b { font-weight: 600; }
+  .meta .role { font-family: 'Geist Mono', monospace; font-size: 10px; color: var(--teal); border: 1px solid rgba(45,212,191,.35); border-radius: 4px; padding: 0 4px; }
+  .meta time { color: var(--faint); font-size: 12px; }
+  .body { color: #cfd4e2; font-size: 14.5px; line-height: 1.55; margin-top: 2px; }
+  .body code { font-family: 'Geist Mono', monospace; font-size: 12.5px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; color: var(--teal); }
+  .reply { font-size: 12.5px; color: var(--muted); border-left: 2px solid var(--violet); padding-left: 8px; margin-bottom: 4px; }
+  .reactions { display: flex; gap: 6px; margin-top: 6px; }
+  .react { font-size: 12px; border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 2px 8px; color: var(--muted); }
+  .react.mine { border-color: rgba(45,212,191,.5); color: var(--text); background: rgba(45,212,191,.08); }
+  .system { color: var(--faint); font-size: 13px; padding-left: 48px; }
+  .ticks { color: var(--teal); font-size: 12px; margin-left: 6px; }
+  .typing { color: var(--muted); font-size: 12.5px; padding: 0 20px 6px; display: flex; gap: 8px; align-items: center; }
+  .typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); display: inline-block; margin-right: 2px; }
+  .composer { margin: 0 20px 18px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 12px 14px; display: flex; align-items: center; gap: 12px; color: var(--faint); font-size: 14px; }
+  .composer .send { margin-left: auto; width: 30px; height: 30px; border-radius: 7px; background: var(--teal); display: grid; place-items: center; color: var(--bg); }
+
+  .details { background: var(--surface); border-left: 1px solid var(--border); padding: 18px 16px; font-size: 14px; }
+  .details h4 { font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .08em; color: var(--faint); font-weight: 500; margin: 6px 0 12px; }
+  .member { display: flex; align-items: center; gap: 10px; padding: 6px 0; color: var(--muted); }
+  .member .av { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: var(--bg); position: relative; }
+  .member .av .presence { position: absolute; right: -3px; bottom: -3px; box-shadow: 0 0 0 2px var(--surface); }
+  .member .tag { margin-left: auto; font-family: 'Geist Mono', monospace; font-size: 10px; color: var(--faint); }
+  .member.dim { opacity: .55; }
+
+  /* Tokens */
+  .tokens { display: grid; grid-template-columns: 1.3fr 1fr; gap: 24px; padding: 0 48px 64px; }
+  .card { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 24px; }
+  .swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 10px; margin-top: 16px; }
+  .sw { border-radius: 8px; height: 64px; border: 1px solid var(--border); }
+  .sw-name { font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--muted); margin-top: 6px; }
+  .type-sample { margin-top: 14px; }
+  .type-sample .big { font-size: 40px; font-weight: 600; letter-spacing: -.04em; }
+  .type-sample .ui { color: var(--muted); font-size: 14px; margin-top: 6px; }
+</style>
+</head>
+<body>
+  <nav>
+    <div class="logo"><span class="logo-mark"></span>SocketSpace</div>
+    <div class="nav-links"><span>Product</span><span>Random mode</span><span>Safety</span><span>How it works</span></div>
+    <div class="nav-actions"><a class="btn">Sign in</a><a class="btn btn-primary">Try the demo</a></div>
+  </nav>
+
+  <header class="hero">
+    <canvas id="hero" aria-hidden="true"></canvas>
+    <div class="hero-content">
+      <span class="pill"><span class="dot"></span>Live now · rooms, DMs and a safer random mode</span>
+      <h1>Every conversation,<br><span class="grad">in real time.</span></h1>
+      <p class="lede">Rooms for your communities, direct messages for your people, and a moderated way to meet someone new. Built for speed, privacy and safety.</p>
+      <div class="ctas"><a class="btn btn-primary btn-lg">Try the demo</a><a class="btn btn-lg">Create an account</a></div>
+      <div class="stats"><span><b>Instant</b> delivery and sync</span><span><b>Nothing lost</b> when you reconnect</span><span><b>18+</b> gated random mode</span></div>
+    </div>
+  </header>
+
+  <section class="features">
+    <div class="feature"><div class="ficon">⚡</div><h3>Instant everywhere</h3><p>Messages, typing and presence sync across tabs and devices the moment they happen.</p></div>
+    <div class="feature"><div class="ficon">#</div><h3>Rooms and DMs</h3><p>Public and private rooms with roles and invites, plus one-to-one conversations.</p></div>
+    <div class="feature"><div class="ficon">🎲</div><h3>Meet someone new</h3><p>Match by shared interests, text only, with strict limits and one-tap report.</p></div>
+    <div class="feature"><div class="ficon">🛡</div><h3>Moderated by design</h3><p>Filters, reports, blocks and a moderator dashboard with a full audit log.</p></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><div><div class="label">Inside the app</div><h2>Dense when you need it, calm when you don't.</h2></div><div class="label">Desktop · dark theme</div></div>
+    <div class="window">
+      <div class="rail">
+        <div class="logo-mark" style="margin-bottom:8px"></div>
+        <div class="rail-btn">⌂</div><div class="rail-btn active">#</div><div class="rail-btn">@<span class="badge"></span></div><div class="rail-btn">🎲</div><div class="rail-btn">🔔</div>
+        <div class="rail-btn me"><div class="avatar" style="width:30px;height:30px;font-size:11px;background:var(--amber)">YO</div></div>
+      </div>
+      <div class="sidebar">
+        <div class="search">Jump to… <span class="kbd">Ctrl K</span></div>
+        <div class="group">ROOMS</div>
+        <div class="item unread"><span class="hash">#</span>general<span class="count">3</span></div>
+        <div class="item active"><span class="hash">#</span>design-talk</div>
+        <div class="item"><span class="hash">#</span>frontend</div>
+        <div class="item"><span class="hash">#</span>random-finds</div>
+        <div class="group">DIRECT MESSAGES</div>
+        <div class="item unread"><span class="presence on"></span>Sam Okafor<span class="count">1</span></div>
+        <div class="item"><span class="presence away"></span>Lee Park</div>
+        <div class="item"><span class="presence off"></span>Mia Novak</div>
+      </div>
+      <div class="convo">
+        <div class="convo-head"><span class="name"># design-talk</span><span class="topic">Type, colour and interfaces</span><div class="right"><span>● 4 online</span><span>⌕</span><span>⋯</span></div></div>
+        <div class="messages">
+          <div class="msg"><div class="avatar" style="background:var(--teal)">AC</div><div><div class="meta"><b>Ava Chen</b><span class="role">OWNER</span><time>10:41</time></div><div class="body">Has anyone tried variable fonts for UI text? Curious about performance on low-end phones.</div></div></div>
+          <div class="divider">NEW MESSAGES</div>
+          <div class="msg"><div class="avatar" style="background:var(--violet)">SO</div><div><div class="meta"><b>Sam Okafor</b><span class="role">MOD</span><time>10:42</time></div><div class="reply">↳ Ava Chen: Has anyone tried variable fonts…</div><div class="body">We shipped one last month: about 40 KB smaller than two static weights. <b>No regressions</b> so far.</div><div class="reactions"><span class="react mine">👍 4</span><span class="react">🔥 2</span></div></div></div>
+          <div class="msg"><div class="avatar" style="background:var(--pink)">LP</div><div><div class="meta"><b>Lee Park</b><time>10:44</time></div><div class="body"><code>font-display: swap</code> plus a preload made the biggest difference for us.</div></div></div>
+          <div class="system">→ Mia Novak joined the room</div>
+          <div class="msg"><div class="avatar" style="background:var(--amber)">YO</div><div><div class="meta"><b>You</b><time>10:45</time><span class="ticks">✓ Sent</span></div><div class="body">Going to test it on our docs site this week 🙌</div></div></div>
+        </div>
+        <div class="typing"><span><i></i><i></i><i></i></span>Ava is typing…</div>
+        <div class="composer">＋<span>Message #design-talk</span><span style="margin-left:auto">😊</span><span class="send" style="margin-left:0">➤</span></div>
+      </div>
+      <div class="details">
+        <h4>ONLINE · 4</h4>
+        <div class="member"><div class="av" style="background:var(--teal)">AC<span class="presence on"></span></div>Ava Chen<span class="tag">owner</span></div>
+        <div class="member"><div class="av" style="background:var(--violet)">SO<span class="presence on"></span></div>Sam Okafor<span class="tag">mod</span></div>
+        <div class="member"><div class="av" style="background:var(--pink)">LP<span class="presence away"></span></div>Lee Park</div>
+        <div class="member"><div class="av" style="background:var(--amber)">YO<span class="presence on"></span></div>You</div>
+        <h4 style="margin-top:22px">OFFLINE · 2</h4>
+        <div class="member dim"><div class="av" style="background:#64748b">MN</div>Mia Novak</div>
+        <div class="member dim"><div class="av" style="background:#64748b">NB</div>Noah Bell</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="tokens">
+    <div class="card"><div class="label">Palette · dark first (light theme mirrors it)</div>
+      <div class="swatches">
+        <div><div class="sw" style="background:#07090f"></div><div class="sw-name">ink 950</div></div>
+        <div><div class="sw" style="background:#0e1220"></div><div class="sw-name">surface</div></div>
+        <div><div class="sw" style="background:#1c2236"></div><div class="sw-name">border</div></div>
+        <div><div class="sw" style="background:#8a93a8"></div><div class="sw-name">muted</div></div>
+        <div><div class="sw" style="background:#e6e9f2"></div><div class="sw-name">text</div></div>
+        <div><div class="sw" style="background:#2dd4bf"></div><div class="sw-name">signal teal</div></div>
+        <div><div class="sw" style="background:#8b5cf6"></div><div class="sw-name">violet</div></div>
+        <div><div class="sw" style="background:#f472b6"></div><div class="sw-name">alert pink</div></div>
+      </div>
+    </div>
+    <div class="card"><div class="label">Type · Geist + Geist Mono</div>
+      <div class="type-sample"><div class="big">Aa Signal 600</div><div class="ui">UI text 14–15 px, tight headings (−4.5%), mono for labels and metadata.</div><div class="ui mono" style="color:var(--teal);font-size:13px">10:45 · ✓ SENT · #design-talk</div></div>
+    </div>
+  </section>
+
+<script>
+/* Hero: a constellation of nodes; messages travel along edges as light pulses; cursor attracts. Canvas 2D. */
+(function () {
+  const canvas = document.getElementById('hero');
+  const ctx = canvas.getContext('2d');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let seed = 7; const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  let W = 0, H = 0, nodes = [], pulses = [], mouse = { x: -9999, y: -9999 }, running = true, last = 0, spawnT = 0;
+  const LINK = 150;
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = canvas.clientWidth; H = canvas.clientHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const count = Math.round((W * H) / 11000);
+    nodes = Array.from({ length: count }, () => ({
+      x: rand() * W, y: rand() * H, vx: (rand() - .5) * .18, vy: (rand() - .5) * .18,
+      r: rand() < .12 ? 2.8 : 1.1 + rand() * 1.2, flash: 0, hue: rand() < .5 ? 'teal' : 'violet'
+    }));
+    for (let i = 0; i < 14; i++) spawn(rand());
+  }
+  function neighbours(n) { return nodes.filter(m => m !== n && Math.hypot(m.x - n.x, m.y - n.y) < LINK); }
+  function spawn(progress = 0) {
+    const a = nodes[Math.floor(rand() * nodes.length)]; const ns = neighbours(a); if (!ns.length) return;
+    const b = ns[Math.floor(rand() * ns.length)];
+    pulses.push({ a, b, t: progress, speed: .006 + rand() * .006, hue: a.hue, hops: 2 + Math.floor(rand() * 3) });
+  }
+  const COLORS = { teal: [45, 212, 191], violet: [139, 92, 246] };
+  function frame(now) {
+    const dt = Math.min(48, now - last || 16); last = now;
+    ctx.clearRect(0, 0, W, H);
+    for (const n of nodes) {
+      if (!reduce) { n.x += n.vx * dt * .06; n.y += n.vy * dt * .06; }
+      const dx = mouse.x - n.x, dy = mouse.y - n.y, d = Math.hypot(dx, dy);
+      if (d < 180 && !reduce) { n.x += dx * .0025; n.y += dy * .0025; }
+      if (n.x < -20) n.x = W + 20; if (n.x > W + 20) n.x = -20; if (n.y < -20) n.y = H + 20; if (n.y > H + 20) n.y = -20;
+      n.flash *= .94;
+    }
+    ctx.lineWidth = 1;
+    for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i], b = nodes[j], d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d < LINK) { ctx.strokeStyle = `rgba(120,140,190,${(1 - d / LINK) * .22})`; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+    }
+    for (const n of nodes) {
+      const md = Math.hypot(mouse.x - n.x, mouse.y - n.y);
+      if (md < 180) { ctx.strokeStyle = `rgba(45,212,191,${(1 - md / 180) * .35})`; ctx.beginPath(); ctx.moveTo(n.x, n.y); ctx.lineTo(mouse.x, mouse.y); ctx.stroke(); }
+    }
+    for (const p of pulses) {
+      if (!reduce) p.t += p.speed * dt * .06 * 16;
+      const x = p.a.x + (p.b.x - p.a.x) * Math.min(p.t, 1), y = p.a.y + (p.b.y - p.a.y) * Math.min(p.t, 1);
+      const [r, g, bl] = COLORS[p.hue];
+      const tx = p.a.x + (p.b.x - p.a.x) * Math.max(0, p.t - .35), ty = p.a.y + (p.b.y - p.a.y) * Math.max(0, p.t - .35);
+      const grad = ctx.createLinearGradient(tx, ty, x, y); grad.addColorStop(0, `rgba(${r},${g},${bl},0)`); grad.addColorStop(1, `rgba(${r},${g},${bl},.9)`);
+      ctx.strokeStyle = grad; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(x, y); ctx.stroke();
+      ctx.fillStyle = `rgba(${r},${g},${bl},1)`; ctx.shadowColor = `rgb(${r},${g},${bl})`; ctx.shadowBlur = 14;
+      ctx.beginPath(); ctx.arc(x, y, 2.4, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+      if (p.t >= 1) {
+        p.b.flash = 1; p.hops--;
+        const ns = neighbours(p.b).filter(m => m !== p.a);
+        if (p.hops > 0 && ns.length) { p.a = p.b; p.b = ns[Math.floor(rand() * ns.length)]; p.t = 0; } else p.dead = true;
+      }
+    }
+    pulses = pulses.filter(p => !p.dead);
+    for (const n of nodes) {
+      const [r, g, b] = COLORS[n.hue];
+      if (n.r > 2 || n.flash > .05) { ctx.shadowColor = `rgb(${r},${g},${b})`; ctx.shadowBlur = 10 + n.flash * 20; }
+      ctx.fillStyle = n.r > 2 || n.flash > .05 ? `rgba(${r},${g},${b},${.75 + n.flash * .25})` : 'rgba(170,185,220,.55)';
+      ctx.beginPath(); ctx.arc(n.x, n.y, n.r + n.flash * 2, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+    }
+    spawnT += dt; if (spawnT > 420 && pulses.length < 26 && !reduce) { spawn(); spawnT = 0; }
+    if (running && !reduce) requestAnimationFrame(frame);
+  }
+  addEventListener('resize', resize);
+  canvas.parentElement.addEventListener('pointermove', e => { const r = canvas.getBoundingClientRect(); mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top; });
+  canvas.parentElement.addEventListener('pointerleave', () => { mouse.x = mouse.y = -9999; });
+  document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) requestAnimationFrame(frame); });
+  new IntersectionObserver(([e]) => { const was = running; running = e.isIntersecting && !document.hidden; if (running && !was) requestAnimationFrame(frame); }).observe(canvas);
+  resize(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

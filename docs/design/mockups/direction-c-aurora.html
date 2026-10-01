@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SocketSpace mockup C: Aurora</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Direction C: "Aurora". Vivid, expressive, social; glass panels over an aurora gradient. Mockup only (Stage B). */
+  :root {
+    --night: #0b0614; --night-2: #120a22; --glass: rgba(255,255,255,.06); --glass-2: rgba(255,255,255,.1); --edge: rgba(255,255,255,.12);
+    --text: #f5f3ff; --muted: #b8b0d4; --faint: #7e76a0;
+    --violet: #7c3aed; --pink: #ec4899; --amber: #f59e0b; --cyan: #22d3ee; --lime: #a3e635;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--night); color: var(--text); font-family: Manrope, system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  .display { font-family: 'Unbounded', Manrope, sans-serif; }
+
+  .aurora { position: absolute; inset: 0; overflow: hidden; z-index: 0; }
+  .blob { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .55; }
+  .b1 { width: 620px; height: 520px; background: var(--violet); left: -120px; top: -80px; }
+  .b2 { width: 560px; height: 480px; background: var(--pink); right: -100px; top: 60px; opacity: .45; }
+  .b3 { width: 520px; height: 420px; background: var(--amber); left: 38%; top: 380px; opacity: .25; }
+  .b4 { width: 420px; height: 380px; background: var(--cyan); left: 8%; top: 470px; opacity: .22; }
+  @media (prefers-reduced-motion: no-preference) {
+    .b1 { animation: drift 18s ease-in-out infinite alternate; } .b2 { animation: drift 22s ease-in-out infinite alternate-reverse; }
+    .b3 { animation: drift 26s ease-in-out infinite alternate; } .b4 { animation: drift 20s ease-in-out infinite alternate-reverse; }
+  }
+  @keyframes drift { to { transform: translate(60px, 40px) scale(1.08); } }
+
+  nav { position: relative; z-index: 3; display: flex; align-items: center; justify-content: space-between; padding: 22px 52px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 20px; }
+  .logo-mark { width: 30px; height: 30px; border-radius: 50%; background: conic-gradient(var(--violet), var(--pink), var(--amber), var(--cyan), var(--violet)); position: relative; }
+  .logo-mark::after { content: ''; position: absolute; inset: 7px; border-radius: 50%; background: var(--night); }
+  .nav-links { display: flex; gap: 6px; padding: 6px; border-radius: 999px; background: var(--glass); border: 1px solid var(--edge); backdrop-filter: blur(12px); }
+  .nav-links span { padding: 8px 16px; border-radius: 999px; font-size: 14px; color: var(--muted); }
+  .nav-links span.active { background: var(--glass-2); color: var(--text); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 11px 20px; font-size: 14.5px; font-weight: 600; color: var(--text); background: var(--glass); border: 1px solid var(--edge); backdrop-filter: blur(12px); }
+  .btn-glow { background: linear-gradient(90deg, var(--violet), var(--pink)); border: 0; box-shadow: 0 8px 30px rgba(236,72,153,.35); }
+  .btn-lg { padding: 15px 26px; font-size: 16px; }
+
+  .hero { position: relative; height: 760px; margin-top: -76px; overflow: hidden; }
+  .hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; }
+  .hero-content { position: relative; z-index: 2; text-align: center; padding-top: 168px; }
+  .hero::after { content: ''; position: absolute; z-index: 1; left: 50%; top: 300px; width: 1100px; height: 520px; transform: translate(-50%, -50%); background: radial-gradient(ellipse at center, rgba(11,6,20,.78) 0%, rgba(11,6,20,.45) 45%, transparent 70%); pointer-events: none; }
+  .badge { display: inline-flex; align-items: center; gap: 10px; padding: 7px 14px 7px 7px; border-radius: 999px; background: var(--glass); border: 1px solid var(--edge); font-size: 13.5px; color: var(--muted); backdrop-filter: blur(12px); }
+  .badge b { background: linear-gradient(90deg, var(--cyan), var(--lime)); color: #06121a; border-radius: 999px; padding: 3px 9px; font-size: 12px; }
+  h1 { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 70px; line-height: 1.06; letter-spacing: -.01em; margin: 26px auto 22px; max-width: 1000px; }
+  h1 .grad { background: linear-gradient(90deg, #c4b5fd, var(--pink) 45%, var(--amber)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lede { font-size: 19px; line-height: 1.6; color: var(--muted); max-width: 600px; margin: 0 auto 34px; }
+  .ctas { display: flex; gap: 14px; justify-content: center; }
+
+  .features { position: relative; z-index: 2; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 0 52px 72px; margin-top: -40px; }
+  .fcard { border-radius: 24px; padding: 24px; background: var(--glass); border: 1px solid var(--edge); backdrop-filter: blur(16px); }
+  .fcard .ic { width: 46px; height: 46px; border-radius: 16px; display: grid; place-items: center; font-size: 20px; margin-bottom: 16px; }
+  .fcard h3 { font-family: 'Unbounded', sans-serif; font-size: 20px; margin-bottom: 8px; }
+  .fcard p { color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+
+  .section { position: relative; padding: 40px 52px 72px; }
+  .section-head { display: flex; justify-content: space-between; align-items: end; margin-bottom: 26px; }
+  .section-head h2 { font-family: 'Unbounded', sans-serif; font-size: 36px; letter-spacing: -.03em; }
+  .kicker { font-size: 13px; font-weight: 600; background: linear-gradient(90deg, var(--cyan), var(--lime)); -webkit-background-clip: text; background-clip: text; color: transparent; letter-spacing: .04em; text-transform: uppercase; }
+  .label { color: var(--faint); font-size: 13px; }
+  .window-wrap { position: relative; border-radius: 30px; padding: 1px; background: linear-gradient(135deg, rgba(124,58,237,.7), rgba(236,72,153,.5), rgba(34,211,238,.4)); box-shadow: 0 30px 90px rgba(124,58,237,.25); }
+  .window { border-radius: 29px; overflow: hidden; display: grid; grid-template-columns: 76px 270px 1fr 250px; height: 640px; background: linear-gradient(160deg, #1a0f33, #120a22 50%, #1b0d2a); }
+  .rail { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px 0; background: rgba(0,0,0,.18); }
+  .rail .r { width: 46px; height: 46px; border-radius: 16px; display: grid; place-items: center; font-size: 18px; color: var(--muted); position: relative; }
+  .rail .r.active { background: linear-gradient(135deg, var(--violet), var(--pink)); color: #fff; box-shadow: 0 6px 20px rgba(236,72,153,.35); }
+  .rail .r .dot { position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 2px #160c2a; }
+  .rail .bottom { margin-top: auto; }
+  .sidebar { padding: 18px 14px; background: rgba(255,255,255,.025); border-right: 1px solid rgba(255,255,255,.06); }
+  .sidebar h3 { font-family: 'Unbounded', sans-serif; font-size: 22px; margin: 2px 6px 14px; }
+  .search { border-radius: 14px; background: var(--glass); border: 1px solid var(--edge); padding: 10px 12px; color: var(--faint); font-size: 14px; margin-bottom: 14px; }
+  .section-t { font-size: 11.5px; letter-spacing: .08em; color: var(--faint); margin: 14px 8px 8px; text-transform: uppercase; }
+  .ch { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 14px; color: var(--muted); font-size: 14.5px; }
+  .ch.active { background: var(--glass-2); color: var(--text); }
+  .ch .em { width: 32px; height: 32px; border-radius: 11px; display: grid; place-items: center; background: var(--glass); font-size: 15px; }
+  .ch .n { margin-left: auto; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 8px; background: linear-gradient(90deg, var(--pink), var(--amber)); color: #1a0b16; }
+  .av { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; position: relative; flex: none; }
+  .av .p { position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #170d2b; }
+  .on { background: var(--lime); } .away { background: var(--amber); } .off { background: #5b5377; }
+  .g1 { background: linear-gradient(135deg, #8b5cf6, #ec4899); } .g2 { background: linear-gradient(135deg, #22d3ee, #6366f1); }
+  .g3 { background: linear-gradient(135deg, #f59e0b, #ec4899); } .g4 { background: linear-gradient(135deg, #a3e635, #22d3ee); } .g5 { background: #4b4366; }
+
+  .convo { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+  .head { display: flex; align-items: center; gap: 12px; padding: 16px 22px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .head .t { font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 19px; }
+  .head .s { color: var(--faint); font-size: 13px; }
+  .head .right { margin-left: auto; display: flex; gap: 8px; }
+  .chip { padding: 7px 12px; border-radius: 999px; background: var(--glass); border: 1px solid var(--edge); font-size: 13px; color: var(--muted); }
+  .msgs { flex: 1; min-height: 0; padding: 18px 22px; display: flex; flex-direction: column; justify-content: flex-end; gap: 12px; overflow: hidden; }
+  .m { display: flex; gap: 10px; align-items: flex-end; max-width: 80%; }
+  .m.mine { align-self: flex-end; flex-direction: row-reverse; }
+  .bub { padding: 10px 14px; border-radius: 20px 20px 20px 6px; background: var(--glass-2); border: 1px solid rgba(255,255,255,.08); font-size: 14.5px; line-height: 1.5; color: #e9e5fb; }
+  .bub .who { font-size: 12.5px; font-weight: 600; margin-bottom: 2px; }
+  .m.mine .bub { background: linear-gradient(135deg, var(--violet), var(--pink)); border: 0; border-radius: 20px 20px 6px 20px; color: #fff; }
+  .bub code { font-family: ui-monospace, monospace; font-size: 12.5px; background: rgba(0,0,0,.3); border-radius: 6px; padding: 1px 5px; color: var(--cyan); }
+  .q { border-left: 3px solid var(--cyan); padding: 3px 8px; margin-bottom: 6px; font-size: 12.5px; color: var(--muted); background: rgba(34,211,238,.08); border-radius: 6px; }
+  .rx { display: flex; gap: 6px; margin-left: 42px; }
+  .rx span { padding: 3px 9px; border-radius: 999px; background: var(--glass); border: 1px solid var(--edge); font-size: 12.5px; color: var(--muted); }
+  .rx span.mine { border-color: rgba(236,72,153,.6); background: rgba(236,72,153,.15); color: #fff; }
+  .ts { font-size: 11.5px; color: var(--faint); margin-top: 3px; text-align: right; }
+  .m.mine .ts { color: rgba(255,255,255,.85); }
+  .sys { align-self: center; font-size: 12.5px; color: var(--faint); padding: 4px 12px; border-radius: 999px; background: rgba(255,255,255,.04); }
+  .typing { padding: 0 22px 8px; color: var(--muted); font-size: 13px; display: flex; gap: 8px; align-items: center; }
+  .typing i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: linear-gradient(var(--pink), var(--amber)); margin-right: 3px; }
+  .composer { margin: 0 22px 18px; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 16px; border-radius: 20px; background: var(--glass); border: 1px solid var(--edge); color: var(--faint); font-size: 14.5px; }
+  .composer .send { margin-left: auto; width: 40px; height: 40px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg, var(--violet), var(--pink)); color: #fff; }
+
+  .details { padding: 20px 18px; background: rgba(255,255,255,.025); border-left: 1px solid rgba(255,255,255,.06); }
+  .details .top { border-radius: 20px; padding: 18px; text-align: center; background: linear-gradient(160deg, rgba(124,58,237,.35), rgba(236,72,153,.2)); border: 1px solid var(--edge); margin-bottom: 16px; }
+  .details .top .big { font-size: 30px; }
+  .details .top .n { font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 18px; margin-top: 4px; }
+  .details .top .d { color: var(--muted); font-size: 12.5px; }
+  .details h4 { font-size: 11.5px; letter-spacing: .08em; color: var(--faint); text-transform: uppercase; margin: 10px 0 8px; font-weight: 500; }
+  .mem { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 14px; color: var(--muted); }
+  .mem .role { margin-left: auto; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(34,211,238,.15); color: var(--cyan); }
+  .mem.dim { opacity: .5; }
+
+  .tokens { position: relative; display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; padding: 0 52px 64px; }
+  .tcard { border-radius: 24px; padding: 24px; background: var(--glass); border: 1px solid var(--edge); }
+  .sws { display: grid; grid-template-columns: repeat(8, 1fr); gap: 10px; margin-top: 16px; }
+  .sw { height: 64px; border-radius: 16px; border: 1px solid var(--edge); }
+  .swn { font-size: 11px; color: var(--faint); margin-top: 6px; }
+  .type-big { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 38px; letter-spacing: -.03em; margin-top: 12px; background: linear-gradient(90deg, #c4b5fd, var(--pink), var(--amber)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+</style>
+</head>
+<body>
+  <div style="position:relative">
+    <div class="aurora"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="blob b4"></div></div>
+    <nav>
+      <div class="logo"><span class="logo-mark"></span>SocketSpace</div>
+      <div class="nav-links"><span class="active">Home</span><span>Rooms</span><span>Random</span><span>Safety</span></div>
+      <div style="display:flex;gap:10px"><a class="btn">Sign in</a><a class="btn btn-glow">Try the demo</a></div>
+    </nav>
+    <header class="hero">
+      <canvas id="hero" aria-hidden="true"></canvas>
+      <div class="hero-content">
+        <span class="badge"><b>NEW</b>Random mode: meet people who share your interests</span>
+        <h1>Your people are<br><span class="grad">already talking.</span></h1>
+        <p class="lede">Jump into rooms, slide into DMs, or spin up a chat with someone new. Real time, every time, with safety switched on.</p>
+        <div class="ctas"><a class="btn btn-glow btn-lg">Try the demo</a><a class="btn btn-lg">Create an account</a></div>
+      </div>
+    </header>
+    <section class="features">
+      <div class="fcard"><div class="ic" style="background:linear-gradient(135deg,#7c3aed,#ec4899)">⚡</div><h3>Live, everywhere</h3><p>Messages, typing and presence on every tab and device, instantly.</p></div>
+      <div class="fcard"><div class="ic" style="background:linear-gradient(135deg,#22d3ee,#6366f1)">🪐</div><h3>Rooms with roles</h3><p>Public or private, invites, owners and moderators, plus direct messages.</p></div>
+      <div class="fcard"><div class="ic" style="background:linear-gradient(135deg,#f59e0b,#ec4899)">🎲</div><h3>Spin a stranger</h3><p>Interest matching, text only, 18+. Share your profile only if you both want to.</p></div>
+      <div class="fcard"><div class="ic" style="background:linear-gradient(135deg,#a3e635,#22d3ee)">🛡</div><h3>Safety on</h3><p>Filters, reports, blocks and a moderation team with a full audit log.</p></div>
+    </section>
+  </div>
+
+  <section class="section">
+    <div class="section-head"><div><div class="kicker">Inside the app</div><h2>Bold outside, focused inside.</h2></div><div class="label">Desktop · dark theme</div></div>
+    <div class="window-wrap"><div class="window">
+      <div class="rail"><span class="logo-mark" style="margin-bottom:8px"></span><div class="r">⌂</div><div class="r active">#</div><div class="r">💬<span class="dot"></span></div><div class="r">🎲</div><div class="r">🔔</div><div class="r bottom"><div class="av g3">YO</div></div></div>
+      <div class="sidebar">
+        <h3>Chats</h3>
+        <div class="search">⌕ Search everything</div>
+        <div class="section-t">Rooms</div>
+        <div class="ch active"><span class="em">🎨</span>design-talk</div>
+        <div class="ch"><span class="em">👋</span>general<span class="n">3</span></div>
+        <div class="ch"><span class="em">🎧</span>vinyl-club</div>
+        <div class="section-t">Direct</div>
+        <div class="ch"><div class="av g2">SO<span class="p on"></span></div>Sam Okafor<span class="n">1</span></div>
+        <div class="ch"><div class="av g4">LP<span class="p away"></span></div>Lee Park</div>
+        <div class="ch"><div class="av g5">MN<span class="p off"></span></div>Mia Novak</div>
+      </div>
+      <div class="convo">
+        <div class="head"><span style="font-size:22px">🎨</span><div><div class="t">design-talk</div><div class="s">Type, colour and interfaces · 4 online</div></div><div class="right"><span class="chip">⌕</span><span class="chip">Members</span></div></div>
+        <div class="msgs">
+          <div class="m"><div class="av g1">AC</div><div class="bub"><div class="who" style="color:#f0abfc">Ava Chen</div>Has anyone tried variable fonts for UI text? Curious about performance on low-end phones.<div class="ts">10:41</div></div></div>
+          <div class="m"><div class="av g2">SO</div><div class="bub"><div class="who" style="color:#67e8f9">Sam Okafor</div><div class="q">Ava: Has anyone tried variable fonts…</div>We shipped one last month: about 40 KB smaller than two static weights. <b>No regressions</b> so far.<div class="ts">10:42</div></div></div>
+          <div class="rx"><span class="mine">👍 4</span><span>🔥 2</span></div>
+          <div class="m"><div class="av g4">LP</div><div class="bub"><div class="who" style="color:#bef264">Lee Park</div><code>font-display: swap</code> plus a preload made the biggest difference for us.<div class="ts">10:44</div></div></div>
+          <div class="sys">Mia Novak joined the room ✨</div>
+          <div class="m mine"><div class="bub">Going to test it on our docs site this week 🙌<div class="ts">10:45 · ✓ Sent</div></div></div>
+        </div>
+        <div class="typing"><span><i></i><i></i><i></i></span>Ava is typing…</div>
+        <div class="composer">＋ <span>Say something nice…</span><span style="margin-left:auto">😊</span><span class="send" style="margin-left:0">➤</span></div>
+      </div>
+      <div class="details">
+        <div class="top"><div class="big">🎨</div><div class="n">design-talk</div><div class="d">Public · 6 members</div></div>
+        <h4>Online · 4</h4>
+        <div class="mem"><div class="av g1">AC</div>Ava Chen<span class="role">owner</span></div>
+        <div class="mem"><div class="av g2">SO</div>Sam Okafor<span class="role">mod</span></div>
+        <div class="mem"><div class="av g4">LP</div>Lee Park</div>
+        <div class="mem"><div class="av g3">YO</div>You</div>
+        <h4>Offline · 2</h4>
+        <div class="mem dim"><div class="av g5">MN</div>Mia Novak</div>
+        <div class="mem dim"><div class="av g5">NB</div>Noah Bell</div>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="tokens">
+    <div class="tcard"><div class="kicker">Palette · dark first (light theme: lilac mist)</div>
+      <div class="sws">
+        <div><div class="sw" style="background:#0b0614"></div><div class="swn">night</div></div>
+        <div><div class="sw" style="background:#1a0f33"></div><div class="swn">deep plum</div></div>
+        <div><div class="sw" style="background:rgba(255,255,255,.1)"></div><div class="swn">glass</div></div>
+        <div><div class="sw" style="background:#b8b0d4"></div><div class="swn">muted</div></div>
+        <div><div class="sw" style="background:#7c3aed"></div><div class="swn">violet</div></div>
+        <div><div class="sw" style="background:#ec4899"></div><div class="swn">pink</div></div>
+        <div><div class="sw" style="background:#f59e0b"></div><div class="swn">amber</div></div>
+        <div><div class="sw" style="background:#22d3ee"></div><div class="swn">cyan</div></div>
+      </div>
+    </div>
+    <div class="tcard"><div class="kicker">Type · Unbounded + Manrope</div><div class="type-big">Spin a stranger.</div><div style="color:var(--muted);font-size:14px;margin-top:8px">A wide, rounded display face with real personality; Manrope for comfortable reading.</div></div>
+  </section>
+
+<script>
+/* Hero: avatars orbit a glowing core on tilted rings; message "comets" arc between them; cursor tilts the system. Canvas 2D. */
+(function () {
+  const canvas = document.getElementById('hero');
+  const ctx = canvas.getContext('2d');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let seed = 5; const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const GRADS = [['#8b5cf6', '#ec4899'], ['#22d3ee', '#6366f1'], ['#f59e0b', '#ec4899'], ['#a3e635', '#22d3ee'], ['#f472b6', '#f59e0b']];
+  const INIT = ['AC', 'SO', 'LP', 'MN', 'NB', 'JR', 'KT', 'EV', 'DA', 'RS', 'IO', 'FL'];
+  let W = 0, H = 0, rings = [], avatars = [], comets = [], tilt = { x: 0, y: 0 }, target = { x: 0, y: 0 }, running = true, last = 0, t = 0, spawnT = 0;
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = canvas.clientWidth; H = canvas.clientHeight; canvas.width = W * dpr; canvas.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    rings = [{ rx: 330, ry: 92, speed: .00016 }, { rx: 520, ry: 150, speed: -.00011 }, { rx: 700, ry: 210, speed: .00007 }];
+    avatars = []; let k = 0;
+    rings.forEach((ring, ri) => { const count = [3, 4, 5][ri]; for (let i = 0; i < count; i++) avatars.push({ ring: ri, a: (i / count) * Math.PI * 2 + rand(), g: GRADS[k % GRADS.length], init: INIT[k++ % INIT.length], r: 15 + rand() * 5 }); });
+    comets = []; for (let i = 0; i < 6; i++) spawn(rand());
+  }
+  function pos(av) {
+    const ring = rings[av.ring]; const cx = W / 2 + tilt.x * 30, cy = H * .64 + tilt.y * 20;
+    const x = cx + Math.cos(av.a) * ring.rx, y = cy + Math.sin(av.a) * ring.ry * (1 + tilt.y * .15);
+    return { x, y, depth: (Math.sin(av.a) + 1) / 2 };
+  }
+  function spawn(progress = 0) {
+    const a = avatars[Math.floor(rand() * avatars.length)]; let b = avatars[Math.floor(rand() * avatars.length)];
+    if (a === b) b = avatars[(avatars.indexOf(a) + 3) % avatars.length];
+    comets.push({ a, b, t: progress, speed: .00045 + rand() * .00035, g: a.g });
+  }
+  function frame(now) {
+    const dt = Math.min(48, now - last || 16); last = now; if (!reduce) t += dt;
+    tilt.x += (target.x - tilt.x) * .05; tilt.y += (target.y - tilt.y) * .05;
+    ctx.clearRect(0, 0, W, H);
+    const cx = W / 2 + tilt.x * 30, cy = H * .64 + tilt.y * 20;
+    // core
+    const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, 160); core.addColorStop(0, 'rgba(255,240,255,.95)'); core.addColorStop(.18, 'rgba(236,72,153,.55)'); core.addColorStop(.5, 'rgba(124,58,237,.18)'); core.addColorStop(1, 'rgba(124,58,237,0)');
+    ctx.fillStyle = core; ctx.beginPath(); ctx.arc(cx, cy, 160, 0, Math.PI * 2); ctx.fill();
+    // rings
+    rings.forEach((ring, i) => { ctx.strokeStyle = `rgba(196,181,253,${.22 - i * .05})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(cx, cy, ring.rx, ring.ry * (1 + tilt.y * .15), 0, 0, Math.PI * 2); ctx.stroke(); });
+    for (const av of avatars) if (!reduce) av.a += rings[av.ring].speed * dt;
+    // comets
+    for (const c of comets) {
+      if (!reduce) c.t += c.speed * dt;
+      const p0 = pos(c.a), p1 = pos(c.b); const mx = (p0.x + p1.x) / 2, my = Math.min(p0.y, p1.y) - 120;
+      const pt = (u) => ({ x: (1 - u) * (1 - u) * p0.x + 2 * (1 - u) * u * mx + u * u * p1.x, y: (1 - u) * (1 - u) * p0.y + 2 * (1 - u) * u * my + u * u * p1.y });
+      const u = Math.min(c.t, 1);
+      for (let s = 0; s < 18; s++) { const uu = Math.max(0, u - s * .012); const q = pt(uu); ctx.fillStyle = s === 0 ? '#fff' : c.g[s % 2]; ctx.globalAlpha = (1 - s / 18) * .9; ctx.beginPath(); ctx.arc(q.x, q.y, Math.max(.6, 3.2 - s * .16), 0, Math.PI * 2); ctx.fill(); }
+      ctx.globalAlpha = 1;
+      if (c.t >= 1) c.dead = true;
+    }
+    comets = comets.filter(c => !c.dead);
+    spawnT += dt; if (spawnT > 700 && comets.length < 9 && !reduce) { spawn(); spawnT = 0; }
+    // avatars, back to front
+    avatars.map(av => ({ av, p: pos(av) })).sort((a, b) => a.p.depth - b.p.depth).forEach(({ av, p }) => {
+      const s = .75 + p.depth * .45, r = av.r * s;
+      const g = ctx.createLinearGradient(p.x - r, p.y - r, p.x + r, p.y + r); g.addColorStop(0, av.g[0]); g.addColorStop(1, av.g[1]);
+      ctx.shadowColor = av.g[1]; ctx.shadowBlur = 18 * s; ctx.globalAlpha = .55 + p.depth * .45;
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.font = `700 ${Math.round(11 * s)}px Manrope, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(av.init, p.x, p.y + .5);
+      ctx.globalAlpha = 1;
+    });
+    if (running && !reduce) requestAnimationFrame(frame);
+  }
+  addEventListener('resize', resize);
+  canvas.parentElement.addEventListener('pointermove', e => { const r = canvas.getBoundingClientRect(); target.x = (e.clientX - r.left) / r.width - .5; target.y = (e.clientY - r.top) / r.height - .5; });
+  canvas.parentElement.addEventListener('pointerleave', () => { target.x = target.y = 0; });
+  document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running) requestAnimationFrame(frame); });
+  new IntersectionObserver(([e]) => { const was = running; running = e.isIntersecting && !document.hidden; if (running && !was) requestAnimationFrame(frame); }).observe(canvas);
+  (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => { resize(); requestAnimationFrame(frame); });
+})();
+</script>
+</body>
+</html>
