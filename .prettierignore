@@ -1,0 +1,9 @@
+# Prettier must never touch archived v1
+v1/
+pnpm-lock.yaml
+.pnpm-store/
+**/.next/
+**/dist/
+**/.turbo/
+**/coverage/
+docs/BRIEF.md

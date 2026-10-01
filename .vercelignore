@@ -1,0 +1,5 @@
+# Files Vercel should not upload for SocketSpace v2 deployments
+v1/
+.pnpm-store/
+docs/
+qa/

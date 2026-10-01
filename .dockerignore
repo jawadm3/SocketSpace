@@ -1,0 +1,24 @@
+# Docker build context exclusions for SocketSpace v2
+# v1 is archived and must never enter a v2 image
+v1/
+
+# Dependencies, build output and caches are rebuilt inside the image
+**/node_modules
+.pnpm-store
+**/.next
+**/dist
+**/.turbo
+**/coverage
+**/playwright-report
+**/test-results
+.cache
+
+# Secrets and local files
+**/.env
+**/.env.*
+!**/.env.example
+.git
+docs
+qa
+*.md
+!**/README.md
