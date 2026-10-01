@@ -7,3 +7,6 @@ pnpm-lock.yaml
 **/.turbo/
 **/coverage/
 docs/BRIEF.md
+# Evidence and design prototypes are kept exactly as captured/rendered
+docs/analysis/evidence/
+docs/design/mockups/

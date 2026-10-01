@@ -1,0 +1,38 @@
+Connected clients: 3 (A, B, C). A sent 2 messages.
+Client A received 0 message(s): []
+Client B received 2 message(s): [
+  {
+    keys: [ 'message', 'timestamp' ],
+    id: undefined,
+    messageLength: 12,
+    timestamp: '12:00'
+  },
+  {
+    keys: [ 'message', 'timestamp', 'injected' ],
+    id: undefined,
+    messageLength: 100000,
+    timestamp: '<script>'
+  }
+]
+Client C received 2 message(s): [
+  {
+    keys: [ 'message', 'timestamp' ],
+    id: undefined,
+    messageLength: 12,
+    timestamp: '12:00'
+  },
+  {
+    keys: [ 'message', 'timestamp', 'injected' ],
+    id: undefined,
+    messageLength: 100000,
+    timestamp: '<script>'
+  }
+]
+--- server log (first 600 chars) ---
+✅ Socket server running on http://localhost:8001
+🟢 New user connected: Bb4CJfUwgSFMBaz-AAAB
+🟢 New user connected: ZOYiOml2FoNesnrKAAAD
+🟢 New user connected: 3DRGMfo4LhWjIjDoAAAF
+📩 Message received: { message: 'hello from A', timestamp: '12:00' }
+📩 Message received: {
+  message: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
