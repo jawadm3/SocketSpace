@@ -1,8 +1,10 @@
 /**
- * Turning database rows into the shapes browsers receive (packages/shared events).
+ * Turning database rows into the shapes browsers receive (packages/shared events). Used by the
+ * realtime server for live events and by the web app for history it renders on the server.
  */
-import type { MessageRow } from '@socketspace/db';
 import type { MessageWire } from '@socketspace/shared/events';
+
+import type { MessageRow } from './queries/messages';
 
 export function toMessageWire(row: MessageRow): MessageWire {
   const removed = row.moderationState === 'removed' || row.deletedAt !== null;

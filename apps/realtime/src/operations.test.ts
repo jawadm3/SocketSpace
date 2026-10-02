@@ -7,14 +7,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { eq, newId, schema } from '@socketspace/db';
 import { createTestRoom, createTestUser } from '@socketspace/db/testing';
-import {
-  INTERNAL_SIGNATURE_HEADER,
-  INTERNAL_TIMESTAMP_HEADER,
-  signInternalRequest,
-  type InternalEvent,
-} from '@socketspace/shared/internal-events';
+import type { InternalEvent } from '@socketspace/shared/internal-events';
 
-import { nextEvent, request, startHarness, type Harness } from './test/harness';
+import { eventBase, nextEvent, request, startHarness, type Harness } from './test/harness';
 
 let h: Harness;
 
@@ -26,29 +21,9 @@ afterAll(async () => {
   await h.close();
 });
 
-async function postEvent(
-  event: InternalEvent,
-  options: { secret?: string; timestamp?: string } = {},
-) {
-  const body = JSON.stringify(event);
-  const timestamp = options.timestamp ?? String(Date.now());
-  const signature = await signInternalRequest(
-    options.secret ?? h.env.INTERNAL_EVENTS_SECRET,
-    timestamp,
-    body,
-  );
-  return fetch(`${h.url}/internal/events`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      [INTERNAL_TIMESTAMP_HEADER]: timestamp,
-      [INTERNAL_SIGNATURE_HEADER]: signature,
-    },
-    body,
-  });
+function postEvent(event: InternalEvent, options: { secret?: string; timestamp?: string } = {}) {
+  return h.postEvent(event, options);
 }
-
-const eventBase = () => ({ id: newId(), at: new Date().toISOString() });
 
 describe('internal events (AUTH-06)', () => {
   it('disconnects exactly the revoked session, with a reason', async () => {

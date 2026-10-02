@@ -1,6 +1,7 @@
 # Real-time protocol and flows
 
-_Stage B, 2026-10-01; updated in Stage C (2026-10-02, decision D-032). Every event below is a Zod
+_Stage B, 2026-10-01; updated in Stage C (2026-10-02, decision D-032) and Stage D (room notices,
+profile updates, D-036). Every event below is a Zod
 schema in `packages/shared/src/events/`, and Socket.IO's TypeScript event maps are derived from
 those schemas, so the browser and the server cannot disagree about a payload's shape._
 
@@ -96,6 +97,8 @@ fetches real names it is allowed to see once per person over HTTP (cached). See 
 | `member:joined` / `member:left` / `member:updated`                   | `{ conversationId, member }`                                                                                                         | conversation room                                                          |
 | `notification:new`                                                   | `{ notification }`                                                                                                                   | the user's private room                                                    |
 | `moderation:notice`                                                  | `{ kind: 'warned' \| 'muted' \| 'suspended' \| 'banned', reason, until? }`                                                           | the user's private room                                                    |
+| `room:notice`                                                        | `{ conversationId, kind: 'muted' \| 'unmuted' \| 'removed' \| 'banned', reason, until }`                                             | the user's private room (only the person concerned)                        |
+| `user:updated`                                                       | `{ user }` (nickname and avatar only, never a real name)                                                                             | conversations the person is in, and their own tabs                         |
 | `session:ended`                                                      | `{ reason, reconnectAfterMs? }` then disconnect; reason is `revoked`, `banned`, `suspended`, `deleted`, `server_shutdown` or `abuse` | sockets of that session, person or server                                  |
 
 ### Delivery states (what the little ticks mean)
@@ -268,14 +271,17 @@ sequenceDiagram
 `x-ss-signature = HMAC-SHA256(INTERNAL_EVENTS_SECRET, timestamp + "." + body)`. Requests older than
 60 seconds, or with a reused event ID, are rejected.
 
-| Event                                                        | Effect                                                                                    |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `member.added` / `member.removed` / `member.role_changed`    | Join or remove that user's sockets to or from the conversation room; broadcast `member:*` |
-| `conversation.updated` / `conversation.deleted`              | Broadcast; remove sockets from the room                                                   |
-| `user.sanctioned` / `user.unsanctioned`                      | Update the in-memory sanction cache; notify; disconnect if suspended or banned            |
-| `session.revoked` / `user.sessions_revoked` / `user.deleted` | Disconnect that session's sockets / all of the person's sockets                           |
-| `message.moderated`                                          | Broadcast `message:updated` (removed or restored) with a new `eventSeq`                   |
-| `block.created`                                              | Leave any random session with that person; refuse DMs                                     |
+| Event                                                                          | Effect                                                                                    |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `member.added` / `member.removed` / `member.role_changed`                      | Join or remove that user's sockets to or from the conversation room; broadcast `member:*` |
+| `member.removed` with `cause` (`left`, `removed`, `banned`), `reason`, `until` | Also sends `room:notice` to the person when a moderator removed or banned them            |
+| `member.muted` (`until`, or `null` when lifted), `reason`                      | `room:notice` (`muted` / `unmuted`) to the person; sends are refused by the database      |
+| `user.updated`                                                                 | Broadcast `user:updated` (nickname and avatar) to every conversation the person is in     |
+| `conversation.updated` / `conversation.deleted`                                | Broadcast; remove sockets from the room                                                   |
+| `user.sanctioned` / `user.unsanctioned`                                        | Update the in-memory sanction cache; notify; disconnect if suspended or banned            |
+| `session.revoked` / `user.sessions_revoked` / `user.deleted`                   | Disconnect that session's sockets / all of the person's sockets                           |
+| `message.moderated`                                                            | Broadcast `message:updated` (removed or restored) with a new `eventSeq`                   |
+| `block.created`                                                                | Leave any random session with that person; refuse DMs                                     |
 
 Delivery: 3 attempts with back-off inside the web request; if all fail, the event goes to
 `realtime_outbox` (see the data model).

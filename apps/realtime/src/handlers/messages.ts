@@ -12,13 +12,13 @@ import {
   filterMemberConversations,
   listEventsSince,
   sendMessage,
+  toMessageWire,
   type SendRefusal,
 } from '@socketspace/db';
 import { ackError, ackOk, type Ack } from '@socketspace/shared/errors';
 import { LIMITS } from '@socketspace/shared/limits';
 
 import { rooms, type HandlerContext, type IoSocket } from '../types';
-import { toMessageWire } from '../wire';
 import { registerHandler, type InFlight } from './define';
 
 /** Plain-English refusals; `until` becomes `retryAfterMs` so the browser can say when. */

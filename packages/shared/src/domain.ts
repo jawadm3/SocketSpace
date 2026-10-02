@@ -84,6 +84,10 @@ export const MODERATION_ACTION_KINDS = [
   'dismiss_report',
   'role_change',
   'room_ban',
+  // Added in Stage D (migration 0002): room-level actions by room owners and moderators.
+  'room_unban',
+  'room_remove',
+  'room_delete',
 ] as const;
 export const SANCTION_KINDS = ['warn', 'mute', 'suspend', 'ban', 'random_timeout'] as const;
 export const SANCTION_SCOPES = ['global', 'random'] as const;

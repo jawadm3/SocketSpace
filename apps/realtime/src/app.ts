@@ -356,7 +356,7 @@ export function createRealtimeServer(deps: RealtimeDeps): RealtimeServer {
         sendJson(res, 409, { error: 'replayed' });
         return;
       }
-      await applyInternalEvent(io, event.data);
+      await applyInternalEvent({ io, db }, event.data);
       metrics.increment('ss_internal_events_total', { result: 'applied', type: event.data.type });
       res.writeHead(204, { 'Cache-Control': 'no-store' });
       res.end();

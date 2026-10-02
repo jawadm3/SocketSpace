@@ -2,7 +2,7 @@
  * Conversations and memberships. Stage C covers what the realtime server needs on connect and
  * what tests and the demo seed need; Stage D adds DMs, invites, roles and moderation actions.
  */
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import type { Database, Queryable } from '../client';
 import { newId } from '../schema/_common';
@@ -89,4 +89,54 @@ export async function filterMemberConversations(
       ),
     );
   return new Set(rows.map((r) => r.conversationId));
+}
+
+export interface ConversationBroadcast {
+  id: string;
+  kind: 'room' | 'dm';
+  visibility: 'public' | 'private';
+  slug: string | null;
+  name: string | null;
+  topic: string | null;
+  lastEventSeq: number;
+  memberCount: number;
+}
+
+/** A conversation in the shape broadcasts carry, or `null` if it is missing or was deleted. */
+export async function getConversationForBroadcast(
+  db: Queryable,
+  conversationId: string,
+): Promise<ConversationBroadcast | null> {
+  const [row] = await db
+    .select({
+      id: conversation.id,
+      kind: conversation.kind,
+      visibility: conversation.visibility,
+      slug: conversation.slug,
+      name: conversation.name,
+      topic: conversation.topic,
+      lastEventSeq: conversation.lastEventSeq,
+      memberCount: conversation.memberCount,
+    })
+    .from(conversation)
+    .where(and(eq(conversation.id, conversationId), isNull(conversation.archivedAt)));
+  return row ?? null;
+}
+
+/** One person's membership of a conversation, or `null`. */
+export async function getMembership(
+  db: Queryable,
+  conversationId: string,
+  userId: string,
+): Promise<{ role: Membership['role']; joinedAt: Date } | null> {
+  const [row] = await db
+    .select({ role: conversationMember.role, joinedAt: conversationMember.joinedAt })
+    .from(conversationMember)
+    .where(
+      and(
+        eq(conversationMember.conversationId, conversationId),
+        eq(conversationMember.userId, userId),
+      ),
+    );
+  return row ?? null;
 }

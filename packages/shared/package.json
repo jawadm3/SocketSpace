@@ -17,6 +17,7 @@
     "./primitives": "./src/primitives.ts",
     "./profile": "./src/profile.ts",
     "./realtime-token": "./src/realtime-token.ts",
+    "./rooms": "./src/rooms.ts",
     "./text": "./src/text.ts"
   },
   "scripts": {

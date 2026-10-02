@@ -10,6 +10,12 @@ import { io as connectClient, type Socket as ClientSocket } from 'socket.io-clie
 import { newId, schema } from '@socketspace/db';
 import { createTestDatabase, type TestDatabase } from '@socketspace/db/testing';
 import type { Ack } from '@socketspace/shared/errors';
+import {
+  INTERNAL_SIGNATURE_HEADER,
+  INTERNAL_TIMESTAMP_HEADER,
+  signInternalRequest,
+  type InternalEvent,
+} from '@socketspace/shared/internal-events';
 
 import { createRealtimeServer, type RealtimeServer } from '../app';
 import { loadRealtimeEnv, type RealtimeEnv } from '../env';
@@ -61,8 +67,16 @@ export interface Harness {
    * and signing keys, like a deploy or a crash-and-restart. `server` and `url` then point at it.
    */
   restart: () => Promise<void>;
+  /** Sends a signed internal event, as the web app does. */
+  postEvent: (
+    event: InternalEvent,
+    options?: { secret?: string; timestamp?: string },
+  ) => Promise<Response>;
   close: () => Promise<void>;
 }
+
+/** `id` and `at` for an internal event. */
+export const eventBase = () => ({ id: newId(), at: new Date().toISOString() });
 
 export interface Hello {
   protocolVersion: number;
@@ -193,6 +207,24 @@ export async function startHarness(overrides: Record<string, string> = {}): Prom
     createSession,
     connect,
     connectAs,
+    postEvent: async (event, options = {}) => {
+      const body = JSON.stringify(event);
+      const timestamp = options.timestamp ?? String(Date.now());
+      const signature = await signInternalRequest(
+        options.secret ?? env.INTERNAL_EVENTS_SECRET,
+        timestamp,
+        body,
+      );
+      return fetch(`${url}/internal/events`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          [INTERNAL_TIMESTAMP_HEADER]: timestamp,
+          [INTERNAL_SIGNATURE_HEADER]: signature,
+        },
+        body,
+      });
+    },
     restart: async () => {
       await server.stop();
       ({ created: server, url } = await start());

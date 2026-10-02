@@ -55,6 +55,8 @@ export const SERVER_EVENTS = {
   'member:updated': c.memberEventSchema,
   'notification:new': c.notificationNewSchema,
   'moderation:notice': c.moderationNoticeSchema,
+  'room:notice': c.roomNoticeSchema,
+  'user:updated': c.userUpdatedSchema,
 
   'random:waiting': r.randomWaitingSchema,
   'random:matched': r.randomMatchedSchema,

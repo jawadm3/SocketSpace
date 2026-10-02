@@ -205,6 +205,15 @@ export const conversationUpdatedSchema = conversationJoinedSchema;
 export const memberEventSchema = z.strictObject({ conversationId: uuid, member: memberWireSchema });
 export const memberLeftSchema = z.strictObject({ conversationId: uuid, userId: uuid });
 export const notificationNewSchema = z.strictObject({ notification: notificationWireSchema });
+/** Told only to the person concerned: a room moderator muted, unmuted, removed or banned them. */
+export const roomNoticeSchema = z.strictObject({
+  conversationId: uuid,
+  kind: z.enum(['muted', 'unmuted', 'removed', 'banned']),
+  reason: z.string().nullable(),
+  until: isoDateTime.nullable(),
+});
+/** Someone's nickname or avatar changed. Nickname only: it goes to many viewers at once. */
+export const userUpdatedSchema = z.strictObject({ user: publicUserSchema });
 export const moderationNoticeSchema = z.strictObject({
   kind: z.enum(['warned', 'muted', 'suspended', 'banned']),
   reason: z.string(),

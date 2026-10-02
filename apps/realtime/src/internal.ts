@@ -3,10 +3,16 @@
  * connections, refusing replays, and draining the outbox of events that could not be sent directly.
  */
 import {
+  getConversationForBroadcast,
+  getMembership,
+  getPersonRows,
+  listMemberships,
   listPendingOutbox,
   markOutboxDelivered,
   markOutboxFailed,
+  nicknameOnly,
   type Database,
+  type Queryable,
 } from '@socketspace/db';
 import { internalEventSchema, type InternalEvent } from '@socketspace/shared/internal-events';
 
@@ -14,6 +20,11 @@ import { describeError } from './handlers/define';
 import type { Logger } from './logger';
 import type { Metrics } from './metrics';
 import { rooms, type IoServer } from './types';
+
+export interface InternalEventDeps {
+  io: IoServer;
+  db: Queryable;
+}
 
 /** Disconnects every socket in a room after telling it why. Works across instances with Redis. */
 async function endSockets(
@@ -27,7 +38,25 @@ async function endSockets(
   io.in(room).disconnectSockets(true);
 }
 
-export async function applyInternalEvent(io: IoServer, event: InternalEvent): Promise<void> {
+/** A member as broadcasts show them: nickname only, because many people receive one copy. */
+async function memberForBroadcast(db: Queryable, conversationId: string, userId: string) {
+  const [membership, [person]] = await Promise.all([
+    getMembership(db, conversationId, userId),
+    getPersonRows(db, [userId]),
+  ]);
+  if (!membership || !person) return null;
+  return {
+    user: nicknameOnly(person),
+    role: membership.role,
+    joinedAt: membership.joinedAt.toISOString(),
+  };
+}
+
+export async function applyInternalEvent(
+  deps: InternalEventDeps,
+  event: InternalEvent,
+): Promise<void> {
+  const { io, db } = deps;
   switch (event.type) {
     case 'session.revoked':
       await Promise.all(
@@ -62,21 +91,85 @@ export async function applyInternalEvent(io: IoServer, event: InternalEvent): Pr
       }
       return;
     }
-    case 'member.added':
+    case 'user.updated': {
+      const [person] = await getPersonRows(db, [event.userId]);
+      if (!person) return;
+      const memberships = await listMemberships(db, event.userId);
+      const targets = [
+        rooms.user(event.userId),
+        ...memberships.map((m) => rooms.conversation(m.conversationId)),
+      ];
+      io.to(targets).emit('user:updated', { user: nicknameOnly(person) });
+      return;
+    }
+    case 'member.added': {
+      const conversation = await getConversationForBroadcast(db, event.conversationId);
+      if (!conversation) return;
+      // Join first, so nothing sent from now on is missed by the new member's open tabs.
       io.in(rooms.user(event.userId)).socketsJoin(rooms.conversation(event.conversationId));
+      io.to(rooms.user(event.userId)).emit('conversation:joined', { conversation });
+      const member = await memberForBroadcast(db, event.conversationId, event.userId);
+      if (member) {
+        io.to(rooms.conversation(event.conversationId)).emit('member:joined', {
+          conversationId: event.conversationId,
+          member,
+        });
+      }
       return;
-    case 'member.removed':
-      io.in(rooms.user(event.userId)).socketsLeave(rooms.conversation(event.conversationId));
+    }
+    case 'member.removed': {
+      const room = rooms.conversation(event.conversationId);
+      const user = rooms.user(event.userId);
+      // Leave first, so the removed person receives nothing more from the room.
+      io.in(user).socketsLeave(room);
+      io.to(room).emit('member:left', {
+        conversationId: event.conversationId,
+        userId: event.userId,
+      });
+      io.to(user).emit('conversation:left', { conversationId: event.conversationId });
+      if (event.cause === 'removed' || event.cause === 'banned') {
+        io.to(user).emit('room:notice', {
+          conversationId: event.conversationId,
+          kind: event.cause,
+          reason: event.reason ?? null,
+          until: event.until ?? null,
+        });
+      }
       return;
-    case 'conversation.deleted':
-      io.in(rooms.conversation(event.conversationId)).socketsLeave(
-        rooms.conversation(event.conversationId),
-      );
+    }
+    case 'member.role_changed': {
+      const member = await memberForBroadcast(db, event.conversationId, event.userId);
+      if (!member) return;
+      io.to(rooms.conversation(event.conversationId)).emit('member:updated', {
+        conversationId: event.conversationId,
+        member,
+      });
       return;
-    // Handled from Stage D/E onwards (member updates, moderation broadcasts, random-mode blocks).
+    }
+    case 'member.muted':
+      io.to(rooms.user(event.userId)).emit('room:notice', {
+        conversationId: event.conversationId,
+        kind: event.until ? 'muted' : 'unmuted',
+        reason: event.until ? event.reason : null,
+        until: event.until,
+      });
+      return;
+    case 'conversation.updated': {
+      const conversation = await getConversationForBroadcast(db, event.conversationId);
+      if (!conversation) return;
+      io.to(rooms.conversation(event.conversationId)).emit('conversation:updated', {
+        conversation,
+      });
+      return;
+    }
+    case 'conversation.deleted': {
+      const room = rooms.conversation(event.conversationId);
+      io.to(room).emit('conversation:left', { conversationId: event.conversationId });
+      io.in(room).socketsLeave(room);
+      return;
+    }
+    // Handled from Stage E onwards (lifting sanctions, moderation broadcasts, random-mode blocks).
     case 'user.unsanctioned':
-    case 'member.role_changed':
-    case 'conversation.updated':
     case 'message.moderated':
     case 'block.created':
       return;
@@ -130,7 +223,7 @@ export class OutboxDrainer {
           continue;
         }
         try {
-          await applyInternalEvent(this.deps.io, parsed.data);
+          await applyInternalEvent(this.deps, parsed.data);
           await markOutboxDelivered(this.deps.db, entry.id);
           applied += 1;
         } catch (error) {

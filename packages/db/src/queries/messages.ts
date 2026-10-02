@@ -8,6 +8,7 @@ import { and, asc, eq, gt, inArray, isNull, lte, or, sql, type SQL } from 'drizz
 
 import type { Database, Queryable } from '../client';
 import { dbNow } from '../clock';
+import { isUniqueViolation } from '../errors';
 import { newId } from '../schema/_common';
 import { user } from '../schema/auth';
 import { conversation, conversationMember, roomBan } from '../schema/conversations';
@@ -47,22 +48,6 @@ export type SendRefusal =
 
 export type SendMessageResult =
   { ok: true; message: MessageRow; duplicate: boolean } | ({ ok: false } & SendRefusal);
-
-const UNIQUE_VIOLATION = '23505';
-
-/** True when `error` (or its cause, as Drizzle wraps driver errors) is a unique-key violation. */
-function isUniqueViolation(error: unknown, constraint: string): boolean {
-  for (let current: unknown = error; current; current = (current as { cause?: unknown }).cause) {
-    const candidate = current as { code?: unknown; constraint?: unknown; message?: unknown };
-    if (candidate.code === UNIQUE_VIOLATION) {
-      return (
-        candidate.constraint === constraint ||
-        (typeof candidate.message === 'string' && candidate.message.includes(constraint))
-      );
-    }
-  }
-  return false;
-}
 
 async function findByClientId(
   db: Queryable,

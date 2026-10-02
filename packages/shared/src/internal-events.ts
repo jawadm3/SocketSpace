@@ -29,6 +29,8 @@ export const internalEventSchema = z.discriminatedUnion('type', [
   /** Every session of the user ended (sign out everywhere, password reset). */
   z.strictObject({ ...base, type: z.literal('user.sessions_revoked'), userId: uuid }),
   z.strictObject({ ...base, type: z.literal('user.deleted'), userId: uuid }),
+  /** Nickname or avatar changed: people who share a conversation see it at once (PROF-01). */
+  z.strictObject({ ...base, type: z.literal('user.updated'), userId: uuid }),
   z.strictObject({
     ...base,
     type: z.literal('user.sanctioned'),
@@ -55,6 +57,20 @@ export const internalEventSchema = z.discriminatedUnion('type', [
     type: z.literal('member.removed'),
     conversationId: uuid,
     userId: uuid,
+    /** Why: they left, a moderator removed them, or they were banned (default: left). */
+    cause: z.enum(['left', 'removed', 'banned']).optional(),
+    reason: z.string().max(500).optional(),
+    /** For bans: when it ends (`null`: until lifted). */
+    until: isoDateTime.nullable().optional(),
+  }),
+  /** A room mute was set (`until`) or lifted (`until: null`). */
+  z.strictObject({
+    ...base,
+    type: z.literal('member.muted'),
+    conversationId: uuid,
+    userId: uuid,
+    until: isoDateTime.nullable(),
+    reason: z.string().max(500),
   }),
   z.strictObject({
     ...base,
