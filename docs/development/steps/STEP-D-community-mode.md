@@ -102,9 +102,9 @@ Local machine: Windows 11 Home, Node.js 22.13.0, 2026-10-02.
 | New web tests                             | chat state rules (9), people lookup (2), avatars and builder (4)                                                                                                                                                                                      |
 | Screens inspected                         | room (desktop and phone), settings, invite, home, onboarding gallery, builder                                                                                                                                                                         |
 
-## D2: Messaging (in progress)
+## D2: Messaging (done)
 
-### Done so far: data, contracts and realtime
+### Part 1: data, contracts and realtime
 
 - **Markdown-lite** (`packages/shared/src/markdown.ts`): one parser for browser and server. It
   produces a tree, never HTML: bold, italic, strike, code, code blocks, quotes, https links,
@@ -131,10 +131,113 @@ Local machine: Windows 11 Home, Node.js 22.13.0, 2026-10-02.
 Also fixed on the way: a lint error that reached CI (a condition TypeScript already narrows), and
 the room page passing an array index where reactions were expected (caught by the type check).
 
+### Part 2: the browser
+
+**Messages are drawn from the parser's tree** (`components/message-body.tsx`). Each part of the
+tree becomes a React element: bold, italic, strike, code, code blocks, quotes, links and
+@mentions. Nothing is ever turned into HTML, so `<img src=x onerror=...>` stays visible text.
+Links open in a new tab with `rel="noopener noreferrer nofollow ugc"`: the new page cannot
+reach back into ours, is not told where the click came from, and search engines know a user wrote
+the link. A mention of your own nickname is highlighted more strongly. The ESLint ban on
+`dangerouslySetInnerHTML` (and on writing `innerHTML`) already existed; a probe file proved it
+fires.
+
+**Chat state** (`lib/chat/state.ts`) gained these rules, each with tests:
+
+- Edits, deletions and reaction changes apply only if they are newer than the copy held (by event
+  number), so a late edit can never bring back a deleted message's text.
+- A deletion leaves a tombstone ("Message deleted") in the same place.
+- **Every room you belong to has a starting event number** from the server's room list, not just
+  the room on screen. Before, a message in a room you were not looking at opened a "gap" from
+  event 0, which asked the server for that room's whole recent history. Now a gap means a real
+  gap, and unread counts in other rooms stay right after a reconnect.
+- **Catching up happens on every connection**, including the first. Events between the page
+  being drawn and the live connection opening used to be noticed only when a later event
+  revealed the gap.
+- Unread counts start from the server. They go up by one for each new message from someone else
+  in a room you are not looking at. Opening the room sets them to zero, and reading on another
+  tab clears them there too.
+- "Is typing" entries expire after 6 seconds. Presence is kept per person, and everyone shows as
+  offline while the connection is down.
+
+**The provider** (`lib/chat/provider.tsx`) wires the new server events to these rules. It sends
+the read marker for the room on screen (only while the tab is visible), tells the server whether
+the tab is in use (`online` or `away`), and sends edits, deletions and reactions. A refusal
+becomes a notice with the server's own reason.
+
+**Throttles in the browser.** The server accepts one typing signal per person every 2 seconds and
+one presence change every 5 seconds, and silently drops the rest. `lib/chat/typing.ts` repeats
+"typing" every 3 seconds while keys keep coming, and never sends twice within 2.1 seconds. It
+sends "stopped" only if "typing" went out recently, and cancels a queued "stopped" when typing
+resumes. Presence changes are coalesced: only the latest state is sent, once the gap allows.
+
+**The room page** (split into `room-view.tsx`, `message-item.tsx` and `composer.tsx`):
+
+- An action bar on each message: reply, react, edit, delete. It appears on hover and whenever
+  keyboard focus is inside the message, so Tab reaches every action. Edit appears for your own
+  messages within 24 hours. Delete appears for your own messages, and for moderators who
+  outrank the author. Deleting asks for confirmation, and focus starts on "Cancel".
+- Reply: a chip above the composer (Esc cancels it). The reply shows a quote; clicking it
+  scrolls to the original, focuses it and highlights it for 2 seconds.
+- Reactions: a picker with the 20 allowed emoji (Esc closes it and returns focus), and toggle
+  buttons under the message that show who reacted.
+- Edit inline: Enter saves, Esc cancels. Up arrow in an empty composer edits your last message.
+  Edited messages show "(edited)".
+- @mention autocomplete (`lib/chat/mentions.ts`): typing "@" lists matching room members
+  (names that start with the text first). Arrow keys move, Enter or Tab picks, Esc closes. A
+  hidden status line tells screen readers how many people match.
+- "Ava is typing…" under the messages, on a line that keeps its height so nothing jumps.
+- Presence dots in the member list (online, away, do not disturb, offline with "last seen"),
+  each with a text label for screen readers.
+- Unread badges in the sidebar, and a total in the phone menu.
+- A tick after your own acknowledged messages (read as "Sent").
+- **Invisible mode**: a switch in Settings > Profile ("Show when I'm online") that saves at once.
+  The realtime server learns of it through `user.updated`.
+
+**Server fix found by looking at screenshots.** Presence was exchanged only when a tab
+connected, so when someone joined a room live, the people already there kept seeing them as
+offline until a reload. J2 had passed only because Ava reloaded the page before the presence
+check. Now a live join tells the room whether the newcomer is online, and sends the newcomer who
+is online there (`internal.ts`, `member.added`). The realtime join test and J2 (checked before
+any reload) cover it.
+
+**Contract change:** the `reaction:toggle` acknowledgement now carries the change's event
+number. The reacting tab receives no broadcast of its own change. Without the number, its next
+message looked like a gap and caused an unneeded resync (and resyncs are rate-limited).
+
+### Decisions
+
+D-039 (how the browser keeps chat state) and D-040 (Turborepo runs at most four tasks at once).
+
+### Problems and fixes
+
+- **The typing check in J2 failed twice.** First cause: after a reload, keystrokes arrived
+  before the live connection was open. The throttle counted the dropped signal as sent and held
+  back the next one for 3 seconds. Fix: the browser only feeds the throttle while connected.
+  Second cause: the test itself. Ava had typed less than 2 seconds earlier (before the reload),
+  so the server dropped the new signal as designed. The test now waits out that window, with a
+  comment explaining why.
+- **`pnpm check` crashed three times in a row, in three different places**: a type check, a
+  PGlite database that failed to start, and a test worker that exited with code 0x80000003.
+  Each package passed on its own. Turborepo started all 13 tasks at once (4 type-aware lint
+  runs, 4 type checks, 4 test pools) on a laptop with about 7.3 GB of usable memory and 3.4 GB
+  free. Limited to 4 tasks at a time, the full check passed in about 50 seconds (D-040).
+- A test of mine expected "nova" to match "av". The test was wrong, not the code.
+
+### Tests run, with actual results
+
+| Check                         | Result                                                                                                                                                            |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm check`                  | 13 of 13 tasks; shared 160, db 97, realtime 56 (+2 Redis tests that run in CI), web 93                                                                            |
+| Same tests on PostgreSQL 17.9 | shared 160, db 97, realtime 56 (+2), web 93                                                                                                                       |
+| New web tests                 | chat state 14 more (23 in all), typing throttle 4, mentions 6, message renderer 5                                                                                 |
+| Realtime                      | the join test now also checks presence both ways                                                                                                                  |
+| End-to-end                    | 9 of 9 in 41.3 s: J1, J11 (x2), headers, live connection, sign-out elsewhere, J2 (now with typing, unread on two tabs, presence and invisible mode), J3 (new), J5 |
+| Raw-HTML lint ban             | A probe file with `dangerouslySetInnerHTML` gave "Raw HTML is not allowed" (exit 1); the probe was deleted                                                        |
+| Screens inspected             | room with formatting, a reply, a mention, a reaction, the action bar, the typing line and the reaction picker (desktop)                                           |
+
 ## What comes next
 
-D2, the browser part: render messages with the markdown-lite tree; message actions (reply, react,
-edit, delete) with keyboard support; reply quotes that jump to the original; the reaction picker;
-@mention autocomplete; typing indicator; presence dots; unread counts in the sidebar, live across
-tabs; invisible-mode switch in profile settings. Then E2E J3 (edit, delete, react, reply,
-mention, formatting) and the typing and unread parts of J2.
+D3, history and reliability: cursor pagination with infinite scroll (HIST-02), a virtualised
+message list (HIST-04), the send outbox kept in `localStorage` so a message typed offline is sent
+after reconnecting (RECON-04), reconnect UX and an offline banner, then journey J4.

@@ -30,6 +30,8 @@ checklist. We aim at the intent of level 2.
 **Audit log**: A record of who did what and when. _Example:_ the visitor book at a reception desk.
 Every moderator action is written to one.
 
+**Autocomplete (listbox)**: Suggestions that appear while you type, which you can pick with the arrow keys and Enter. A "listbox" is the accessible name for such a list, so screen readers announce it properly. _Example:_ typing "@av" in a message suggests "@ava", like a phone suggesting a contact as you type a name.
+
 **Better Auth**: The sign-in library SocketSpace runs inside its own web app (nothing is handed to an outside sign-in company). It handles passwords, email verification, password resets, passkeys, guests and "Sign in with Google"-style buttons, and stores everything in our database. _Example:_ a lock and key system you install and keep the master key for, instead of renting one from a security firm.
 
 **Broadcast**: Sending one message to everyone who is listening. _Example:_ a shop's loudspeaker
@@ -57,6 +59,8 @@ you can use it. Render's free servers take about a minute.
 
 **Commit (git)**: A saved snapshot of changes with a short message describing them. _Example:_ a
 numbered save point in a video game.
+
+**Concurrency (task runner)**: How many jobs a tool runs at the same time. More is faster until the computer runs out of memory; then jobs crash. SocketSpace lets Turborepo run 4 at once (D-040). _Example:_ a kitchen with four hobs: cooking on all four is quick, but a fifth pan has nowhere to go.
 
 **Container image**: A sealed package holding a program and everything it needs to run, which any container host can start the same way. _Example:_ a ready meal in a sealed tray: heat it anywhere and it tastes the same. SocketSpace builds one image for each app.
 
@@ -92,6 +96,8 @@ on any ship, train or lorry.
 **End-to-end test (Playwright)**: A test that drives a real browser like a person would: typing, clicking and reading the page. _Example:_ a mystery shopper who walks through the whole shop instead of checking one shelf. Journey J1 (sign up, verify, reset the password) runs this way.
 
 **Environment variable**: A named setting given to a program when it starts, kept outside the code (addresses, secrets, switches). _Example:_ the settings on a washing machine: the same machine, different settings per wash. Every variable is listed in `.env.example`, without values.
+
+**Event cursor (gap detection)**: The number of the last change a browser has applied in a conversation. Every change gets the next number, so if change 12 arrives when the cursor is at 10, the browser knows it missed 11 and asks the server for it. _Example:_ numbered pages of a letter: if page 3 follows page 1, you know page 2 is missing.
 
 **EXIF**: Hidden information stored inside photos, such as the camera model and sometimes the GPS
 location where it was taken. _Example:_ a postmark on a letter revealing where it was posted. We
@@ -135,6 +141,8 @@ creates a duplicate.
 
 **Integration test**: A test that runs several real parts together, for example the sign-in code with a real database. _Example:_ test-driving a whole car rather than checking each part on a bench.
 
+**Invisible mode**: A setting that makes you always look offline to others, while you keep chatting normally. _Example:_ reading in a library with your phone on "do not disturb": you are there, but nobody sees a green light.
+
 **Invite link**: A web address with a long random code that lets someone join a room, even a private one. It can expire, admit a limited number of people, or be cancelled. SocketSpace stores only a fingerprint (hash) of the code. _Example:_ a numbered guest-list wristband.
 
 **is-a.dev**: A free service that gives developers a subdomain such as `name.is-a.dev`, requested through a GitHub pull request.
@@ -152,6 +160,8 @@ the main content appears; TBT (Total Blocking Time) is how long the page is too 
 Lighthouse is Google's free tool that measures them. _Example:_ how long until the curtain rises,
 and how long the usher ignores you.
 
+**Link safety attributes (noopener, noreferrer, nofollow, ugc)**: Labels on links that people post. `noopener` stops the new page from controlling ours, `noreferrer` hides which page the click came from, `nofollow` and `ugc` ("user-generated content") tell search engines the site does not vouch for the link. _Example:_ handing someone a leaflet without giving them your house key or your address.
+
 **Linter (ESLint)**: A tool that reads code and points out likely mistakes without running it.
 _Example:_ a proofreader who flags "their/there" mix-ups.
 
@@ -163,6 +173,8 @@ everyone gets identical copies. _Example:_ a recipe that says "Brand X flour, 50
 
 **Magic bytes**: The first few bytes of a file, which reveal its real type regardless of its name.
 _Example:_ checking what is actually inside a box rather than trusting the label.
+
+**Markdown-lite**: A small set of typing shortcuts for formatting messages: `**bold**`, `*italic*`, `~~strike~~`, `` `code` ``, quotes starting with `>`, links and @mentions. SocketSpace turns it into a tree and draws the tree, never raw HTML. _Example:_ writing _emphasis_ with stars on a postcard, and the reader understanding it as emphasis.
 
 **Migration (database)**: A small, versioned script that changes the database structure (for
 example, adds a table). _Example:_ numbered renovation plans applied to a house in order.
@@ -227,6 +239,8 @@ finished pages to the shared folder.
 each person a small bucket of tokens that refills slowly; each action spends one. _Example:_ a
 coffee loyalty card that allows a few free refills per hour.
 
+**Read marker / unread count**: The read marker remembers the last message you read in each room; the unread count is how many messages from others came after it. Reading on one tab moves the marker, so every tab clears its badge. _Example:_ a bookmark in a shared book: wherever you pick it up, you know where you stopped.
+
 **Redis**: A very fast in-memory data store, often used to pass messages between servers. SocketSpace can use it to link several realtime servers (the Redis adapter); the free deployment runs one server and does not need it. _Example:_ a shared noticeboard between several office buildings.
 
 **Reducer**: A small function that takes the current state and one event and returns the next state, without side effects, which makes the rules easy to test. The chat screen's rules (ordering, duplicates, gaps) are a reducer. _Example:_ a referee's rule book: given the score and what just happened, it says what the new score is.
@@ -282,6 +296,8 @@ installing any newly published package version.
 
 **Theme / design tokens**: A theme is a complete look (colours, fonts, corner rounding, shadows); design tokens are the named values that make it up. Switching theme swaps the token values. _Example:_ repainting a room by changing only the paint labels, not the furniture.
 
+**Throttle**: Letting something happen at most once in a given time, and dropping or delaying the rest. _Example:_ a lift that waits a few seconds to collect everyone instead of leaving for each person who presses the button.
+
 **Tombstone**: A placeholder kept where something was deleted, so the surrounding order still makes
 sense. _Example:_ "This message was deleted" in a chat.
 
@@ -292,6 +308,8 @@ skips unchanged work. _Example:_ a kitchen manager who does not remake a sauce t
 
 **TypeScript**: JavaScript with types (labels saying what kind of value each thing is), checked
 before the code runs. _Example:_ labelled kitchen containers, so sugar never goes in the salt jar.
+
+**Typing indicator**: The "Ava is typing…" line. Browsers send a short signal while someone types; others hide it if no new signal arrives within 6 seconds. _Example:_ seeing someone pick up a pen across the table.
 
 **Unit test (Vitest)**: A small automatic check that one piece of code does what it should.
 _Example:_ testing a single light switch before wiring the whole house.
@@ -314,5 +332,7 @@ _Example:_ a walkie-talkie channel that stays on.
 _Example:_ the list of trays in the toolbox. v1 is deliberately not on it.
 
 **X-Forwarded-For**: A request header listing the IP addresses a request passed through. Only the entries added by our own trusted proxy can be believed, because a visitor can write anything into it. _Example:_ a parcel's chain of postmarks: you trust the stamps added by the post office, not the ones the sender drew on.
+
+**XSS (cross-site scripting)**: An attack that hides a script inside text (for example a message) so that it runs in other people's browsers. SocketSpace never inserts user text as HTML, so `<img onerror=...>` is shown as harmless text. _Example:_ a note on a noticeboard that, if read aloud by the wrong machine, would be taken as a command.
 
 **Zod / schema validation**: A schema is a precise description of what valid data looks like (which fields, which types, how long). Zod is the TypeScript library SocketSpace uses to write schemas once in `packages/shared` and check every incoming event and request against them on both ends. Unknown fields are refused. _Example:_ a customs form that rejects any parcel whose label does not match the form exactly.

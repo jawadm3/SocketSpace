@@ -28,6 +28,11 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
   - D2 messaging (server side): markdown-lite parser, edit with 30-day history, delete as
     tombstones, reactions, @mentions, read markers and unread counts, typing indicators, presence
     across tabs with invisible mode.
+  - D2 messaging (browser): messages drawn from the markdown-lite tree (never HTML); reply,
+    react, edit and delete from an action bar reachable by keyboard; reply quotes that jump to
+    the original; the reaction picker; Up arrow edits your last message; @mention autocomplete;
+    "is typing" line; presence dots; unread badges cleared across tabs; an invisible-mode switch
+    in profile settings; a tick on acknowledged messages.
 - **Stage C (foundations), 2026-10-02**
   - Secret scanning: a pinned, checksum-verified gitleaks 8.30.1 (`scripts/tools/gitleaks.mjs`),
     run by a git pre-commit hook (`.githooks/pre-commit`) and by `pnpm secrets:scan`.
@@ -58,9 +63,17 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
 ### Changed
 
 - v1 moved into `v1/` with its history preserved, and excluded from all v2 tooling.
+- The `reaction:toggle` acknowledgement carries the change's event number, and browsers catch
+  up on every connection for every room they belong to, not just the open one (D-039).
+- Turborepo runs at most four tasks at once, because `pnpm check` ran out of memory on the
+  development laptop (D-040).
 
 ### Fixed
 
+- Someone who joined a room while others were online looked offline to them until a reload,
+  and saw everyone there as offline too (Stage D2).
+- A message in a room you were not looking at made the browser fetch that room's recent history
+  (its catch-up started from zero) (Stage D2).
 - Two timing-sensitive tests could fail on slow machines: a token rate-limit test that
   straddled a clock minute, and a message burst test whose sends took over a second (Stage D1).
 - Signing in while the browser still held the cookie of an ended session silently signed the

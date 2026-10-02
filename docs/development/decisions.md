@@ -277,3 +277,21 @@ The owner approved the stack and added the product changes below. They are also 
 - **Writing marks read.** Sending a message moves the sender's read marker to it; the marker only ever moves forward and never past the conversation's latest event.
 - **Presence lives in the realtime server's memory.** Each tab reports online, away or do-not-disturb; a person is "do not disturb" if any tab says so, else online if any tab is in use, else away, and offline when the last tab closes ("last seen" is saved then, to the minute). Invisible mode always shows offline. With several realtime servers each would know only its own connections; the free deployment runs one, so this is exact there.
 - **Typing** is checked against the socket's room membership (no database query) and throttled by dropping extra events, as the protocol says.
+
+## D-039: How the browser keeps chat state (Stage D2, browser)
+
+- **Stage:** D2. **Status:** Accepted.
+- **Every room has a cursor from the start.** The sidebar's room list carries each room's event number when the page was drawn, and the browser starts each room's cursor there. Before, only the open room had one, so a message in another room looked like a gap from event 0 and fetched that room's recent history. Now a gap is a real gap, and unread counts in rooms that are not on screen stay correct after a reconnect.
+- **Catch up on every connection, including the first.** Events between the server drawing the page and the live connection opening were otherwise noticed only when a later event revealed the gap. It costs one `sync:request` per 50 conversations per connection, inside the limit of 6 per minute.
+- **Changes apply by event number.** An edit, deletion or reaction summary replaces the copy held only if its event number is not lower, so arrival order never matters. A deletion is a tombstone in the same place.
+- **The `reaction:toggle` acknowledgement carries `eventSeq`.** The reacting tab gets no broadcast of its own change, and without the number its cursor would see a gap at the next message and resync for nothing.
+- **Unread counts:** the server's counts when the page is drawn, plus one for each new message from someone else in a room not on screen; zero while a room is on screen in a visible tab (its read marker follows the newest event, sent at most every 0.4 seconds); and `read:updated` from another tab clears the badge. A refreshed server list wins over live counting, except for the room on screen.
+- **Typing and presence signals are throttled in the browser** to what the server accepts (one typing signal per person per 2 seconds, one presence change per 5 seconds), because the server drops extras silently. A dropped "typing" would otherwise delay the indicator by a full repeat interval. "Stopped" is only sent when "typing" went out in the last 6 seconds.
+- **A live join exchanges presence** (realtime `member.added`): the room learns whether the newcomer is online and the newcomer learns who is online there. Before, presence was only exchanged on connect.
+- **Permissions in the interface follow the server's rules** (edit: author within 24 hours and allowed to post; delete: author, or a moderator who outranks the author). The interface only hides buttons; the server still decides every request.
+
+## D-040: Turborepo runs at most four tasks at once
+
+- **Stage:** D2. **Status:** Accepted.
+- **Problem:** with Turborepo's default of 10 tasks at once, `pnpm check` started its 13 tasks almost together (type-aware lint, type checks and test pools for four packages). On the development laptop (about 7.3 GB usable, 3.4 GB free) it failed three times in a row, each time in a different package: a type check, a PGlite database that could not start, and a test worker that exited with code 0x80000003. Every package passed on its own.
+- **Decision:** `"concurrency": "4"` in `turbo.json` (checked against the installed version's `schema.json` and docs). The full check then passed 13 of 13 in about 50 seconds. GitHub's runners have 4 processors, so CI loses nothing.

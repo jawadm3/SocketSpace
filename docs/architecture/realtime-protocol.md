@@ -73,7 +73,7 @@ fetches real names it is allowed to see once per person over HTTP (cached). See 
 | `message:send`    | `{ conversationId, clientId, body, replyToId?, attachmentIds? }` | `{ message }`                                       | member, not muted/banned, DM not blocked, rate limit, word filter, attachments owned by sender and pending |
 | `message:edit`    | `{ messageId, body }`                                            | `{ message }`                                       | author only, not deleted, within 24 h, word filter                                                         |
 | `message:delete`  | `{ messageId }`                                                  | `{ messageId, eventSeq }`                           | author, or room owner/moderator, or admin                                                                  |
-| `reaction:toggle` | `{ messageId, emoji }`                                           | `{ messageId, reactions }`                          | member, emoji in allow-list, at most 20 distinct emoji per message                                         |
+| `reaction:toggle` | `{ messageId, emoji }`                                           | `{ messageId, reactions, eventSeq }`                | member, emoji in allow-list, at most 20 distinct emoji per message                                         |
 | `typing:set`      | `{ conversationId, typing: boolean }`                            | none (fire and forget, throttled)                   | member                                                                                                     |
 | `read:update`     | `{ conversationId, seq }`                                        | `{ unread }`                                        | member; `seq` can only move forward                                                                        |
 | `delivery:ack`    | `{ items: [{ conversationId, seq }] }` (batched every 2 s)       | none                                                | DMs only                                                                                                   |
@@ -108,6 +108,12 @@ fetches real names it is allowed to see once per person over HTTP (cached). See 
   `lastSeenAt`) when the last tab closes. Invisible mode always shows `offline`.
 - A newly connected tab receives one `presence` event for each person online in its
   conversations (up to 500).
+- When someone joins a room while connected (`member.added`), the room receives their presence
+  (unless they look offline) and their tabs receive the presence of everyone online in that
+  room, so nobody has to reload to see who is there (D-039).
+- Browsers send `presence:set` when a tab becomes visible (`online`) or hidden (`away`), no
+  more than once per 5 seconds; `typing:set` no more than once per 2.1 seconds, repeated every
+  3 seconds while typing (D-039).
 - `typing:set` reaches only members (checked against the socket's rooms) and is throttled by
   dropping extra events; browsers hide an indicator after 6 seconds without an update.
 - Presence is kept in the realtime server's memory: exact with one server (the free
@@ -132,8 +138,10 @@ The client keeps, per conversation, `lastEventSeq`: the highest event number it 
 
 - **Gap detection:** every live event carries `eventSeq`. If an event arrives with
   `eventSeq > lastEventSeq + 1`, the client knows it missed something and calls `sync:request`.
-- **After any reconnect:** the client fetches a fresh token if needed, reconnects, and sends one
-  `sync:request` with the cursors of every conversation it has open or listed. The server returns
+- **After every connect (the first one too):** the client fetches a fresh token if needed,
+  connects, and sends `sync:request` with the cursors of every conversation it has open or
+  listed. Each room in the sidebar starts from the event number the server rendered, so rooms
+  that are not on screen catch up too (D-039). The server returns
   every message whose `version_seq` is greater than the cursor (new messages, edits, deletions and
   reaction changes), ordered, up to 200 per conversation. Beyond 200 it answers `reset: true` and
   the client reloads the latest page over HTTP instead.
