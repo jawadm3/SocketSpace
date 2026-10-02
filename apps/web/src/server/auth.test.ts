@@ -100,6 +100,27 @@ describe('email verification (AUTH-02)', () => {
     expect((await userRow(email))?.emailVerified).toBe(true);
   });
 
+  it('signs in on first use only: a reused link starts no session', async () => {
+    // Verification signs the person in (autoSignInAfterVerification), so a link that worked twice
+    // would be a reusable sign-in link for anyone who later finds the email.
+    const { email } = await signUp();
+    const text = h.mail.latestTo(email.toLowerCase())?.text ?? '';
+    const token =
+      new URL(/https?:\/\/\S+verify-email\S+/.exec(text)?.[0] ?? '').searchParams.get('token') ??
+      '';
+    const startsSession = (cookies: Map<string, string>) =>
+      [...cookies.entries()].some(
+        ([name, value]) => name.endsWith('session_token') && value !== '',
+      );
+
+    const first = await h.call('/verify-email', { query: { token } });
+    expect(startsSession(first.cookies)).toBe(true);
+    const again = await h.call('/verify-email', { query: { token } });
+    expect(again.status).toBe(200);
+    expect(again.json).toEqual({ status: true, user: null });
+    expect(startsSession(again.cookies)).toBe(false);
+  });
+
   it('refuses a tampered token', async () => {
     const result = await h.call('/verify-email', { query: { token: 'not-a-real-token' } });
     expect(result.status).toBeGreaterThanOrEqual(300);

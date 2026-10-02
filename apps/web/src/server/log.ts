@@ -4,6 +4,8 @@
  *
  * Fields that could hold secrets or personal data are replaced with "[redacted]" at any depth
  * (security.md 3.10): message text is never logged, and neither are tokens or email addresses.
+ * Errors are reduced to their name and code (D-033): a database error's message repeats the
+ * query's parameters, which can include an email address or a token.
  */
 import 'server-only';
 
@@ -25,9 +27,19 @@ const REDACT = new Set([
 const LEVELS = { trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60, silent: 100 };
 export type LogLevel = keyof typeof LEVELS;
 
+/** A log-safe description of an error: the outermost name and the innermost code, no messages. */
+export function describeError(error: Error): { name: string; code?: string } {
+  let code: string | undefined;
+  for (let current: unknown = error; current; current = (current as { cause?: unknown }).cause) {
+    const candidate = (current as { code?: unknown }).code;
+    if (typeof candidate === 'string') code = candidate;
+  }
+  return code === undefined ? { name: error.name } : { name: error.name, code };
+}
+
 export function redact(value: unknown, depth = 0): unknown {
   if (depth > 6 || value === null || typeof value !== 'object') return value;
-  if (value instanceof Error) return { name: value.name, message: value.message };
+  if (value instanceof Error) return describeError(value);
   if (Array.isArray(value)) return value.map((item) => redact(item, depth + 1));
   const out: Record<string, unknown> = {};
   for (const [key, inner] of Object.entries(value)) {

@@ -1,7 +1,7 @@
 /**
  * Integration tests that need network stubs: breached-password checks (AUTH-07), realtime token
  * signing (RT-01), secure cookies (AUTH-06) and safe account linking for social sign-in
- * (AUTH-10, AUTH-13, decision D-022).
+ * (AUTH-10, AUTH-13, decision D-022): Facebook and Microsoft never link by email; GitHub does.
  */
 import { createHash } from 'node:crypto';
 
@@ -146,6 +146,8 @@ const PROVIDER_ENV = {
   FACEBOOK_CLIENT_SECRET: 'fb-test-secret-placeholder',
   GITHUB_CLIENT_ID: 'gh-test-app',
   GITHUB_CLIENT_SECRET: 'gh-test-secret-placeholder',
+  MICROSOFT_CLIENT_ID: 'ms-test-app',
+  MICROSOFT_CLIENT_SECRET: 'ms-test-secret-placeholder',
 };
 
 /** An existing, verified email-and-password account. */
@@ -180,6 +182,28 @@ function facebookRoutes(profile: Record<string, unknown>): Route {
   };
 }
 
+/**
+ * Microsoft's token endpoint returns an ID token; in the sign-in callback Better Auth only decodes
+ * it (the code exchange itself is the proof), so an unsigned token is enough for the stub.
+ */
+function microsoftRoutes(claims: Record<string, unknown>): Route {
+  const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const idToken = `${part({ alg: 'none', typ: 'JWT' })}.${part(claims)}.stub`;
+  return (url) => {
+    if (url.href === 'https://login.microsoftonline.com/common/oauth2/v2.0/token') {
+      return json({
+        access_token: 'ms-access',
+        id_token: idToken,
+        token_type: 'Bearer',
+        expires_in: 3600,
+      });
+    }
+    // No profile photo.
+    if (url.hostname === 'graph.microsoft.com') return new Response(null, { status: 404 });
+    return undefined;
+  };
+}
+
 describe('account linking (AUTH-13, D-022)', () => {
   it('never lets a Facebook sign-in take over an existing account with the same email', async () => {
     const h = await createAuthHarness(PROVIDER_ENV);
@@ -210,6 +234,41 @@ describe('account linking (AUTH-13, D-022)', () => {
         .select()
         .from(schema.account)
         .where(eq(schema.account.userId, ava.id));
+      expect(accounts.map((a) => a.providerId)).toEqual(['credential']);
+    } finally {
+      await h.close();
+    }
+  });
+
+  it('never lets a Microsoft sign-in take over an existing account with the same email', async () => {
+    const h = await createAuthHarness(PROVIDER_ENV);
+    try {
+      const lee = await existingVerifiedAccount(h, 'lee@example.test');
+      const { state, cookie } = await startSocial(h, 'microsoft');
+      // Microsoft also claims the email is verified: it must still not link.
+      stubFetch(
+        microsoftRoutes({
+          oid: '00000000-0000-0000-0000-00000000c0de',
+          tid: '9188040d-6c67-4c5b-b112-36a304b66dad',
+          name: 'Lee Example',
+          email: 'lee@example.test',
+          email_verified: true,
+        }),
+      );
+      const callback = await h.call('/callback/microsoft', {
+        query: { code: 'test-code', state },
+        cookie,
+      });
+      expect(callback.status).toBe(302);
+      expect(callback.headers.get('location')).toContain('error=');
+      expect([...callback.cookies.keys()].some((name) => name.endsWith('session_token'))).toBe(
+        false,
+      );
+
+      const accounts = await h.db
+        .select()
+        .from(schema.account)
+        .where(eq(schema.account.userId, lee.id));
       expect(accounts.map((a) => a.providerId)).toEqual(['credential']);
     } finally {
       await h.close();
