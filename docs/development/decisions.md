@@ -257,3 +257,13 @@ The owner approved the stack and added the product changes below. They are also 
 - **What a banned person sees:** for a public room, its name and "you are banned until ..." (so they know why); for a private room, nothing (it looks missing, like any private room you are not in).
 - **Live updates:** `room:notice` (new) tells only the person concerned that they were muted, unmuted, removed or banned, with the reason. `user:updated` (new) carries a changed nickname or avatar to everyone who shares a conversation. Both, like every broadcast, carry nicknames only (D-024).
 - **Onboarding's theme step moves to Stage F**, when the Signal and Aurora themes exist. Offering three choices that all look like Airmail would mislead.
+
+## D-037: Avatars, people lookups and test addresses (Stage D1)
+
+- **Stage:** D1. **Status:** Accepted.
+- **The avatar builder is built from DiceBear's own description of each style** (`OptionsDescriptor`) for the six gallery styles: their parts (hair, eyes, glasses ...), which parts are optional extras (a default probability below 100, so they can be switched off), each style's colour palettes, and eight soft backgrounds. Nothing is hand-copied, so a DiceBear update cannot silently drift from the form.
+- **Saved avatars are checked against those options on the server.** DiceBear quietly accepts an unknown variant and draws a broken picture (found by a quick render test), so every part must be one of its variants, every colour one of its swatches, and switches only 0 or 100. Anything else is refused.
+- **Avatars are drawn by our own server at `/api/avatar`.** The settings travel in the URL, so the answer can be cached for a year, and the SVG is served with a policy that allows no scripts. The URL writes the settings in a fixed order, because PostgreSQL's `jsonb` reorders keys and the same picture would otherwise have several addresses (found while writing the J11 journey).
+- **People lookup (`GET /api/users`):** broadcasts carry nicknames only (D-024); a browser asks for each person once and gets a real name only where that viewer is allowed to see it. 120 lookups a minute per person; responses are never cached by shared caches.
+- **Photo avatars wait for the upload pipeline (D5)**; the onboarding theme step waits for Stage F (D-036).
+- **End-to-end tests:** each test "device" sends its own address from the three documentation ranges, with a counter that keeps counting across test files (a per-file counter made files share addresses and trip each other's limits). The E2E realtime server trusts one proxy hop, like Render in production, so per-IP connection limits apply per device instead of to 127.0.0.1.

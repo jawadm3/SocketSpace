@@ -1,13 +1,12 @@
 # PROGRESS
 
-_Last updated: 2026-10-02, session 3 (Stage C closed; Stage D is next)._
+_Last updated: 2026-10-02, session 3 (Stage C closed; Stage D in progress: D1 done, D2 next)._
 
 ## Current stage
 
-**Stage C (foundations) is complete.** All six milestones are built, tested and pushed; CI is green
-on `main`; CodeQL has no open alerts; the step log, requirements matrix, storage notes, glossary
-and changelog are up to date. **Next: Stage D (community mode), starting with D1.** See "Exact next
-step".
+**Stage D (community mode) is in progress.** D1 (profiles and rooms) is done: built, tested
+(8/8 end-to-end journeys locally) and pushed. **Next: D2 (messaging).** Stage C is complete and
+closed (see its section below). Step log: `docs/development/steps/STEP-D-community-mode.md`.
 
 ## Owner decisions (2026-10-01)
 
@@ -82,6 +81,25 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
   - STEP-C log (with the Better Auth upstream report text), requirements matrix (50 Done, 35 In
     progress, 92 Planned of 177), storage notes re-measured, 9 glossary terms, changelog.
 
+### Stage D: community mode (in progress; log: `docs/development/steps/STEP-D-community-mode.md`)
+
+- **D1 profiles and rooms** (`3570c15`, `7b5fc4f`, `1652b83`, `3d52162`; D-036, D-037):
+  - Rooms in the database: create, join, leave, explore with search, settings, roles and
+    ownership transfer, invites (code shown once, only its hash stored; expiry, use limits,
+    cancel), room mute, remove and ban with reasons, delete (archive). Each change decides and
+    writes in one transaction under the room's row lock; room moderation goes to the audit log
+    (migration 0002).
+  - Live: membership, role, mute, settings and profile events move sockets and broadcast
+    `conversation:*`, `member:*`, `room:notice` (new) and `user:updated` (new), nickname only.
+  - Web: app shell with one shared connection, sidebar, notices; room page with live messages,
+    optimistic sending, resync on reconnect and on gaps; settings showing only allowed actions;
+    invite page; "Room not found" that leaks nothing; `/api/users` (real names only where
+    allowed); `/api/avatar` (our own server draws avatars).
+  - Profiles: optional real name with visibility and display choice; 24 presets; avatar builder
+    from DiceBear's descriptors with server-side validation; profile settings with live updates.
+  - Fixed on the way: a flaky token rate-limit test (minute boundary); E2E address pool and proxy
+    hop setting (D-037).
+
 ## Verified (with evidence)
 
 | What                                                                        | Evidence                                                                                                                                                                                     |
@@ -101,6 +119,7 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
 | CodeQL clean                                                                | Alerts #1 to #4 fixed by `47d9449`; #5 dismissed with reason (D-035); 0 open.                                                                                                                |
 | Windows quoting fix                                                         | Round trip through `Start-Process`: old helper 2/6 arguments intact, new 6/6; `db:start`/`db:stop` cycle works.                                                                              |
 | Journeys J1, J11, SEC-05 headers, live connection, AUTH-06 revocation       | Playwright 5/5 locally and in CI (run 36956890831).                                                                                                                                          |
+| Stage D1 locally                                                            | `pnpm check` 13/13: shared 148, db 85, web 64, realtime 45 (+2 Redis); E2E 8/8 (J1, J2, J5, J11 x2, headers, live connection, sign-out elsewhere).                                           |
 | CI green on `main`                                                          | Run 36956890831 on `4d31e43` and run 37013142109 on `47d9449`: all 6 jobs succeeded; Redis tests ran; E2E 5/5; 34 commits scanned, no leaks.                                                 |
 | Docker images                                                               | CI smoke test: both run as `node`; healthz 200; handshake without Origin 403, with web origin 200; metrics without token 401; readyz database+keys true; realtime exit code 0 after SIGTERM. |
 | Foreign-origin probe from v1 now fails                                      | `connection.test.ts` and the Docker smoke test (403).                                                                                                                                        |
@@ -123,21 +142,23 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
 
 ## Exact next step
 
-Stage D, milestone **D1: profiles and rooms** (`docs/development/plan.md`). Suggested order:
+Stage D, milestone **D2: messaging** (`docs/development/plan.md`). Suggested order:
 
-1. **Viewer-aware user objects:** one server function that turns a user row into what a given
-   viewer may see (nickname, avatar, real name only when `realNameForViewer` allows it; D-024,
-   PROF-04), used by every page and event that shows a person.
-2. **Onboarding screens:** optional real name with visibility and display choice, avatar gallery
-   with at least 24 CC0 presets (PROF-06, now 16) and the avatar builder (PROF-07), theme step.
-3. **Rooms:** create (public/private), explore, join, leave; roles; invites with expiry, uses and
-   revoke; room mute and ban; room settings (ROOM-01 to ROOM-06). Each membership change sends an
-   internal event (outbox fallback) so live sockets join or leave rooms.
-4. Tests first-class as in Stage C: db integration, realtime multi-client, E2E journeys from
-   `qa/acceptance_criteria.md`; add a check script for SEC-01 once new HTTP routes appear.
+1. **Edit and delete** (MSG-02, MSG-03): `message:edit` (author, 24 hours, revision kept 30 days)
+   and `message:delete` (author, room moderators by rank, admins) as tombstones; both take a new
+   event number so resync carries them; the client already merges by `eventSeq`.
+2. **Replies and reactions** (MSG-04, MSG-05): reply chip in the composer, quote that jumps to the
+   original (also when deleted); `reaction:toggle` with the emoji allow-list, at most 20 distinct.
+3. **Mentions and markdown-lite** (MSG-06, MSG-07, SEC-06): server-side `@nickname` parsing into
+   `mention` rows (members only, blocks respected), autocomplete; a safe renderer (no raw HTML,
+   hostile-input tests, lint ban on `dangerouslySetInnerHTML`).
+4. **Typing, presence, read state** (RT-03, RT-04, RT-05, PROF-02): `typing:set` throttled with
+   expiry, presence across tabs with invisible mode, `read:update` and unread counts in the
+   sidebar, live across tabs.
+5. E2E: journeys J2 (typing, unread) and J3 (edit, delete, react, reply, mention, formatting).
 
-Local state: run `pnpm db:start` before tests against PostgreSQL or E2E (it was stopped at the
-end of session 2). `apps/web/.env.local` and `apps/realtime/.env.local` exist (generated by
+Local state: run `pnpm db:start` before tests against PostgreSQL or E2E. Run
+`pnpm db:migrate:local` after pulling (migration 0002 was added in D1). `apps/web/.env.local` and `apps/realtime/.env.local` exist (generated by
 `pnpm setup:local`).
 
 ## Effort guide (from Anthropic's Claude Code docs, checked 2026-10-01)

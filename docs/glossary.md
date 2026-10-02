@@ -21,6 +21,8 @@ your finished project. SocketSpace v1 is tagged `v1.0.0`.
 **Append-only**: Data that can be added to but never changed or deleted. _Example:_ a bound logbook
 with numbered pages. The moderation audit log is append-only, enforced by the database.
 
+**Archive (soft delete)**: Marking something as deleted instead of erasing it, so it disappears from the app but its record survives for safety reviews. A deleted room is archived. _Example:_ moving a letter into a locked drawer instead of shredding it.
+
 **ASVS**: The OWASP Application Security Verification Standard, a checklist of security
 requirements for web applications, in levels 1 to 3. _Example:_ a building-safety inspection
 checklist. We aim at the intent of level 2.
@@ -97,6 +99,8 @@ remove it from every uploaded image.
 
 **File-system race (time-of-check to time-of-use)**: A bug where a program checks a file ("does it exist?") and then acts on it, and something changes the file in between. The fix is to ask the operating system to do both in one step, for example "create this file, but fail if it already exists" (the exclusive flag `wx`). _Example:_ checking a parking space is free, walking back to your car, and finding someone took it; reserving it in one step avoids that.
 
+**Fixed-window rate limit**: Counting actions per clock period (for example per minute starting at :00) and refusing once the count passes the limit; the count starts again at the next period. _Example:_ a shop that serves 30 people per hour, counted from the top of each hour.
+
 **Formatter (Prettier)**: A tool that rewrites code layout into one consistent style. _Example:_ a
 tidy-up that lines all the books on a shelf the same way.
 
@@ -123,13 +127,19 @@ that it was not changed. _Example:_ a wax seal only the sender's ring can make.
 **Horizontal scaling**: Handling more users by adding more servers rather than a bigger one.
 _Example:_ opening more checkout tills instead of hiring one faster cashier.
 
+**Hydration**: When a page arrives already drawn by the server and the browser then attaches its own interactive code to it. Anything that differs between the two drawings (such as a time in the reader's time zone) is filled in afterwards. _Example:_ a printed form that comes to life once you sit down at the counter with a clerk.
+
 **Idempotent**: Doing something twice has the same effect as doing it once. _Example:_ pressing a
 lift button again does not call a second lift. Re-sending a message with the same client ID never
 creates a duplicate.
 
 **Integration test**: A test that runs several real parts together, for example the sign-in code with a real database. _Example:_ test-driving a whole car rather than checking each part on a bench.
 
+**Invite link**: A web address with a long random code that lets someone join a room, even a private one. It can expire, admit a limited number of people, or be cancelled. SocketSpace stores only a fingerprint (hash) of the code. _Example:_ a numbered guest-list wristband.
+
 **is-a.dev**: A free service that gives developers a subdomain such as `name.is-a.dev`, requested through a GitHub pull request.
+
+**jsonb (PostgreSQL)**: A column type that stores structured data (JSON) in an efficient binary form. It may reorder the keys of an object, so code must not rely on their order. _Example:_ a filing clerk who sorts the pages of your form alphabetically.
 
 **JWKS**: A published list of the public keys used to check JWT signatures. _Example:_ a public
 register of official stamps so anyone can check a pass is genuine.
@@ -219,6 +229,8 @@ coffee loyalty card that allows a few free refills per hour.
 
 **Redis**: A very fast in-memory data store, often used to pass messages between servers. SocketSpace can use it to link several realtime servers (the Redis adapter); the free deployment runs one server and does not need it. _Example:_ a shared noticeboard between several office buildings.
 
+**Reducer**: A small function that takes the current state and one event and returns the next state, without side effects, which makes the rules easy to test. The chat screen's rules (ordering, duplicates, gaps) are a reducer. _Example:_ a referee's rule book: given the score and what just happened, it says what the new score is.
+
 **Remote (git)**: The address of the shared copy of the repository. _Example:_ the postal address
 you send your work to.
 
@@ -237,11 +249,15 @@ _Example:_ motion-sensor lights in a corridor. Neon's database does this after 5
 **Sequence number**: A number given to each event in a conversation, counting up by one. _Example:_
 numbered tickets at a deli counter: if you hold 41 and see 43 called, you know you missed 42.
 
+**Server action**: A function in a Next.js app that a form calls directly; it runs on the server, where it checks who is asking and validates everything before changing data. _Example:_ a counter clerk who checks your ID and form before stamping it.
+
 **Service container (CI)**: A helper program (for example PostgreSQL or Redis) that CI starts next to a test job, used only for that run and then thrown away. _Example:_ a hired practice partner who leaves when the session ends.
 
 **Session (sign-in)**: The record that says "this browser is signed in as this person", kept in the database and pointed to by a cookie. Ending the session signs that browser out. _Example:_ a cloakroom ticket: hand it in and you get your coat; tear it up and the coat stays.
 
 **SHA pinning (GitHub Actions)**: Referring to a reusable CI step by the exact fingerprint of its code instead of a name like "v7", so nobody can change it underneath us. _Example:_ ordering a specific edition of a book by its ISBN rather than "the latest one".
+
+**Slug (room address)**: The short, URL-safe name of a room, such as `design-talk` in `/app/r/design-talk`: lower-case letters, numbers and dashes. _Example:_ the short name on a mailbox.
 
 **Smoke test**: A quick check that something starts and answers at all, before deeper tests. _Example:_ switching on a newly repaired appliance to see that nothing smokes.
 

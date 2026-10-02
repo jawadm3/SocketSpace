@@ -226,19 +226,23 @@ describe('rate limits (SEC-02)', () => {
     const user = await createTestUser(h.db);
     const room = await createTestRoom(h.db, user.id);
     const socket = await h.connectAs(user.id);
-    const acks = [];
-    for (let i = 0; i < 11; i++) {
-      acks.push(
-        await request(socket, 'message:send', {
+    // All at once, so they reach the bucket before it can refill (1 token a second). Sent one by
+    // one, a slow CI machine took over a second for ten sends and the eleventh was allowed.
+    const acks = await Promise.all(
+      Array.from({ length: 14 }, (_, i) =>
+        request(socket, 'message:send', {
           conversationId: room.id,
           clientId: uuidv4(),
           body: `m${String(i)}`,
         }),
-      );
-    }
+      ),
+    );
     expect(acks.slice(0, 10).every((a) => a.ok)).toBe(true);
-    const limited = acks[10];
-    if (!limited || limited.ok) throw new Error('expected the 11th send to be limited');
+    const allowed = acks.filter((a) => a.ok).length;
+    expect(allowed).toBeGreaterThanOrEqual(10);
+    expect(allowed).toBeLessThanOrEqual(11);
+    const limited = acks.find((a) => !a.ok);
+    if (!limited || limited.ok) throw new Error('expected sends beyond the burst to be limited');
     expect(limited.error.code).toBe('RATE_LIMITED');
     expect(limited.error.retryAfterMs).toBeGreaterThan(0);
     expect(limited.error.retryAfterMs).toBeLessThanOrEqual(1000);

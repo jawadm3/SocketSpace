@@ -17,6 +17,14 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
 
 ### Added
 
+- **Stage D (community mode), in progress**
+  - D1 rooms: create public or private rooms, explore and search, join and leave, invite links
+    (shown once, stored as a fingerprint, expiry and use limits), roles and ownership transfer,
+    room mute, remove and ban with reasons, rename and delete; all audited and live.
+  - The app shell: one live connection for every page, sidebar of your rooms, live messages with
+    optimistic sending, automatic resync after reconnects and gaps, moderator notices.
+  - Profiles: optional real name with who may see it, 24 preset pictures and an avatar builder,
+    profile settings; a new nickname or picture reaches people at once.
 - **Stage C (foundations), 2026-10-02**
   - Secret scanning: a pinned, checksum-verified gitleaks 8.30.1 (`scripts/tools/gitleaks.mjs`),
     run by a git pre-commit hook (`.githooks/pre-commit`) and by `pnpm secrets:scan`.
@@ -50,6 +58,8 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
 
 ### Fixed
 
+- Two timing-sensitive tests could fail on slow machines: a token rate-limit test that
+  straddled a clock minute, and a message burst test whose sends took over a second (Stage D1).
 - Signing in while the browser still held the cookie of an ended session silently signed the
   person out again (Stage C, D-030).
 - `pnpm db:start` quoted Windows command-line arguments incorrectly (a path ending in `\` was
