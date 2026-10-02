@@ -9,6 +9,7 @@ import { getDb } from '@/server/db';
 import { requireAppUser } from '@/server/session';
 import { getOwnProfile } from '@socketspace/db';
 
+import { LiveStatus } from '../live-status';
 import { SignOutButton } from '../sign-out-button';
 import { VerifyEmailBanner } from '../verify-email-banner';
 
@@ -34,7 +35,10 @@ export default async function AppHome() {
             <p className="text-sm text-muted">Signed in as {user.email}</p>
           </div>
         </div>
-        <p className="mt-6 text-sm text-ink-2">
+        <div className="mt-6">
+          <LiveStatus />
+        </div>
+        <p className="mt-4 text-sm text-ink-2">
           Rooms, direct messages and live chat arrive in the next stage of the build. Your account,
           profile and sign-in are ready.
         </p>

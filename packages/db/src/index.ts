@@ -18,5 +18,6 @@ export * from './queries/messages';
 export * from './queries/users';
 export * from './queries/conversations';
 export * from './queries/limits';
+export * from './queries/outbox';
 // The query-building operators, re-exported so apps use this package's Drizzle instance.
 export { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';

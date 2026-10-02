@@ -3,7 +3,7 @@
  * verify by email, sign in again, reset the password. Also J11's "no skipping onboarding" and
  * "taken nickname shows free suggestions".
  */
-import { expect, test } from '@playwright/test';
+import { expect, newDevice, test } from './fixtures';
 
 import { PASSWORD, completeOnboarding, newEmail, signUp, waitForMailLink } from './helpers';
 
@@ -85,13 +85,13 @@ test('J1: sign up, onboard, verify, sign out and in, reset the password', async 
 test('J11: a taken nickname (in any letter case) offers free suggestions', async ({ browser }) => {
   const nickname = `Maple${String(Date.now()).slice(-6)}`;
 
-  const first = await browser.newPage();
+  const first = await (await newDevice(browser)).newPage();
   await signUp(first, newEmail('first'));
   await completeOnboarding(first, nickname);
   await expect(first).toHaveURL(/\/app$/);
   await first.close();
 
-  const page = await browser.newPage();
+  const page = await (await newDevice(browser)).newPage();
   await signUp(page, newEmail('second'));
   await completeOnboarding(page, nickname.toLowerCase());
   await expect(page.getByText('That nickname is taken')).toBeVisible();

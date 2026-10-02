@@ -61,7 +61,7 @@ export default defineConfig(
   },
   {
     // The web app: Next.js rules and the rules of React hooks.
-    files: ['apps/web/**/*.{ts,tsx}'],
+    files: ['apps/web/src/**/*.{ts,tsx}'],
     extends: [nextPlugin.configs['core-web-vitals'], reactHooks.configs.flat.recommended],
     languageOptions: { globals: { ...globals.browser } },
     settings: { next: { rootDir: 'apps/web/' } },

@@ -2,7 +2,7 @@
  * Conversations and memberships. Stage C covers what the realtime server needs on connect and
  * what tests and the demo seed need; Stage D adds DMs, invites, roles and moderation actions.
  */
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type { Database, Queryable } from '../client';
 import { newId } from '../schema/_common';
@@ -70,4 +70,23 @@ export async function addMember(
       .where(eq(conversation.id, conversationId));
     return { added: true };
   });
+}
+
+/** Of `conversationIds`, the ones `userId` belongs to (one query; used to authorise resync). */
+export async function filterMemberConversations(
+  db: Queryable,
+  userId: string,
+  conversationIds: readonly string[],
+): Promise<Set<string>> {
+  if (conversationIds.length === 0) return new Set();
+  const rows = await db
+    .select({ conversationId: conversationMember.conversationId })
+    .from(conversationMember)
+    .where(
+      and(
+        eq(conversationMember.userId, userId),
+        inArray(conversationMember.conversationId, [...conversationIds]),
+      ),
+    );
+  return new Set(rows.map((r) => r.conversationId));
 }

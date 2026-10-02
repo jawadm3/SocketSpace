@@ -2,7 +2,7 @@
  * Screenshots of the Stage C pages for a visual check (not a regression test; Stage F adds those).
  * Runs only when E2E_SHOTS=1. Images go to test-results/shots (git-ignored).
  */
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 import { completeOnboarding, newEmail, signUp } from './helpers';
 

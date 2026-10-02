@@ -5,7 +5,7 @@ import { and, eq, gt, isNull, lte, or, sql } from 'drizzle-orm';
 
 import type { Queryable } from '../client';
 import { dbNow } from '../clock';
-import { user } from '../schema/auth';
+import { session, user } from '../schema/auth';
 import { userSanction } from '../schema/safety';
 
 export interface ConnectionProfile {
@@ -174,4 +174,23 @@ export async function getOwnProfile(db: Queryable, userId: string): Promise<OwnP
     .from(user)
     .where(eq(user.id, userId));
   return row ?? null;
+}
+
+/**
+ * True if the session exists, belongs to the user and has not expired (database clock).
+ * The realtime server checks this on connect, so a token issued just before a sign-out cannot
+ * open a new connection in the remaining minutes of its life.
+ */
+export async function isSessionActive(
+  db: Queryable,
+  sessionId: string,
+  userId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: session.id })
+    .from(session)
+    .where(
+      and(eq(session.id, sessionId), eq(session.userId, userId), gt(session.expiresAt, sql`now()`)),
+    );
+  return row !== undefined;
 }

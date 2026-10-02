@@ -1,0 +1,7 @@
+{
+  "extends": "@socketspace/config/tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src", "scripts", "vitest.config.ts"]
+}
