@@ -206,7 +206,7 @@ The owner approved the stack and added the product changes below. They are also 
 - **Stage:** C. **Status:** Accepted.
 - **Problem:** found by the end-to-end test. A browser still holding the cookie of a session that ended (for example after a password reset elsewhere) signs in successfully, but Better Auth's guest (anonymous) plugin then looks the old session up, finds nothing, and appends "delete the session cookie" headers that cancel the fresh one. The person is silently signed out again.
 - **Fix:** a `before` hook on session-starting paths removes a session cookie that no longer matches a live session from the request. A live guest cookie is kept, so upgrading a guest to a full account still works. Regression tests cover both.
-- **Upstream:** worth reporting to Better Auth (1.7.6). Filing an issue needs the owner's GitHub account; the description is in `docs/development/steps/STEP-C-foundations.md`.
+- **Upstream:** reported on 2026-10-02, with the owner's approval, as [better-auth/better-auth#11533](https://github.com/better-auth/better-auth/issues/11533), after confirming the cause in the 1.7.6 source: the anonymous plugin's after hook reads the session from the old cookie, and the "session not found" path appends cookie-deleting headers after the new session cookie. Remove the workaround once a fixed release is adopted and the regression tests pass without it.
 
 ## D-031: Realtime server bundled into one file; small Docker images
 

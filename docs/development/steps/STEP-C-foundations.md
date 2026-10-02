@@ -237,6 +237,11 @@ Local machine: Windows 11 Home, Node.js 22.13.0. "Session 3" results are from 20
 
 ## Upstream report for Better Auth (D-030)
 
+Filed on 2026-10-02 as
+[better-auth/better-auth#11533](https://github.com/better-auth/better-auth/issues/11533), in the
+repository's bug-report format, after checking the cause in the 1.7.6 source. The text drafted here
+was:
+
 The owner may want to report this to Better Auth (it needs the owner's GitHub account). Suggested
 text:
 

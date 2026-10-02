@@ -140,15 +140,17 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
 
 ## Known problems and things waiting for the owner
 
-1. **pnpm state file on C:** (1 KB). Optional owner fix:
-   `pnpm config set --global state-dir "D:/mini project/.pnpm-state"`.
-2. **Optional:** test OAuth apps (for example GitHub, Google) with a `localhost` callback to try
-   social sign-in locally before Stage H.
-3. **Optional, owner's GitHub account:** report the Better Auth stale-cookie behaviour upstream
-   (D-030; ready-to-paste text in `STEP-C-foundations.md`, "Upstream report"); and switch on
-   Dependabot security alerts in the repository settings.
-4. **Accepted advisory:** one moderate `pnpm audit` finding (old esbuild inside drizzle-kit's dev
+1. **Accepted advisory:** one moderate `pnpm audit` finding (old esbuild inside drizzle-kit's dev
    loader, never used in production; D-034).
+2. **Social sign-in apps:** the owner decided (2026-10-02) to create every provider's developer
+   app at once in Stage H, with the live URLs; no local test apps before then.
+3. **Optional, owner:** the old pnpm state file is still at
+   `C:\Users\jawad\AppData\Local\pnpm-state\` (51 bytes) after the move; it can be deleted.
+
+Done with the owner on 2026-10-02: pnpm's state directory moved to
+`D:/mini project/.pnpm-state` (owner); the Better Auth bug reported upstream as
+[better-auth/better-auth#11533](https://github.com/better-auth/better-auth/issues/11533) (D-030);
+Dependabot security alerts switched on for the repository (0 open alerts at first check).
 
 ## Exact next step
 
