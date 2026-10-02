@@ -150,7 +150,10 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
 Done with the owner on 2026-10-02: pnpm's state directory moved to
 `D:/mini project/.pnpm-state` (owner); the Better Auth bug reported upstream as
 [better-auth/better-auth#11533](https://github.com/better-auth/better-auth/issues/11533) (D-030);
-Dependabot security alerts switched on for the repository (0 open alerts at first check).
+Dependabot security alerts switched on for the repository. Its first full scan found 75 alerts
+(3 critical, 37 high, 30 moderate, 5 low), **all in the archived `v1/package-lock.json`**, which
+is never installed, built or deployed; v2's `pnpm-lock.yaml` has none. Waiting for the owner:
+dismiss the v1 alerts as "not used" (reversible), or leave them visible.
 
 ## Exact next step
 
