@@ -1,7 +1,8 @@
 import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from 'jose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { eq, schema } from '@socketspace/db';
+import { eq, schema, sql } from '@socketspace/db';
+import { rowsOf } from '@socketspace/db/testing';
 import {
   REALTIME_TOKEN_AUDIENCE,
   realtimeTokenClaimsSchema,
@@ -106,6 +107,13 @@ describe('POST /api/realtime/token', () => {
 
   it(`allows ${String(TOKEN_REQUESTS_PER_MINUTE)} tokens a minute, then asks the browser to wait`, async () => {
     const { cookie } = await signedInCookie();
+    // The limit counts per clock minute on the database clock. Start well inside a minute, so the
+    // requests never straddle a boundary (that reset the count and made this test flaky in CI).
+    const [clock] = rowsOf<{ t: string }>(
+      await h.db.execute(sql`select extract(epoch from now())::text as t`),
+    );
+    const secondsIn = Number(clock?.t ?? 0) % 60;
+    if (secondsIn > 40) await new Promise((done) => setTimeout(done, (61 - secondsIn) * 1000));
     for (let i = 0; i < TOKEN_REQUESTS_PER_MINUTE; i++) {
       expect((await issue(tokenRequest(cookie))).status).toBe(200);
     }
