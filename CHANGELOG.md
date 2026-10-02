@@ -25,6 +25,9 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
     optimistic sending, automatic resync after reconnects and gaps, moderator notices.
   - Profiles: optional real name with who may see it, 24 preset pictures and an avatar builder,
     profile settings; a new nickname or picture reaches people at once.
+  - D2 messaging (server side): markdown-lite parser, edit with 30-day history, delete as
+    tombstones, reactions, @mentions, read markers and unread counts, typing indicators, presence
+    across tabs with invisible mode.
 - **Stage C (foundations), 2026-10-02**
   - Secret scanning: a pinned, checksum-verified gitleaks 8.30.1 (`scripts/tools/gitleaks.mjs`),
     run by a git pre-commit hook (`.githooks/pre-commit`) and by `pnpm secrets:scan`.

@@ -1,12 +1,13 @@
 # PROGRESS
 
-_Last updated: 2026-10-02, session 3 (Stage C closed; Stage D in progress: D1 done, D2 next)._
+_Last updated: 2026-10-02, end of session 3 (Stage D in progress: D1 done; D2 data and realtime done, D2 browser part next)._
 
 ## Current stage
 
-**Stage D (community mode) is in progress.** D1 (profiles and rooms) is done: built, tested
-(8/8 end-to-end journeys locally) and pushed. **Next: D2 (messaging).** Stage C is complete and
-closed (see its section below). Step log: `docs/development/steps/STEP-D-community-mode.md`.
+**Stage D (community mode) is in progress.** D1 (profiles and rooms) is done. D2 (messaging) has
+its database, shared parser and realtime parts done and tested; **next is D2's browser part**
+(see "Exact next step"). Stage C is complete and closed. Step log:
+`docs/development/steps/STEP-D-community-mode.md`.
 
 ## Owner decisions (2026-10-01)
 
@@ -100,6 +101,13 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
   - Fixed on the way: a flaky token rate-limit test (minute boundary); E2E address pool and proxy
     hop setting (D-037).
 
+- **D2 messaging, server side** (D-038): shared markdown-lite parser (tree, never HTML; hostile
+  input tests); edit with 30-day history, delete as tombstones (moderator deletions audited),
+  reactions (allow-list, 20 distinct), @mentions (members only, blocks respected), read markers
+  and unread counts; realtime `message:edit/delete`, `reaction:toggle`, `read:update`,
+  `typing:set`, presence across tabs with invisible mode and "last seen".
+- Two flaky tests fixed (minute boundary, burst timing) and one lint error that reached CI.
+
 ## Verified (with evidence)
 
 | What                                                                        | Evidence                                                                                                                                                                                     |
@@ -119,6 +127,7 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
 | CodeQL clean                                                                | Alerts #1 to #4 fixed by `47d9449`; #5 dismissed with reason (D-035); 0 open.                                                                                                                |
 | Windows quoting fix                                                         | Round trip through `Start-Process`: old helper 2/6 arguments intact, new 6/6; `db:start`/`db:stop` cycle works.                                                                              |
 | Journeys J1, J11, SEC-05 headers, live connection, AUTH-06 revocation       | Playwright 5/5 locally and in CI (run 36956890831).                                                                                                                                          |
+| Stage D2 server side locally                                                | `pnpm check` 13/13: shared 160, db 97, web 64, realtime 56 (+2 Redis); same on PostgreSQL 17.9; E2E 8/8 (27.7 s).                                                                            |
 | Stage D1 locally                                                            | `pnpm check` 13/13: shared 148, db 85, web 64, realtime 45 (+2 Redis); E2E 8/8 (J1, J2, J5, J11 x2, headers, live connection, sign-out elsewhere).                                           |
 | CI green on `main`                                                          | Run 36956890831 on `4d31e43` and run 37013142109 on `47d9449`: all 6 jobs succeeded; Redis tests ran; E2E 5/5; 34 commits scanned, no leaks.                                                 |
 | Docker images                                                               | CI smoke test: both run as `node`; healthz 200; handshake without Origin 403, with web origin 200; metrics without token 401; readyz database+keys true; realtime exit code 0 after SIGTERM. |
@@ -142,20 +151,30 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
 
 ## Exact next step
 
-Stage D, milestone **D2: messaging** (`docs/development/plan.md`). Suggested order:
+Stage D, **D2's browser part** (the server side is done and tested; D-038). In
+`apps/web/src/app/(app)/app/r/[slug]/room-view.tsx` and `apps/web/src/lib/chat/`:
 
-1. **Edit and delete** (MSG-02, MSG-03): `message:edit` (author, 24 hours, revision kept 30 days)
-   and `message:delete` (author, room moderators by rank, admins) as tombstones; both take a new
-   event number so resync carries them; the client already merges by `eventSeq`.
-2. **Replies and reactions** (MSG-04, MSG-05): reply chip in the composer, quote that jumps to the
-   original (also when deleted); `reaction:toggle` with the emoji allow-list, at most 20 distinct.
-3. **Mentions and markdown-lite** (MSG-06, MSG-07, SEC-06): server-side `@nickname` parsing into
-   `mention` rows (members only, blocks respected), autocomplete; a safe renderer (no raw HTML,
-   hostile-input tests, lint ban on `dangerouslySetInnerHTML`).
-4. **Typing, presence, read state** (RT-03, RT-04, RT-05, PROF-02): `typing:set` throttled with
-   expiry, presence across tabs with invisible mode, `read:update` and unread counts in the
-   sidebar, live across tabs.
-5. E2E: journeys J2 (typing, unread) and J3 (edit, delete, react, reply, mention, formatting).
+1. **Render messages from the markdown-lite tree** (`@socketspace/shared/markdown`) as React
+   elements: bold, italic, strike, code, code blocks, quotes, links (`rel="noopener noreferrer
+nofollow ugc"`, new tab), @mentions highlighted (your own nickname stronger). Add an ESLint ban
+   on `dangerouslySetInnerHTML` (SEC-06).
+2. **Chat state** (`lib/chat/state.ts`, with tests): apply `message:updated`,
+   `message:deleted` (tombstone) and `reaction:updated` by `eventSeq`; unread counts per room;
+   typing per room (expire after 6 s); presence per person. Provider: handle `typing`,
+   `presence`, `read:updated`, `reaction:updated`, `message:deleted`; send `presence:set` on tab
+   visibility changes; send `read:update` when a room is open and visible.
+3. **Message actions**, keyboard reachable: reply (chip in the composer, quote that jumps to and
+   highlights the original, "deleted" quote when gone), react (allow-list picker), edit (author,
+   24 h; Up arrow in an empty composer edits your last message), delete (author, moderators by
+   rank; confirm).
+4. **@mention autocomplete** in the composer from the room's members (arrow keys, Enter, Esc).
+5. **Typing indicator** under the list ("Ava is typing…", throttled `typing:set` while typing);
+   **presence dots** in the member list; **unread badges** in the sidebar (initial counts from
+   `unreadCounts`), cleared live across tabs.
+6. **Invisible mode** switch in Settings > Profile (`setShowPresence` + `user.updated` event).
+7. **E2E**: J3 (edit, delete, react, reply, mention notification row exists, formatting and
+   `<img onerror>` shown as text) and J2's typing and unread parts. Then update the matrix
+   (MSG-02..07, RT-03..05, PROF-02, SEC-06), STEP-D, PROGRESS, commit and push; check CI.
 
 Local state: run `pnpm db:start` before tests against PostgreSQL or E2E. Run
 `pnpm db:migrate:local` after pulling (migration 0002 was added in D1). `apps/web/.env.local` and `apps/realtime/.env.local` exist (generated by

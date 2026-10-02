@@ -1,7 +1,8 @@
 # Step D: Community mode
 
 - **Started:** 2026-10-02 (session 3).
-- **Status:** In progress. D1 (profiles and rooms) is done; D2 to D5 follow.
+- **Status:** In progress. D1 (profiles and rooms) is done; D2 (messaging) has its database and
+  realtime parts done, the browser part next; D3 to D5 follow.
 
 ## Goal
 
@@ -11,13 +12,13 @@ previews, images), presence, history, search, notifications and uploads, all liv
 Stage exit (`qa/acceptance_criteria.md`): journeys J2 to J6, J9 and J11 pass as automated tests;
 virtualised list; search; notifications; uploads.
 
-| Milestone                     | Status | Commits                         |
-| ----------------------------- | ------ | ------------------------------- |
-| D1 Profiles and rooms         | Done   | `3570c15`, `7b5fc4f`, `1652b83` |
-| D2 Messaging                  | Next   |                                 |
-| D3 History and reliability    |        |                                 |
-| D4 DMs, notifications, search |        |                                 |
-| D5 Media                      |        |                                 |
+| Milestone                     | Status                                | Commits                         |
+| ----------------------------- | ------------------------------------- | ------------------------------- |
+| D1 Profiles and rooms         | Done                                  | `3570c15`, `7b5fc4f`, `1652b83` |
+| D2 Messaging                  | Half: data and realtime done, UI next | `7c85aca` and the next commit   |
+| D3 History and reliability    |                                       |                                 |
+| D4 DMs, notifications, search |                                       |                                 |
+| D5 Media                      |                                       |                                 |
 
 ## D1: Profiles and rooms
 
@@ -101,7 +102,38 @@ Local machine: Windows 11 Home, Node.js 22.13.0, 2026-10-02.
 | New web tests                             | chat state rules (9), people lookup (2), avatars and builder (4)                                                                                                                                                                                      |
 | Screens inspected                         | room (desktop and phone), settings, invite, home, onboarding gallery, builder                                                                                                                                                                         |
 
+## D2: Messaging (in progress)
+
+### Done so far: data, contracts and realtime
+
+- **Markdown-lite** (`packages/shared/src/markdown.ts`): one parser for browser and server. It
+  produces a tree, never HTML: bold, italic, strike, code, code blocks, quotes, https links,
+  @mentions, backslash escapes. 12 tests, including hostile input (`<img onerror>`, `javascript:`
+  links) and 4,000 characters of unclosed markers parsed in well under 200 ms. One real bug found
+  by a test and fixed: `**bold *and italic***` closed the bold too early.
+- **Database** (`message-actions.ts`, `read-state.ts`): edit (author, 24 hours on the database
+  clock, still allowed to post; earlier text kept), delete as a tombstone (author, outranking room
+  moderators, admins; audited when not the author), reactions (allow-list, at most 20 different),
+  mentions (members only, outside code, not the author, not someone who blocked the author),
+  read markers that only move forward and unread counts. Each change takes the next event number.
+- **Realtime**: `message:edit`, `message:delete`, `reaction:toggle`, `read:update` (other tabs
+  told), `typing:set` (members only, throttled), presence across tabs with invisible mode, a
+  snapshot of who is online for a new tab, "last seen" when someone leaves (D-038).
+
+| Check                          | Result                                                                       |
+| ------------------------------ | ---------------------------------------------------------------------------- |
+| `pnpm check`                   | 13 of 13 tasks; shared 160, db 97, web 64, realtime 56 (+2 Redis)            |
+| On PostgreSQL 17.9             | db 97/97, realtime 56 (+2), web 64/64                                        |
+| New tests                      | markdown 12; db message actions 12; realtime presence rules 3, live events 8 |
+| End-to-end after these changes | 8 of 8 journeys still pass (27.7 s)                                          |
+
+Also fixed on the way: a lint error that reached CI (a condition TypeScript already narrows), and
+the room page passing an array index where reactions were expected (caught by the type check).
+
 ## What comes next
 
-D2, messaging: edit with history, delete as tombstones, replies, reactions, @mentions, the
-markdown-lite renderer, typing indicators, presence, read state and unread counts.
+D2, the browser part: render messages with the markdown-lite tree; message actions (reply, react,
+edit, delete) with keyboard support; reply quotes that jump to the original; the reaction picker;
+@mention autocomplete; typing indicator; presence dots; unread counts in the sidebar, live across
+tabs; invisible-mode switch in profile settings. Then E2E J3 (edit, delete, react, reply,
+mention, formatting) and the typing and unread parts of J2.

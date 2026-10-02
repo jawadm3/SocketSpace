@@ -101,6 +101,18 @@ fetches real names it is allowed to see once per person over HTTP (cached). See 
 | `user:updated`                                                       | `{ user }` (nickname and avatar only, never a real name)                                                                             | conversations the person is in, and their own tabs                         |
 | `session:ended`                                                      | `{ reason, reconnectAfterMs? }` then disconnect; reason is `revoked`, `banned`, `suspended`, `deleted`, `server_shutdown` or `abuse` | sockets of that session, person or server                                  |
 
+### Presence and typing (Stage D2, D-038)
+
+- Each tab sends `presence:set` with `online` (in use), `away` (hidden or idle) or `dnd`. Others
+  see `dnd` if any tab says so, else `online` if any tab is in use, else `away`; `offline` (with
+  `lastSeenAt`) when the last tab closes. Invisible mode always shows `offline`.
+- A newly connected tab receives one `presence` event for each person online in its
+  conversations (up to 500).
+- `typing:set` reaches only members (checked against the socket's rooms) and is throttled by
+  dropping extra events; browsers hide an indicator after 6 seconds without an update.
+- Presence is kept in the realtime server's memory: exact with one server (the free
+  deployment); with several, each knows only its own connections.
+
 ### Delivery states (what the little ticks mean)
 
 | State           | Shown as         | Meaning                                                                       |
