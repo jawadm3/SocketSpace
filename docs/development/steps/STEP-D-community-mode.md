@@ -236,8 +236,68 @@ D-039 (how the browser keeps chat state) and D-040 (Turborepo runs at most four 
 | Raw-HTML lint ban             | A probe file with `dangerouslySetInnerHTML` gave "Raw HTML is not allowed" (exit 1); the probe was deleted                                                        |
 | Screens inspected             | room with formatting, a reply, a mention, a reaction, the action bar, the typing line and the reaction picker (desktop)                                           |
 
+## D3: History and reliability (done)
+
+### What was built, and how it works
+
+- **Older messages on demand** (HIST-02). `GET /api/rooms/[slug]/messages?before=<seq>` returns
+  the 100 messages before a message number, the people in them, and whether there are more.
+  Cutting pages by number means a page never shifts when new messages arrive. The route uses the
+  room page's rules: members, or anyone for a public room; banned people and outsiders of
+  private rooms get the same "not found" as a room that does not exist.
+- **A virtualised message list** (HIST-04, `message-list.tsx`, TanStack Virtual). Only the
+  messages near the screen exist in the page, each measured as it appears. The list opens at the
+  newest message, follows new ones while you are at the bottom, and shows "New messages" when you
+  are reading further up. Scrolling near the top loads the previous page, and the message you
+  were reading stays where it was. A button does the same for keyboard users.
+- **Reply quotes find their original**, even when it is not loaded yet. The list loads up to 20
+  older pages, then scrolls to the original and focuses it.
+- **The outbox** (RECON-04, `lib/chat/outbox.ts`). Messages wait here until the server stores
+  them, one at a time and in order. They are kept in `localStorage`, so a reload does not lose
+  them. Offline time is not counted as failed attempts. Passing failures are retried after 1, 2,
+  4 and 8 seconds; after 5 tries, or at once for a refusal, the message shows "Not sent" with
+  "Try again". Signing out clears it. Re-sends use the same client ID, so nothing is stored
+  twice.
+- **Offline and reconnecting** (RECON-01, RECON-02). The browser's offline event pauses the
+  connection at once and shows a banner ("You are offline. Messages you send will go out when the
+  connection returns."). The online event reconnects at once. After a reconnect the browser
+  catches up (D2) and then sends the outbox. A first connection that fails is tried again with
+  growing waits. A reconnect shows the banner only after 2 seconds, so short blips stay quiet.
+- **Screen readers** hear new messages from others through a separate polite announcement. The
+  list itself does not announce, because virtualisation adds old messages while scrolling up.
+
+### Decisions
+
+D-041.
+
+### Problems and fixes
+
+- **One scroll to the top loaded the whole history.** The history test reached the start of
+  10,000 messages suspiciously fast. A probe test showed 10 page requests for a single scroll in
+  a 1,000-message room, with the reader thrown to message 1. Cause: the "start of the room" line
+  was the first row of the virtual list, so the library anchored the reader's place to it, and
+  it never moves. Fix: the line now sits above the list, outside the measured rows. The same
+  probe then showed one request, with the reader still on the same message. The history test now
+  checks exactly this.
+- **J3 failed after the list change.** The old text of an edited message was still in the page,
+  in the hidden screen-reader announcement. Announcements are now cleared after 5 seconds, and
+  the test looks inside the message list only.
+- The test seed failed twice on SQL details: message IDs come from the app (not the database),
+  and PostgreSQL needed explicit number types for added parameters.
+
+### Tests run, with actual results
+
+| Check                         | Result                                                                                                                                                                                                                          |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm check`                  | 13 of 13 tasks; shared 160, db 97, realtime 56 (+2 Redis tests that run in CI), web 107                                                                                                                                         |
+| Same tests on PostgreSQL 17.9 | shared 160, db 97, realtime 56 (+2), web 107                                                                                                                                                                                    |
+| New web tests                 | outbox 9, history route 3, older pages in state 2                                                                                                                                                                               |
+| End-to-end                    | 11 of 11 in 1.4 min, including J4 (new) and the 10,000-message history test (new)                                                                                                                                               |
+| 10,000 messages (HIST-04)     | at most 24 message rows in the page; whole history scrolled one screen per frame: p95 30.6 ms, worst 51.2 ms, 1 of 548 frames over 50 ms; start reached after 100 page requests, 18.6 s (development laptop, headless Chromium) |
+| Screens inspected             | room offline (banner, a waiting message, everyone shown offline), room at phone width                                                                                                                                           |
+
 ## What comes next
 
-D3, history and reliability: cursor pagination with infinite scroll (HIST-02), a virtualised
-message list (HIST-04), the send outbox kept in `localStorage` so a message typed offline is sent
-after reconnecting (RECON-04), reconnect UX and an offline banner, then journey J4.
+D4: direct messages (with the "who may message me" setting and blocks), in-app notifications
+(mentions, replies, DMs; this completes MSG-06 and NOTIF-01), and full-text search (HIST-03).
+Then D5: media (image uploads, avatar photos) and link previews.

@@ -33,6 +33,10 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
     the original; the reaction picker; Up arrow edits your last message; @mention autocomplete;
     "is typing" line; presence dots; unread badges cleared across tabs; an invisible-mode switch
     in profile settings; a tick on acknowledged messages.
+  - D3 history and reliability: older messages load as you scroll up, keeping your place; a
+    virtualised message list (10,000 messages measured); reply quotes load their original;
+    an outbox that keeps unsent messages across reloads and sends them in order; an offline
+    banner, and reconnecting as soon as the network returns.
 - **Stage C (foundations), 2026-10-02**
   - Secret scanning: a pinned, checksum-verified gitleaks 8.30.1 (`scripts/tools/gitleaks.mjs`),
     run by a git pre-commit hook (`.githooks/pre-commit`) and by `pnpm secrets:scan`.
@@ -70,6 +74,8 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
 
 ### Fixed
 
+- Scrolling to the top of a room loaded every older page at once instead of one (found before
+  release by a probe test, Stage D3).
 - Someone who joined a room while others were online looked offline to them until a reload,
   and saw everyone there as offline too (Stage D2).
 - A message in a room you were not looking at made the browser fetch that room's recent history
@@ -83,6 +89,8 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
   leaving a gap for a race (CodeQL findings, D-035).
 
 ### Security
+
+- Unsent messages kept in the browser are cleared on sign-out and when a session ends (D-041).
 
 - Cross-site sign-in requests are refused (login CSRF), Facebook and Microsoft sign-ins never take
   over an existing account by email, and logs never contain message text or tokens (D-029, D-033).

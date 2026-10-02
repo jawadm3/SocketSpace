@@ -146,6 +146,10 @@ Server-side fetching is risky: a malicious link could make our server request
   moderation actions) with user ID and request ID, not personal details.
 - IP addresses are stored only where needed (sessions; HMAC-hashed for bans) with the retention
   periods in `data-model.md`.
+- The only message text kept in the browser is the person's own **unsent** messages (the outbox,
+  in `localStorage`, under their user ID), until the server stores them or they press "Delete".
+  Signing out and an ended session clear every outbox in that browser; saved entries are checked
+  against the send contract before use (D-041).
 
 ### 3.11 Social sign-in and account linking (ASVS V10 "OAuth and OIDC")
 

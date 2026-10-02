@@ -148,8 +148,15 @@ The client keeps, per conversation, `lastEventSeq`: the highest event number it 
 - **Outbox:** messages the user sent but that were not acknowledged stay in the outbox (memory plus
   `localStorage`, so they survive a page reload) and are re-sent **with the same `clientId`**. The
   database's unique key on (`author_id`, `client_id`) turns a re-send into a no-op that returns the
-  original message. The retry budget is 5 attempts with back-off, then the message is marked
-  "Failed" with a manual retry button.
+  original message. The outbox sends **one message at a time, in the order written**, so the server
+  numbers them in that order. While there is no connection nothing is sent and no attempt is
+  counted. A failure that may pass (no answer, connection lost, `RATE_LIMITED`, `UNAVAILABLE`) is
+  retried after 1, 2, 4 and 8 seconds (or the server's `retryAfterMs`); after 5 attempts, or at
+  once for a refusal such as `FORBIDDEN`, the message is marked "Failed" with a manual retry
+  button. Signing out (or an ended session) clears it (D-041).
+- **Offline:** the browser's `offline` event disconnects the socket and shows a banner at once;
+  `online` reconnects at once instead of waiting out Socket.IO's back-off. If the very first
+  connection fails, it is retried after 2, 4, 8 ... up to 30 seconds (D-041).
 - **De-duplication on the client:** messages are stored in a map keyed by `id` and replaced by
   `clientId` when the ack arrives, so an echo and an ack for the same message never show twice.
 - Socket.IO's own connection-state recovery is switched on for drops under 2 minutes (in-memory

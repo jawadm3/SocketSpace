@@ -32,6 +32,8 @@ Every moderator action is written to one.
 
 **Autocomplete (listbox)**: Suggestions that appear while you type, which you can pick with the arrow keys and Enter. A "listbox" is the accessible name for such a list, so screen readers announce it properly. _Example:_ typing "@av" in a message suggests "@ava", like a phone suggesting a contact as you type a name.
 
+**Back-off (retry)**: Waiting longer after each failed try (1 second, then 2, then 4 ...), so a struggling server is not flooded with retries. _Example:_ ringing a busy friend again after a minute, then five, then ten.
+
 **Better Auth**: The sign-in library SocketSpace runs inside its own web app (nothing is handed to an outside sign-in company). It handles passwords, email verification, password resets, passkeys, guests and "Sign in with Google"-style buttons, and stores everything in our database. _Example:_ a lock and key system you install and keep the master key for, instead of renting one from a security firm.
 
 **Broadcast**: Sending one message to everyone who is listening. _Example:_ a shop's loudspeaker
@@ -80,6 +82,8 @@ your hand to sign. Prevented with cookie settings and origin checks.
 
 **CU-hour (Neon)**: Neon's unit of database computing time: one "compute unit" running for one
 hour. _Example:_ kilowatt-hours on an electricity bill. The free plan includes 100 per month.
+
+**Cursor pagination**: Fetching a long list in pages by saying "the items before this one" instead of "page 7". New items arriving at the top cannot shift what the next page contains. _Example:_ a bookmark: "carry on from here" works even if pages were added at the front.
 
 **DiceBear**: A free, open-source (MIT) library that draws avatars from a few settings. _Example:_ a character creator in a video game. SocketSpace runs it inside the app, so no outside service is involved.
 
@@ -164,6 +168,8 @@ and how long the usher ignores you.
 
 **Linter (ESLint)**: A tool that reads code and points out likely mistakes without running it.
 _Example:_ a proofreader who flags "their/there" mix-ups.
+
+**localStorage**: A small storage area in the browser, kept per website, that survives reloads and restarts. SocketSpace keeps only your own unsent messages there, and clears them when you sign out. _Example:_ a sticky note left on your own desk.
 
 **Lockfile (`pnpm-lock.yaml`)**: A file recording the exact version of every installed package, so
 everyone gets identical copies. _Example:_ a recipe that says "Brand X flour, 500 g" instead of
@@ -257,6 +263,8 @@ filing cabinet that also keeps every earlier draft.
 
 **Scale to zero**: A service that switches itself off when unused and back on when needed.
 _Example:_ motion-sensor lights in a corridor. Neon's database does this after 5 idle minutes.
+
+**Scroll anchoring**: Keeping the part of a list you are reading in the same place on screen when content is added above it. _Example:_ someone slips extra pages in at the front of your book, and you are still on the same sentence.
 
 **Secret scanning (gitleaks)**: A tool that searches code and its history for things that look like passwords, keys or tokens. _Example:_ an airport scanner for your luggage before it is loaded.
 
