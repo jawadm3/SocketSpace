@@ -5,9 +5,13 @@
  * /app, and the chat state every page reads (state.ts holds the rules; this file wires the socket
  * to them).
  *
- * - Sending is optimistic: the message shows at once as "Sending", is replaced by the stored copy
- *   when the server acknowledges it, or is marked "Failed" with the reason and a retry button.
- *   A retry re-sends the same client ID, so it can never create a duplicate.
+ * - Sending is optimistic: the message shows at once as "Sending" and goes into the outbox
+ *   (outbox.ts), which sends one message at a time, keeps unsent ones across reloads, retries
+ *   with back-off and re-sends the same client ID, so it can never create a duplicate. It is
+ *   replaced by the stored copy when the server acknowledges it, or marked "Failed" with the
+ *   reason and a retry button.
+ * - The browser's offline and online events pause and resume the connection at once; when the
+ *   first connection cannot be made, it is tried again with growing waits.
  * - Edits, deletions and reactions apply when the server acknowledges them; a refusal becomes a
  *   notice with the server's reason.
  * - On every (re)connect, and whenever a gap in event numbers stays open, it asks the server for
@@ -30,7 +34,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import type { Ack } from '@socketspace/shared/errors';
+import { RETRYABLE_CODES, type Ack } from '@socketspace/shared/errors';
 import type {
   AckData,
   ConversationWire,
@@ -40,7 +44,7 @@ import type {
 import type { ReactionEmoji } from '@socketspace/shared/emoji';
 import type { PublicUser } from '@socketspace/shared/profile';
 
-import { connectRealtime, type RealtimeSocket } from '@/lib/realtime-client';
+import { connectRealtime, TokenRequestError, type RealtimeSocket } from '@/lib/realtime-client';
 
 import {
   chatReducer,
@@ -49,6 +53,7 @@ import {
   type ChatState,
   type SidebarRoom,
 } from './state';
+import { Outbox, type OutboxItem, type SendResult } from './outbox';
 import { TypingThrottle } from './typing';
 
 export type MemberEvent =
@@ -70,10 +75,19 @@ interface ChatContextValue {
   stoppedTyping: (conversationId: string) => void;
   /** The room page on screen (or `null` when it closes). */
   setOpenConversation: (conversationId: string | null) => void;
-  loadConversation: (conversationId: string, messages: MessageWire[], lastEventSeq: number) => void;
+  loadConversation: (
+    conversationId: string,
+    messages: MessageWire[],
+    lastEventSeq: number,
+    hasOlder: boolean,
+  ) => void;
+  /** A page of older history fetched by the room page (infinite scroll). */
+  loadOlderMessages: (conversationId: string, messages: MessageWire[], hasMore: boolean) => void;
   rememberUsers: (users: PublicUser[]) => void;
   ensureUsers: (ids: readonly string[]) => void;
   dismissNotice: (id: string) => void;
+  /** Shows a notice at the top of the app (for example "That message is too far back"). */
+  notify: (text: string, tone?: 'info' | 'error') => void;
   onMemberEvent: (conversationId: string, handler: (event: MemberEvent) => void) => () => void;
 }
 
@@ -248,139 +262,272 @@ export function ChatProvider({
     else tracker.timer = setTimeout(run, wait);
   }, []);
 
+  // The outbox: unsent messages, kept in this browser until the server has them.
+  const outboxRef = useRef<Outbox | null>(null);
+  useEffect(() => {
+    const sendViaSocket = (item: OutboxItem): Promise<SendResult> =>
+      new Promise((resolve) => {
+        const retryable = (message: string): SendResult => ({
+          ok: false,
+          retryable: true,
+          error: { code: 'UNAVAILABLE', message },
+        });
+        const socket = socketRef.current;
+        if (!socket?.connected) {
+          resolve(retryable('No connection.'));
+          return;
+        }
+        // A dropped connection never answers; do not wait for the timeout to find out.
+        const onDrop = () => {
+          resolve(retryable('The connection dropped.'));
+        };
+        socket.once('disconnect', onDrop);
+        socket
+          .timeout(SEND_TIMEOUT_MS)
+          .emitWithAck('message:send', {
+            conversationId: item.conversationId,
+            clientId: item.clientId,
+            body: item.body,
+            ...(item.replyToId ? { replyToId: item.replyToId } : {}),
+          })
+          .then(
+            (ack: Ack<AckData<'message:send'>>) => {
+              resolve(
+                ack.ok
+                  ? { ok: true, message: ack.data.message }
+                  : { ok: false, error: ack.error, retryable: RETRYABLE_CODES.has(ack.error.code) },
+              );
+            },
+            () => {
+              resolve(retryable('No answer from the server.'));
+            },
+          )
+          .finally(() => {
+            socket.off('disconnect', onDrop);
+          });
+      });
+
+    let storage: Storage | null = null;
+    try {
+      storage = window.localStorage;
+    } catch {
+      // Blocked: the outbox still works, in memory only.
+    }
+    const outbox = new Outbox({
+      userId: me.id,
+      storage,
+      send: sendViaSocket,
+      isConnected: () => socketRef.current?.connected === true,
+      onSent: (_clientId, message) => {
+        dispatch({ type: 'message', message });
+      },
+      onFailed: (clientId, error) => {
+        dispatch({ type: 'pending-failed', clientId, error });
+      },
+    });
+    outboxRef.current = outbox;
+    // Messages an earlier page could not send show again, and go out once connected.
+    for (const item of outbox.restore()) {
+      dispatch({
+        type: 'pending-added',
+        pending: {
+          clientId: item.clientId,
+          conversationId: item.conversationId,
+          body: item.body,
+          ...(item.replyToId ? { replyToId: item.replyToId } : {}),
+        },
+      });
+      if (item.failed)
+        dispatch({ type: 'pending-failed', clientId: item.clientId, error: item.failed });
+    }
+    outbox.connected();
+    return () => {
+      outbox.dispose();
+      outboxRef.current = null;
+    };
+  }, [me.id]);
+
   // The connection.
   useEffect(() => {
     let socket: RealtimeSocket | null = null;
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let failures = 0;
+    const lostStatus = () => (navigator.onLine ? 'reconnecting' : 'offline');
 
-    connectRealtime().then(
-      (connected) => {
-        if (cancelled) {
-          connected.close();
+    const start = () => {
+      retryTimer = null;
+      connectRealtime().then(onConnected, (error: unknown) => {
+        if (cancelled) return;
+        // Signed out, or not allowed to chat: trying again would not help.
+        if (
+          error instanceof TokenRequestError &&
+          error.status >= 400 &&
+          error.status < 500 &&
+          error.status !== 429
+        ) {
+          dispatch({ type: 'status', status: 'unavailable' });
           return;
         }
-        socket = connected;
-        socketRef.current = connected;
+        dispatch({ type: 'status', status: lostStatus() });
+        failures += 1;
+        retryTimer = setTimeout(start, Math.min(30_000, 2000 * 2 ** (failures - 1)));
+      });
+    };
 
-        connected.on('server:hello', () => {
-          dispatch({ type: 'status', status: 'connected' });
-          // A new connection starts "online"; say so if this tab is hidden.
-          presenceRef.current.sent = 'online';
-          reportPresence();
-          // Catch up on everything since the page was rendered or the connection dropped.
-          resync(
-            Object.entries(stateRef.current.conversations).map(([conversationId, c]) => ({
-              conversationId,
-              afterEventSeq: c.lastEventSeq,
-            })),
-          );
-        });
-        connected.on('disconnect', () => {
-          dispatch({ type: 'status', status: 'reconnecting' });
-          dispatch({ type: 'presence-cleared' });
-        });
-        connected.on('connect_error', () => {
-          dispatch({ type: 'status', status: 'reconnecting' });
-        });
-        connected.on('session:ended', ({ reason }) => {
-          if (reason === 'server_shutdown') return; // Socket.IO reconnects on its own.
-          connected.close();
-          router.push('/sign-in');
-          router.refresh();
-        });
+    const onConnected = (connected: RealtimeSocket) => {
+      failures = 0;
+      if (cancelled) {
+        connected.close();
+        return;
+      }
+      socket = connected;
+      socketRef.current = connected;
 
-        connected.on('message:new', ({ message }) => {
-          dispatch({ type: 'message', message, live: true });
-          ensureUsers([message.authorId]);
-        });
-        connected.on('message:updated', ({ message }) => {
-          dispatch({ type: 'message', message });
-        });
-        connected.on('message:deleted', ({ conversationId, messageId, eventSeq }) => {
-          dispatch({
-            type: 'message-deleted',
+      connected.on('server:hello', () => {
+        dispatch({ type: 'status', status: 'connected' });
+        // A new connection starts "online"; say so if this tab is hidden.
+        presenceRef.current.sent = 'online';
+        reportPresence();
+        // Catch up on everything since the page was rendered or the connection dropped.
+        resync(
+          Object.entries(stateRef.current.conversations).map(([conversationId, c]) => ({
             conversationId,
-            messageId,
-            eventSeq,
-            deletedAt: new Date().toISOString(),
-          });
-        });
-        connected.on('reaction:updated', ({ conversationId, messageId, reactions, eventSeq }) => {
-          dispatch({ type: 'reactions', conversationId, messageId, reactions, eventSeq });
-          ensureUsers(reactions.flatMap((r) => r.userIds));
-        });
-        connected.on('read:updated', ({ conversationId, userId, seq }) => {
-          if (userId === me.id) dispatch({ type: 'read', conversationId, seq });
-        });
-        connected.on('typing', ({ conversationId, userId, typing }) => {
-          dispatch({ type: 'typing', conversationId, userId, typing, now: Date.now() });
-          if (typing) ensureUsers([userId]);
-        });
-        connected.on('presence', ({ userId, status, lastSeenAt }) => {
-          dispatch({ type: 'presence', userId, status, lastSeenAt });
-        });
+            afterEventSeq: c.lastEventSeq,
+          })),
+        );
+        // Then send what was written meanwhile, in order.
+        outboxRef.current?.connected();
+      });
+      connected.on('disconnect', () => {
+        dispatch({ type: 'status', status: lostStatus() });
+        dispatch({ type: 'presence-cleared' });
+      });
+      connected.on('connect_error', () => {
+        dispatch({ type: 'status', status: lostStatus() });
+      });
+      connected.on('session:ended', ({ reason }) => {
+        if (reason === 'server_shutdown') return; // Socket.IO reconnects on its own.
+        // Unsent text must not stay behind for whoever uses this browser next.
+        outboxRef.current?.clear();
+        connected.close();
+        router.push('/sign-in');
+        router.refresh();
+      });
 
-        connected.on('conversation:joined', ({ conversation }) => {
-          const room = toSidebarRoom(conversation);
-          if (room) dispatch({ type: 'room-joined', room });
+      connected.on('message:new', ({ message }) => {
+        dispatch({ type: 'message', message, live: true });
+        ensureUsers([message.authorId]);
+      });
+      connected.on('message:updated', ({ message }) => {
+        dispatch({ type: 'message', message });
+      });
+      connected.on('message:deleted', ({ conversationId, messageId, eventSeq }) => {
+        dispatch({
+          type: 'message-deleted',
+          conversationId,
+          messageId,
+          eventSeq,
+          deletedAt: new Date().toISOString(),
         });
-        connected.on('conversation:updated', ({ conversation }) => {
-          const room = toSidebarRoom(conversation);
-          if (room) dispatch({ type: 'room-updated', room });
-        });
-        connected.on('conversation:left', ({ conversationId }) => {
-          dispatch({ type: 'room-left', conversationId });
-          // The page showing that room re-checks what this person may now see.
-          router.refresh();
-        });
+      });
+      connected.on('reaction:updated', ({ conversationId, messageId, reactions, eventSeq }) => {
+        dispatch({ type: 'reactions', conversationId, messageId, reactions, eventSeq });
+        ensureUsers(reactions.flatMap((r) => r.userIds));
+      });
+      connected.on('read:updated', ({ conversationId, userId, seq }) => {
+        if (userId === me.id) dispatch({ type: 'read', conversationId, seq });
+      });
+      connected.on('typing', ({ conversationId, userId, typing }) => {
+        dispatch({ type: 'typing', conversationId, userId, typing, now: Date.now() });
+        if (typing) ensureUsers([userId]);
+      });
+      connected.on('presence', ({ userId, status, lastSeenAt }) => {
+        dispatch({ type: 'presence', userId, status, lastSeenAt });
+      });
 
-        const emitMember = (conversationId: string, event: MemberEvent) => {
-          for (const handler of memberListeners.current.get(conversationId) ?? []) handler(event);
-        };
-        connected.on('member:joined', ({ conversationId, member }) => {
-          dispatch({ type: 'users', users: [member.user] });
-          emitMember(conversationId, { type: 'joined', member });
-        });
-        connected.on('member:updated', ({ conversationId, member }) => {
-          emitMember(conversationId, { type: 'updated', member });
-        });
-        connected.on('member:left', ({ conversationId, userId }) => {
-          emitMember(conversationId, { type: 'left', userId });
-        });
-        connected.on('user:updated', ({ user }) => {
-          dispatch({ type: 'users', users: [user] });
-        });
+      connected.on('conversation:joined', ({ conversation }) => {
+        const room = toSidebarRoom(conversation);
+        if (room) dispatch({ type: 'room-joined', room });
+      });
+      connected.on('conversation:updated', ({ conversation }) => {
+        const room = toSidebarRoom(conversation);
+        if (room) dispatch({ type: 'room-updated', room });
+      });
+      connected.on('conversation:left', ({ conversationId }) => {
+        dispatch({ type: 'room-left', conversationId });
+        // The page showing that room re-checks what this person may now see.
+        router.refresh();
+      });
 
-        connected.on('room:notice', ({ conversationId, kind, reason, until }) => {
-          const room = stateRef.current.rooms.find((r) => r.id === conversationId);
-          const where = room ? `#${room.name}` : 'a room';
-          const when = until ? ` until ${new Date(until).toLocaleString()}` : '';
-          const why = reason ? `: ${reason}` : '';
-          const text = {
-            muted: `You were muted in ${where}${when}${why}`,
-            unmuted: `You can post in ${where} again.`,
-            removed: `You were removed from ${where}${why}`,
-            banned: `You were banned from ${where}${when}${why}`,
-          }[kind];
-          dispatch({
-            type: 'notice',
-            notice: { id: noticeId(), tone: kind === 'unmuted' ? 'info' : 'error', text },
-          });
-          // The room page re-reads what this person may do now (for example the mute banner).
-          router.refresh();
+      const emitMember = (conversationId: string, event: MemberEvent) => {
+        for (const handler of memberListeners.current.get(conversationId) ?? []) handler(event);
+      };
+      connected.on('member:joined', ({ conversationId, member }) => {
+        dispatch({ type: 'users', users: [member.user] });
+        emitMember(conversationId, { type: 'joined', member });
+      });
+      connected.on('member:updated', ({ conversationId, member }) => {
+        emitMember(conversationId, { type: 'updated', member });
+      });
+      connected.on('member:left', ({ conversationId, userId }) => {
+        emitMember(conversationId, { type: 'left', userId });
+      });
+      connected.on('user:updated', ({ user }) => {
+        dispatch({ type: 'users', users: [user] });
+      });
+
+      connected.on('room:notice', ({ conversationId, kind, reason, until }) => {
+        const room = stateRef.current.rooms.find((r) => r.id === conversationId);
+        const where = room ? `#${room.name}` : 'a room';
+        const when = until ? ` until ${new Date(until).toLocaleString()}` : '';
+        const why = reason ? `: ${reason}` : '';
+        const text = {
+          muted: `You were muted in ${where}${when}${why}`,
+          unmuted: `You can post in ${where} again.`,
+          removed: `You were removed from ${where}${why}`,
+          banned: `You were banned from ${where}${when}${why}`,
+        }[kind];
+        dispatch({
+          type: 'notice',
+          notice: { id: noticeId(), tone: kind === 'unmuted' ? 'info' : 'error', text },
         });
-        connected.on('moderation:notice', ({ kind, reason, until }) => {
-          const when = until ? ` until ${new Date(until).toLocaleString()}` : '';
-          notifyError(`Your account was ${kind}${when}: ${reason}`);
-        });
-      },
-      () => {
-        if (!cancelled) dispatch({ type: 'status', status: 'unavailable' });
-      },
-    );
+        // The room page re-reads what this person may do now (for example the mute banner).
+        router.refresh();
+      });
+      connected.on('moderation:notice', ({ kind, reason, until }) => {
+        const when = until ? ` until ${new Date(until).toLocaleString()}` : '';
+        notifyError(`Your account was ${kind}${when}: ${reason}`);
+      });
+    };
+    start();
+
+    // The browser knows first when the network goes: pause the connection, and resume it at
+    // once when the network returns (instead of waiting out Socket.IO's back-off).
+    const onOffline = () => {
+      socket?.disconnect();
+      dispatch({ type: 'status', status: 'offline' });
+    };
+    const onOnline = () => {
+      if (socket) {
+        if (!socket.connected) {
+          dispatch({ type: 'status', status: 'reconnecting' });
+          socket.connect();
+        }
+      } else if (retryTimer) {
+        clearTimeout(retryTimer);
+        failures = 0;
+        start();
+      }
+    };
+    window.addEventListener('offline', onOffline);
+    window.addEventListener('online', onOnline);
 
     return () => {
       cancelled = true;
+      window.removeEventListener('offline', onOffline);
+      window.removeEventListener('online', onOnline);
+      if (retryTimer) clearTimeout(retryTimer);
       socketRef.current = null;
       socket?.close();
     };
@@ -492,69 +639,21 @@ export function ChatProvider({
     typingThrottle.current?.stopped(conversationId);
   }, []);
 
-  const emitSend = useCallback(
-    (conversationId: string, clientId: string, body: string, replyToId?: string) => {
-      const socket = socketRef.current;
-      if (!socket) {
-        dispatch({
-          type: 'pending-failed',
-          clientId,
-          error: { code: 'UNAVAILABLE', message: 'Not sent: no connection. Try again.' },
-        });
-        return;
-      }
-      socket
-        .timeout(SEND_TIMEOUT_MS)
-        .emitWithAck('message:send', {
-          conversationId,
-          clientId,
-          body,
-          ...(replyToId ? { replyToId } : {}),
-        })
-        .then(
-          (ack: Ack<AckData<'message:send'>>) => {
-            if (ack.ok) dispatch({ type: 'message', message: ack.data.message });
-            else dispatch({ type: 'pending-failed', clientId, error: ack.error });
-          },
-          () => {
-            dispatch({
-              type: 'pending-failed',
-              clientId,
-              error: { code: 'UNAVAILABLE', message: 'Not sent yet: no answer from the server.' },
-            });
-          },
-        );
-    },
-    [],
-  );
+  const send = useCallback((conversationId: string, body: string, replyToId?: string) => {
+    const clientId = crypto.randomUUID();
+    const pending = { clientId, conversationId, body, ...(replyToId ? { replyToId } : {}) };
+    dispatch({ type: 'pending-added', pending });
+    typingThrottle.current?.stopped(conversationId);
+    outboxRef.current?.add(pending);
+  }, []);
 
-  const send = useCallback(
-    (conversationId: string, body: string, replyToId?: string) => {
-      const clientId = crypto.randomUUID();
-      dispatch({
-        type: 'pending-added',
-        pending: { clientId, conversationId, body, ...(replyToId ? { replyToId } : {}) },
-      });
-      typingThrottle.current?.stopped(conversationId);
-      emitSend(conversationId, clientId, body, replyToId);
-    },
-    [emitSend],
-  );
-
-  const retry = useCallback(
-    (clientId: string) => {
-      for (const conversation of Object.values(stateRef.current.conversations)) {
-        const pending = conversation.pending.find((p) => p.clientId === clientId);
-        if (!pending) continue;
-        dispatch({ type: 'pending-retried', clientId });
-        emitSend(pending.conversationId, clientId, pending.body, pending.replyToId);
-        return;
-      }
-    },
-    [emitSend],
-  );
+  const retry = useCallback((clientId: string) => {
+    dispatch({ type: 'pending-retried', clientId });
+    outboxRef.current?.retry(clientId);
+  }, []);
 
   const dismiss = useCallback((clientId: string) => {
+    outboxRef.current?.remove(clientId);
     dispatch({ type: 'pending-dismissed', clientId });
   }, []);
 
@@ -634,13 +733,22 @@ export function ChatProvider({
   );
 
   const loadConversation = useCallback(
-    (conversationId: string, messages: MessageWire[], lastEventSeq: number) => {
-      dispatch({ type: 'conversation-loaded', conversationId, messages, lastEventSeq });
+    (conversationId: string, messages: MessageWire[], lastEventSeq: number, hasOlder: boolean) => {
+      dispatch({ type: 'conversation-loaded', conversationId, messages, lastEventSeq, hasOlder });
+    },
+    [],
+  );
+  const loadOlderMessages = useCallback(
+    (conversationId: string, messages: MessageWire[], hasMore: boolean) => {
+      dispatch({ type: 'older-loaded', conversationId, messages, hasMore });
     },
     [],
   );
   const dismissNotice = useCallback((id: string) => {
     dispatch({ type: 'notice-dismissed', id });
+  }, []);
+  const notify = useCallback((text: string, tone: 'info' | 'error' = 'info') => {
+    dispatch({ type: 'notice', notice: { id: noticeId(), tone, text } });
   }, []);
   const onMemberEvent = useCallback(
     (conversationId: string, handler: (event: MemberEvent) => void) => {
@@ -669,9 +777,11 @@ export function ChatProvider({
       stoppedTyping,
       setOpenConversation,
       loadConversation,
+      loadOlderMessages,
       rememberUsers,
       ensureUsers,
       dismissNotice,
+      notify,
       onMemberEvent,
     }),
     [
@@ -687,9 +797,11 @@ export function ChatProvider({
       stoppedTyping,
       setOpenConversation,
       loadConversation,
+      loadOlderMessages,
       rememberUsers,
       ensureUsers,
       dismissNotice,
+      notify,
       onMemberEvent,
     ],
   );

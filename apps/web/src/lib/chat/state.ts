@@ -21,7 +21,13 @@
 import type { MessageWire, PRESENCE_STATUSES } from '@socketspace/shared/events';
 import type { PublicUser } from '@socketspace/shared/profile';
 
-export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'unavailable';
+export type ConnectionStatus =
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  /** The browser reports no network; the connection waits for it to return. */
+  | 'offline'
+  | 'unavailable';
 export type PresenceStatus = (typeof PRESENCE_STATUSES)[number];
 
 /** How long a "typing" signal lasts without a fresh one (realtime-protocol.md). */
@@ -46,6 +52,8 @@ export interface ConversationState {
   pending: PendingMessage[];
   /** The room page's history is in `messages` (before that, only live messages are known). */
   loaded: boolean;
+  /** Older messages exist on the server than the oldest one held (infinite scroll, HIST-02). */
+  hasOlder: boolean;
 }
 
 export interface SidebarRoom {
@@ -92,7 +100,10 @@ export type ChatAction =
       conversationId: string;
       messages: MessageWire[];
       lastEventSeq: number;
+      hasOlder: boolean;
     }
+  /** A page of older history (scrolling up). It changes no cursor: those events are known. */
+  | { type: 'older-loaded'; conversationId: string; messages: MessageWire[]; hasMore: boolean }
   /** A message, new or changed. `live` marks a `message:new` event (it may count as unread). */
   | { type: 'message'; message: MessageWire; live?: boolean }
   | {
@@ -164,6 +175,7 @@ const emptyConversation = (lastEventSeq = 0): ConversationState => ({
   ahead: [],
   pending: [],
   loaded: false,
+  hasOlder: false,
 });
 
 /** Inserts or replaces messages by ID, keeping `seq` order. */
@@ -285,11 +297,26 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
     case 'conversation-loaded':
       // History rendered by the server: everything up to `lastEventSeq` is known.
+      return withConversation(state, action.conversationId, (conversation) => {
+        // After a refresh, older pages already loaded stay, and so does what they said.
+        const heldOldest = conversation.loaded ? conversation.messages[0]?.seq : undefined;
+        const pageOldest = action.messages[0]?.seq;
+        const keepsOlder =
+          heldOldest !== undefined && pageOldest !== undefined && heldOldest < pageOldest;
+        return {
+          ...conversation,
+          messages: mergeMessages(conversation.messages, action.messages),
+          loaded: true,
+          hasOlder: keepsOlder ? conversation.hasOlder : action.hasOlder,
+          ...jumpCursor(conversation, action.lastEventSeq),
+        };
+      });
+
+    case 'older-loaded':
       return withConversation(state, action.conversationId, (conversation) => ({
         ...conversation,
         messages: mergeMessages(conversation.messages, action.messages),
-        loaded: true,
-        ...jumpCursor(conversation, action.lastEventSeq),
+        hasOlder: action.hasMore,
       }));
 
     case 'message': {

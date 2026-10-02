@@ -84,6 +84,16 @@ test('room screens at desktop and mobile width', async ({ browser }) => {
   await reply.hover();
   await ava.page.screenshot({ path: 'test-results/shots/desktop-room.png' });
 
+  // Offline: the banner, and a message waiting in the outbox.
+  await ava.context.setOffline(true);
+  await ava.page.getByLabel(`Message #${name}`).fill('Sent when the network returns');
+  await ava.page.getByLabel(`Message #${name}`).press('Enter');
+  await expect(ava.page.getByTestId('connection-banner')).toBeVisible();
+  await ava.page.screenshot({ path: 'test-results/shots/desktop-room-offline.png' });
+  await ava.context.setOffline(false);
+  await expect(ava.page.getByTestId('connection-banner')).toHaveCount(0, { timeout: 10_000 });
+  await expect(ava.page.getByRole('log').getByText('Sending…')).toHaveCount(0);
+
   await ava.page.setViewportSize({ width: 375, height: 812 });
   await ava.page.screenshot({ path: 'test-results/shots/mobile-room.png' });
   await ava.page.setViewportSize({ width: 1280, height: 860 });

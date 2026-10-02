@@ -19,6 +19,9 @@ import { requireAppUser } from '@/server/session';
 
 import { RoomView } from './room-view';
 
+/** Messages drawn with the page; older ones load as the reader scrolls up. */
+const PAGE_SIZE = 50;
+
 /** One database read per request, shared by the title and the page. */
 const loadRoom = cache(async (slug: string) => {
   const { user } = await requireAppUser(`/app/r/${slug}`);
@@ -61,10 +64,13 @@ export default async function RoomPage({ params }: { params: Promise<{ slug: str
   }
 
   const db = getDb();
-  const [messages, members] = await Promise.all([
-    listRecentMessages(db, room.id, { limit: 50 }),
+  const [latest, members] = await Promise.all([
+    // One extra row tells whether older messages exist (loaded on scroll, HIST-02).
+    listRecentMessages(db, room.id, { limit: PAGE_SIZE + 1 }),
     listRoomMembers(db, room.id, { limit: 200 }),
   ]);
+  const hasOlder = latest.length > PAGE_SIZE;
+  const messages = hasOlder ? latest.slice(1) : latest;
   const reactions = await listReactions(
     db,
     messages.map((m) => m.id),
@@ -94,6 +100,7 @@ export default async function RoomPage({ params }: { params: Promise<{ slug: str
       }
       emailVerified={user.emailVerified}
       initialMessages={messages.map((m) => toMessageWire(m, reactions.get(m.id) ?? []))}
+      hasOlder={hasOlder}
       initialMembers={members.map((m) => ({
         userId: m.userId,
         role: m.role,

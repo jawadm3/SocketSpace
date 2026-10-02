@@ -48,6 +48,7 @@ function loaded(lastEventSeq: number, messages: MessageWire[] = []): ChatState {
     conversationId: CONV,
     messages,
     lastEventSeq,
+    hasOlder: false,
   });
 }
 
@@ -270,6 +271,7 @@ describe('room baselines (catching up in rooms that are not on screen)', () => {
       conversationId: OTHER_ROOM,
       messages: [],
       lastEventSeq: 4,
+      hasOlder: false,
     });
     state = chatReducer(state, {
       type: 'rooms-set',
@@ -414,5 +416,50 @@ describe('typing and presence (RT-03, RT-04)', () => {
     });
     state = chatReducer(state, { type: 'presence-cleared' });
     expect(state.presence[AUTHOR]?.status).toBe('offline');
+  });
+});
+
+describe('older pages (HIST-02)', () => {
+  it('adds older messages in order without moving the cursor', () => {
+    let state = chatReducer(initialChatState([], []), {
+      type: 'conversation-loaded',
+      conversationId: CONV,
+      messages: [msg(51), msg(52)],
+      lastEventSeq: 52,
+      hasOlder: true,
+    });
+    state = chatReducer(state, {
+      type: 'older-loaded',
+      conversationId: CONV,
+      messages: [msg(49), msg(50)],
+      hasMore: false,
+    });
+    expect(conv(state)?.messages.map((m) => m.seq)).toEqual([49, 50, 51, 52]);
+    expect(conv(state)).toMatchObject({ lastEventSeq: 52, hasOlder: false, ahead: [] });
+  });
+
+  it('a refreshed latest page keeps older pages already loaded, and what they said', () => {
+    let state = chatReducer(initialChatState([], []), {
+      type: 'conversation-loaded',
+      conversationId: CONV,
+      messages: [msg(51)],
+      lastEventSeq: 51,
+      hasOlder: true,
+    });
+    state = chatReducer(state, {
+      type: 'older-loaded',
+      conversationId: CONV,
+      messages: [msg(1)],
+      hasMore: false,
+    });
+    state = chatReducer(state, {
+      type: 'conversation-loaded',
+      conversationId: CONV,
+      messages: [msg(51), msg(52)],
+      lastEventSeq: 52,
+      hasOlder: true,
+    });
+    expect(conv(state)?.messages.map((m) => m.seq)).toEqual([1, 51, 52]);
+    expect(conv(state)?.hasOlder).toBe(false);
   });
 });

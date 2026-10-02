@@ -83,7 +83,7 @@ test('J3: format, edit, react, reply, mention and delete', async ({ browser }) =
   for (const page of [ava.page, sam.page]) {
     const lunch = message(page, 'Lunch at 1pm?');
     await expect(lunch).toContainText('(edited)');
-    await expect(page.getByText('Lunch at noon?')).toHaveCount(0);
+    await expect(page.getByRole('log').getByText('Lunch at noon?')).toHaveCount(0);
   }
 
   // React (MSG-05): 👍 toggles on and off, for both people.

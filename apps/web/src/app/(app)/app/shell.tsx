@@ -5,9 +5,10 @@
  * connection status and notices from moderators. Mobile gets a compact top bar with the same
  * links; Stage F refines the small-screen layout.
  */
-import { Compass, Hash, Home, Lock, Plus, Settings, X } from 'lucide-react';
+import { Compass, Hash, Home, Lock, Plus, Settings, WifiOff, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 import { UserAvatar } from '@/components/user-avatar';
 import { useChat } from '@/lib/chat/provider';
@@ -19,6 +20,7 @@ const STATUS_TEXT: Record<Status, string> = {
   connecting: 'Connecting to live chat…',
   connected: 'Connected to live chat',
   reconnecting: 'Reconnecting to live chat… (on our free hosting this can take up to a minute)',
+  offline: 'You are offline.',
   unavailable: 'Live chat is unavailable right now.',
 };
 
@@ -27,7 +29,7 @@ export function ConnectionStatus() {
   const dot =
     state.status === 'connected'
       ? 'bg-emerald-500'
-      : state.status === 'unavailable'
+      : state.status === 'unavailable' || state.status === 'offline'
         ? 'bg-danger'
         : 'bg-stamp';
   return (
@@ -225,6 +227,56 @@ export function MobileBar() {
           <RoomList />
         </div>
       </details>
+    </div>
+  );
+}
+
+/** How long a reconnect may take before the banner appears (most take a second or two). */
+const RECONNECT_GRACE_MS = 2000;
+
+/**
+ * A banner across the app while the live connection is down (RECON-01). Offline shows at once;
+ * a reconnect only after a short grace period, so a quick blip does not flash a warning.
+ * Messages written meanwhile wait in the outbox and go out by themselves.
+ */
+export function ConnectionBanner() {
+  const { state } = useChat();
+  const { status } = state;
+  const [graceOver, setGraceOver] = useState(false);
+  const [graceFor, setGraceFor] = useState(status);
+  if (graceFor !== status) {
+    setGraceFor(status);
+    setGraceOver(false);
+  }
+  useEffect(() => {
+    if (status !== 'reconnecting') return;
+    const timer = setTimeout(() => {
+      setGraceOver(true);
+    }, RECONNECT_GRACE_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [status]);
+
+  let text: string | null = null;
+  if (status === 'offline') {
+    text = 'You are offline. Messages you send will go out when the connection returns.';
+  } else if (status === 'reconnecting' && graceOver) {
+    text = 'Reconnecting… Messages you send will go out when the connection returns.';
+  } else if (status === 'unavailable') {
+    text = 'Live chat is unavailable right now. Try reloading the page.';
+  }
+  return (
+    <div role="status" aria-live="polite" className="empty:hidden">
+      {text ? (
+        <p
+          data-testid="connection-banner"
+          className="flex items-center gap-2 border-b border-line bg-stamp/20 px-4 py-2 text-sm font-semibold text-ink"
+        >
+          <WifiOff aria-hidden="true" className="h-4 w-4 shrink-0" />
+          {text}
+        </p>
+      ) : null}
     </div>
   );
 }

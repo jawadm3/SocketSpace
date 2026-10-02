@@ -10,7 +10,7 @@ import { ChatProvider } from '@/lib/chat/provider';
 import { getDb } from '@/server/db';
 import { requireAppUser } from '@/server/session';
 
-import { MobileBar, Notices, Sidebar } from './shell';
+import { ConnectionBanner, MobileBar, Notices, Sidebar } from './shell';
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const { user } = await requireAppUser('/app');
@@ -38,6 +38,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <MobileBar />
+          <ConnectionBanner />
           <Notices />
           <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         </div>

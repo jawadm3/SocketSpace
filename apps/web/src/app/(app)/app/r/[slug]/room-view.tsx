@@ -12,22 +12,16 @@
 import { Hash, Lock, Settings, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useActionState, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useActionState, useCallback, useEffect, useRef, useState } from 'react';
 
 import type { MessageWire } from '@socketspace/shared/events';
 import { LIMITS } from '@socketspace/shared/limits';
 import type { PublicUser } from '@socketspace/shared/profile';
 
-import { MessageBody } from '@/components/message-body';
 import { Alert, Button, buttonClasses } from '@/components/ui';
 import { UserAvatar } from '@/components/user-avatar';
 import { useChat } from '@/lib/chat/provider';
-import {
-  describeTyping,
-  typingUserIds,
-  type PendingMessage,
-  type PresenceStatus,
-} from '@/lib/chat/state';
+import { describeTyping, typingUserIds, type PresenceStatus } from '@/lib/chat/state';
 
 import { joinRoomAction, leaveRoomAction, type RoomActionState } from '../../room-actions';
 import { Composer } from './composer';
@@ -35,11 +29,10 @@ import {
   displayName,
   isRemoved,
   LocalTime,
-  MessageItem,
-  snippet,
   useMinute,
   type MessagePermissions,
 } from './message-item';
+import { MessageList } from './message-list';
 
 type Role = 'owner' | 'moderator' | 'member';
 const RANK: Record<Role, number> = { member: 1, moderator: 2, owner: 3 };
@@ -58,170 +51,6 @@ interface MemberEntry {
   userId: string;
   role: Role;
   joinedAt: string;
-}
-
-function PendingItem({
-  pending,
-  me,
-  original,
-}: {
-  pending: PendingMessage;
-  me: PublicUser;
-  original: MessageWire | undefined;
-}) {
-  const { retry, dismiss } = useChat();
-  const failed = pending.status === 'failed';
-  return (
-    <li className="flex gap-3 px-4 pt-3">
-      <div className="w-10 shrink-0">
-        <UserAvatar user={me} />
-      </div>
-      <div className="min-w-0 flex-1">
-        {pending.replyToId && original && !isRemoved(original) ? (
-          <p className="mb-0.5 truncate text-xs text-ink-2">↪ {snippet(original.body)}</p>
-        ) : null}
-        <p className="flex items-baseline gap-2">
-          <span className="font-bold text-ink">{me.nickname}</span>
-          <span className={`text-xs ${failed ? 'font-semibold text-danger' : 'text-muted'}`}>
-            {failed ? 'Not sent' : 'Sending…'}
-          </span>
-        </p>
-        <MessageBody
-          body={pending.body}
-          myNickname={me.nickname}
-          className={`text-[0.95rem] ${failed ? 'text-ink' : 'text-ink-2 opacity-70'}`}
-        />
-        {failed ? (
-          <div role="alert" className="mt-1 flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-danger">{pending.error?.message}</span>
-            <button
-              type="button"
-              className="font-semibold text-accent underline"
-              onClick={() => {
-                retry(pending.clientId);
-              }}
-            >
-              Try again
-            </button>
-            <button
-              type="button"
-              className="font-semibold text-ink-2 underline"
-              onClick={() => {
-                dismiss(pending.clientId);
-              }}
-            >
-              Delete
-            </button>
-          </div>
-        ) : null}
-      </div>
-    </li>
-  );
-}
-
-function MessageList({
-  room,
-  messages,
-  pending,
-  permissionsFor,
-  editingId,
-  setEditingId,
-  onReply,
-}: {
-  room: RoomInfo;
-  messages: MessageWire[];
-  pending: PendingMessage[];
-  permissionsFor: (message: MessageWire) => MessagePermissions;
-  editingId: string | null;
-  setEditingId: (id: string | null) => void;
-  onReply: (id: string) => void;
-}) {
-  const { state, me } = useChat();
-  const scroller = useRef<HTMLDivElement>(null);
-  const atBottom = useRef(true);
-  const [unseen, setUnseen] = useState(false);
-  const count = messages.length + pending.length;
-  const byId = new Map(messages.map((m) => [m.id, m]));
-
-  // Follow new messages only if the reader is already at the bottom (no forced scrolling).
-  useLayoutEffect(() => {
-    const element = scroller.current;
-    if (!element) return;
-    if (atBottom.current) element.scrollTop = element.scrollHeight;
-    else setUnseen(true);
-  }, [count]);
-
-  return (
-    <div className="relative min-h-0 flex-1">
-      <div
-        ref={scroller}
-        className="h-full overflow-y-auto pb-2"
-        onScroll={(event) => {
-          const element = event.currentTarget;
-          atBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
-          if (atBottom.current) setUnseen(false);
-        }}
-      >
-        {messages.length === 0 && pending.length === 0 ? (
-          <div className="flex h-full items-center justify-center p-8 text-center text-ink-2">
-            <p>No messages yet. Be the first to say hello in #{room.name}.</p>
-          </div>
-        ) : (
-          <div role="log" aria-label={`Messages in ${room.name}`}>
-            <ol className="flex flex-col">
-              {messages.map((message, index) => {
-                const previous = messages[index - 1];
-                const continued =
-                  previous?.authorId === message.authorId &&
-                  !isRemoved(previous) &&
-                  Date.parse(message.createdAt) - Date.parse(previous.createdAt) < 5 * 60_000;
-                const original = message.replyToId ? byId.get(message.replyToId) : undefined;
-                return (
-                  <MessageItem
-                    key={message.id}
-                    message={message}
-                    author={state.users[message.authorId]}
-                    original={original}
-                    originalAuthor={original ? state.users[original.authorId]?.nickname : undefined}
-                    continued={continued}
-                    permissions={permissionsFor(message)}
-                    editing={editingId === message.id}
-                    onEdit={setEditingId}
-                    onEditDone={() => {
-                      setEditingId(null);
-                      document.getElementById('composer')?.focus();
-                    }}
-                    onReply={onReply}
-                  />
-                );
-              })}
-              {pending.map((p) => (
-                <PendingItem
-                  key={p.clientId}
-                  pending={p}
-                  me={me}
-                  original={p.replyToId ? byId.get(p.replyToId) : undefined}
-                />
-              ))}
-            </ol>
-          </div>
-        )}
-      </div>
-      {unseen ? (
-        <button
-          type="button"
-          className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-accent-ink shadow"
-          onClick={() => {
-            const element = scroller.current;
-            if (element) element.scrollTop = element.scrollHeight;
-            setUnseen(false);
-          }}
-        >
-          New messages ↓
-        </button>
-      ) : null}
-    </div>
-  );
 }
 
 /** "Ava is typing…" under the messages; the line keeps its height so nothing jumps. */
@@ -363,6 +192,7 @@ export function RoomView({
   initialMessages,
   initialMembers,
   people,
+  hasOlder: initialHasOlder,
 }: {
   room: RoomInfo;
   membership: { role: Role; mutedUntil: string | null } | null;
@@ -370,9 +200,18 @@ export function RoomView({
   initialMessages: MessageWire[];
   initialMembers: MemberEntry[];
   people: PublicUser[];
+  /** Older messages exist than the page brought. */
+  hasOlder: boolean;
 }) {
-  const { state, me, loadConversation, rememberUsers, onMemberEvent, setOpenConversation } =
-    useChat();
+  const {
+    state,
+    me,
+    loadConversation,
+    loadOlderMessages,
+    rememberUsers,
+    onMemberEvent,
+    setOpenConversation,
+  } = useChat();
   const router = useRouter();
   // Live member events adjust the list; a fresh server render replaces it.
   const [members, setMembers] = useState(initialMembers);
@@ -388,12 +227,52 @@ export function RoomView({
   const conversation = state.conversations[room.id];
   const messages = conversation?.loaded ? conversation.messages : initialMessages;
   const pending = conversation?.pending ?? [];
+  const hasOlder = conversation?.loaded ? conversation.hasOlder : initialHasOlder;
 
   // The page's history and people go into the shared state (again after a refresh).
   useEffect(() => {
     rememberUsers(people);
-    loadConversation(room.id, initialMessages, room.lastEventSeq);
-  }, [room.id, room.lastEventSeq, initialMessages, people, loadConversation, rememberUsers]);
+    loadConversation(room.id, initialMessages, room.lastEventSeq, initialHasOlder);
+  }, [
+    room.id,
+    room.lastEventSeq,
+    initialMessages,
+    initialHasOlder,
+    people,
+    loadConversation,
+    rememberUsers,
+  ]);
+
+  // Older pages (HIST-02), one request at a time, starting before the oldest message held.
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderError, setOlderError] = useState<string | null>(null);
+  const loadingRef = useRef(false);
+  const oldestSeq = messages[0]?.seq;
+  const loadOlder = useCallback(() => {
+    if (loadingRef.current || oldestSeq === undefined) return;
+    loadingRef.current = true;
+    setLoadingOlder(true);
+    setOlderError(null);
+    const url = `/api/rooms/${encodeURIComponent(room.slug)}/messages?before=${String(oldestSeq)}`;
+    fetch(url, { credentials: 'same-origin', cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(String(response.status));
+        const page = (await response.json()) as {
+          messages: MessageWire[];
+          users: PublicUser[];
+          hasMore: boolean;
+        };
+        rememberUsers(page.users);
+        loadOlderMessages(room.id, page.messages, page.hasMore);
+      })
+      .catch(() => {
+        setOlderError('Earlier messages could not be loaded.');
+      })
+      .finally(() => {
+        loadingRef.current = false;
+        setLoadingOlder(false);
+      });
+  }, [oldestSeq, room.id, room.slug, rememberUsers, loadOlderMessages]);
 
   // While a member has this room on screen, it counts as read (badges clear on every tab).
   const isMember = membership !== null;
@@ -540,9 +419,11 @@ export function RoomView({
           </div>
         ) : null}
         <MessageList
-          room={room}
+          key={room.id}
+          room={{ id: room.id, name }}
           messages={messages}
           pending={pending}
+          older={{ hasOlder, loading: loadingOlder, error: olderError, load: loadOlder }}
           permissionsFor={permissionsFor}
           editingId={editingId}
           setEditingId={setEditingId}

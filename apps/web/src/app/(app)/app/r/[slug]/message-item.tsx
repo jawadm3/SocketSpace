@@ -77,22 +77,31 @@ export function snippet(body: string, max = 120): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
-/** Scrolls to a message and highlights it for a moment (reply quotes jump here). */
-export function jumpToMessage(messageId: string): boolean {
-  const element = document.getElementById(`message-${messageId}`);
-  if (!element) return false;
-  element.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  element.focus({ preventScroll: true });
-  element.dataset.highlight = 'true';
-  setTimeout(() => {
-    delete element.dataset.highlight;
-  }, 2000);
-  return true;
-}
-
-function ReplyQuote({ original, author }: { original: MessageWire | undefined; author?: string }) {
+function ReplyQuote({
+  originalId,
+  original,
+  author,
+  onJump,
+}: {
+  originalId: string;
+  original: MessageWire | undefined;
+  author?: string;
+  onJump: (messageId: string) => void;
+}) {
   if (!original) {
-    return <p className="mb-0.5 text-xs text-muted italic">Replying to an earlier message</p>;
+    // Not loaded yet: the list loads older pages until it finds it.
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          onJump(originalId);
+        }}
+        className="mb-0.5 flex items-center gap-1.5 text-xs text-muted italic hover:text-ink"
+      >
+        <CornerUpLeft aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+        Replying to an earlier message (show it)
+      </button>
+    );
   }
   if (isRemoved(original)) {
     return <p className="mb-0.5 text-xs text-muted italic">Replying to a deleted message</p>;
@@ -101,7 +110,7 @@ function ReplyQuote({ original, author }: { original: MessageWire | undefined; a
     <button
       type="button"
       onClick={() => {
-        jumpToMessage(original.id);
+        onJump(original.id);
       }}
       className="mb-0.5 flex max-w-full items-center gap-1.5 rounded-md text-left text-xs text-ink-2 hover:text-ink"
       aria-label={`Replying to ${author ?? 'someone'}: ${snippet(original.body, 80)}. Go to the original message.`}
@@ -376,6 +385,9 @@ export function MessageItem({
   onEdit,
   onEditDone,
   onReply,
+  onJump,
+  measureRef,
+  index,
 }: {
   message: MessageWire;
   author: PublicUser | undefined;
@@ -388,6 +400,11 @@ export function MessageItem({
   onEdit: (messageId: string) => void;
   onEditDone: () => void;
   onReply: (messageId: string) => void;
+  /** Scroll to (and if needed load) another message. */
+  onJump: (messageId: string) => void;
+  /** The list measures each row's height (virtualised list). */
+  measureRef: (element: HTMLLIElement | null) => void;
+  index: number;
 }) {
   const { me, toggleReaction } = useChat();
   const minute = useMinute();
@@ -407,6 +424,8 @@ export function MessageItem({
 
   return (
     <li
+      ref={measureRef}
+      data-index={index}
       id={`message-${message.id}`}
       tabIndex={-1}
       aria-label={removed ? `${name}: message deleted` : undefined}
@@ -417,7 +436,12 @@ export function MessageItem({
       <div className="w-10 shrink-0">{showHeader ? <UserAvatar user={author} /> : null}</div>
       <div className="min-w-0 flex-1">
         {message.replyToId !== null ? (
-          <ReplyQuote original={original} author={originalAuthor} />
+          <ReplyQuote
+            originalId={message.replyToId}
+            original={original}
+            author={originalAuthor}
+            onJump={onJump}
+          />
         ) : null}
         {showHeader ? (
           <p className="flex items-baseline gap-2">
