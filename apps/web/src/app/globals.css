@@ -1,0 +1,132 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens, Stage C skeleton: the Airmail theme (the default, D-021) in light and dark
+ * ("night post"). Stage F adds Signal and Aurora and moves the token sets into packages/ui.
+ *
+ * The page carries two attributes, set on the server from a cookie so the first frame is right:
+ *   data-theme = airmail | signal | aurora
+ *   data-mode  = light | dark | system   (system follows the device setting)
+ * Raw values use the --ss- prefix; Tailwind utilities (bg-surface, text-ink, ...) map to them.
+ */
+
+:root,
+[data-theme='airmail'] {
+  --ss-bg: #f3f4ef;
+  --ss-bg-2: #e8ebe3;
+  --ss-card: #ffffff;
+  --ss-ink: #172033;
+  --ss-ink-2: #2f3a52;
+  --ss-muted: #5d6578;
+  --ss-line: #d9ddd2;
+  --ss-accent: #2b59c3;
+  --ss-accent-ink: #ffffff;
+  --ss-accent-soft: #e1e9fb;
+  /* Deeper red for anything carrying text (white on #e2483d is only 4.0:1). */
+  --ss-danger: #c53a30;
+  --ss-danger-soft: #fde4e1;
+  --ss-stamp: #ffd84d;
+  --ss-stripe-red: #e2483d;
+  --ss-stripe-blue: #2b59c3;
+  --ss-focus: #2b59c3;
+  color-scheme: light;
+}
+
+[data-theme='airmail'][data-mode='dark'] {
+  --ss-bg: #0f1729;
+  --ss-bg-2: #172036;
+  --ss-card: #1b2540;
+  --ss-ink: #eef0ea;
+  --ss-ink-2: #cfd5e2;
+  --ss-muted: #a3abbd;
+  --ss-line: #2e3a58;
+  --ss-accent: #8fb0ff;
+  --ss-accent-ink: #0f1729;
+  --ss-accent-soft: #22305a;
+  --ss-danger: #ff9b91;
+  --ss-danger-soft: #3b2129;
+  --ss-stamp: #ffd84d;
+  --ss-stripe-red: #e2483d;
+  --ss-stripe-blue: #5b84e8;
+  --ss-focus: #8fb0ff;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme='airmail'][data-mode='system'] {
+    --ss-bg: #0f1729;
+    --ss-bg-2: #172036;
+    --ss-card: #1b2540;
+    --ss-ink: #eef0ea;
+    --ss-ink-2: #cfd5e2;
+    --ss-muted: #a3abbd;
+    --ss-line: #2e3a58;
+    --ss-accent: #8fb0ff;
+    --ss-accent-ink: #0f1729;
+    --ss-accent-soft: #22305a;
+    --ss-danger: #ff9b91;
+    --ss-danger-soft: #3b2129;
+    --ss-stamp: #ffd84d;
+    --ss-stripe-red: #e2483d;
+    --ss-stripe-blue: #5b84e8;
+    --ss-focus: #8fb0ff;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-surface: var(--ss-bg);
+  --color-surface-2: var(--ss-bg-2);
+  --color-card: var(--ss-card);
+  --color-ink: var(--ss-ink);
+  --color-ink-2: var(--ss-ink-2);
+  --color-muted: var(--ss-muted);
+  --color-line: var(--ss-line);
+  --color-accent: var(--ss-accent);
+  --color-accent-ink: var(--ss-accent-ink);
+  --color-accent-soft: var(--ss-accent-soft);
+  --color-danger: var(--ss-danger);
+  --color-danger-soft: var(--ss-danger-soft);
+  --color-stamp: var(--ss-stamp);
+  --radius-card: 1rem;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* In-app motion stays subtle and quick (brief 6.2): 150 to 250 ms. */
+  --default-transition-duration: 180ms;
+}
+
+html {
+  background: var(--ss-bg);
+  color: var(--ss-ink);
+}
+
+body {
+  min-height: 100dvh;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* A visible focus ring for keyboard users everywhere (WCAG 2.2 "Focus Visible"). */
+:focus-visible {
+  outline: 3px solid var(--ss-focus);
+  outline-offset: 2px;
+}
+
+/* The airmail stripe, used sparingly as a frame accent. */
+.airmail-stripe {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--ss-stripe-red) 0 12px,
+    transparent 12px 24px,
+    var(--ss-stripe-blue) 24px 36px,
+    transparent 36px 48px
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

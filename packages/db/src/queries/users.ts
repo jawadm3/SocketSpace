@@ -150,3 +150,28 @@ function isNicknameConflict(error: unknown): boolean {
   }
   return false;
 }
+
+export interface OwnProfile {
+  nickname: string | null;
+  name: string;
+  bio: string;
+  avatarKind: 'preset' | 'custom' | 'photo' | null;
+  avatarConfig: unknown;
+  image: string | null;
+}
+
+/** The signed-in person's own profile fields (everything they may see about themselves). */
+export async function getOwnProfile(db: Queryable, userId: string): Promise<OwnProfile | null> {
+  const [row] = await db
+    .select({
+      nickname: user.nickname,
+      name: user.name,
+      bio: user.bio,
+      avatarKind: user.avatarKind,
+      avatarConfig: user.avatarConfig,
+      image: user.image,
+    })
+    .from(user)
+    .where(eq(user.id, userId));
+  return row ?? null;
+}

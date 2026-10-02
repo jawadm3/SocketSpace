@@ -14,7 +14,9 @@ export {
   type Schema,
   type Transaction,
 } from './client';
-export { migratePostgres, migrationsFolder } from './migrate';
 export * from './queries/messages';
 export * from './queries/users';
 export * from './queries/conversations';
+export * from './queries/limits';
+// The query-building operators, re-exported so apps use this package's Drizzle instance.
+export { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';

@@ -26,6 +26,8 @@ export const internalEventSchema = z.discriminatedUnion('type', [
     userId: uuid,
     sessionIds: z.array(uuid).min(1).max(100),
   }),
+  /** Every session of the user ended (sign out everywhere, password reset). */
+  z.strictObject({ ...base, type: z.literal('user.sessions_revoked'), userId: uuid }),
   z.strictObject({ ...base, type: z.literal('user.deleted'), userId: uuid }),
   z.strictObject({
     ...base,

@@ -22,12 +22,20 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "secrets:scan": "node scripts/tools/gitleaks.mjs git --redact --no-banner -v .",
-    "secrets:staged": "node scripts/tools/gitleaks.mjs git --pre-commit --staged --redact --no-banner -v"
+    "secrets:staged": "node scripts/tools/gitleaks.mjs git --pre-commit --staged --redact --no-banner -v",
+    "setup:local": "node scripts/setup-local.mjs",
+    "db:start": "pnpm --filter @socketspace/db db:start",
+    "db:stop": "pnpm --filter @socketspace/db db:stop",
+    "db:status": "pnpm --filter @socketspace/db db:status",
+    "db:migrate:local": "pnpm --filter @socketspace/db db:migrate:local",
+    "db:seed:local": "pnpm --filter @socketspace/db db:seed:local"
   },
   "devDependencies": {
     "@eslint/js": "^10",
+    "@next/eslint-plugin-next": "^16.3.6",
     "@types/node": "^22",
     "eslint": "^10",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17",
     "prettier": "^3",
     "turbo": "^2",
