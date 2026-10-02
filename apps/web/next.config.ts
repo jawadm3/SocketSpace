@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 import type { NextConfig } from 'next';
 
 /**
@@ -17,6 +19,13 @@ const securityHeaders = [
 ];
 
 const config: NextConfig = {
+  // The Docker image (apps/web/Dockerfile) sets NEXT_OUTPUT=standalone to get a self-contained
+  // server. Vercel builds leave it unset. The tracing root is the repository, so the shared
+  // workspace packages are included.
+  ...(process.env.NEXT_OUTPUT === 'standalone' && {
+    output: 'standalone' as const,
+    outputFileTracingRoot: resolve(import.meta.dirname, '..', '..'),
+  }),
   // Workspace packages export TypeScript source; Next.js compiles them with the app.
   transpilePackages: ['@socketspace/db', '@socketspace/shared'],
   poweredByHeader: false,

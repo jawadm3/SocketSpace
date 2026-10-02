@@ -1,0 +1,11 @@
+# CodeQL scans v2 only. v1/ is the archived original and is excluded from all v2 tooling.
+name: SocketSpace CodeQL config
+queries:
+  - uses: security-and-quality
+paths-ignore:
+  - v1
+  - docs
+  - '**/node_modules'
+  - '**/.next'
+  - '**/dist'
+  - packages/db/migrations
