@@ -84,6 +84,16 @@ test('room screens at desktop and mobile width', async ({ browser }) => {
   await outsiderPage.goto(inviteUrl);
   await outsiderPage.screenshot({ path: 'test-results/shots/desktop-invite.png', fullPage: true });
 
+  await ava.page.goto('/app/settings/profile');
+  await ava.page.getByRole('tab', { name: 'Make your own' }).click();
+  await ava.page.getByRole('button', { name: 'Portrait', exact: true }).click();
+  await ava.page.getByRole('combobox', { name: /^Glasses/ }).selectOption({ label: 'Style 2' });
+  await ava.page.getByRole('button', { name: 'Background 3 of 8' }).click();
+  await ava.page.screenshot({
+    path: 'test-results/shots/desktop-profile-builder.png',
+    fullPage: true,
+  });
+
   await sam.page.goto('/app');
   await sam.page.screenshot({ path: 'test-results/shots/desktop-app-home.png', fullPage: true });
 

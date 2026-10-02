@@ -65,7 +65,7 @@ export async function signUp(page: Page, email: string, password = PASSWORD): Pr
 }
 
 export async function completeOnboarding(page: Page, nickname: string): Promise<void> {
-  await page.getByLabel('Nickname').fill(nickname);
+  await page.getByLabel('Nickname', { exact: true }).fill(nickname);
   await page.getByAltText(/^Picture 1 /).click();
   await page.getByRole('button', { name: 'Continue' }).click();
 }

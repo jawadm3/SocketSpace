@@ -151,7 +151,7 @@ export function Sidebar() {
           <UserAvatar user={me} size="sm" />
           <span className="min-w-0 flex-1 truncate text-sm font-semibold">{me.nickname}</span>
           <Link
-            href="/settings/sessions"
+            href="/app/settings/profile"
             className="rounded-lg p-2 text-muted hover:bg-surface-2"
             aria-label="Settings"
           >
@@ -191,7 +191,7 @@ export function MobileBar() {
             <Plus aria-hidden="true" className="h-5 w-5" />
           </Link>
           <Link
-            href="/settings/sessions"
+            href="/app/settings/profile"
             className="rounded-lg p-2 hover:bg-surface-2"
             aria-label="Settings"
           >

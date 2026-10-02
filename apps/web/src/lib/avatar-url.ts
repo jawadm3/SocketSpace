@@ -11,8 +11,21 @@ function base64Url(text: string): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+/**
+ * One avatar, one URL: the settings are written in a fixed order (the database stores them as
+ * jsonb, which reorders keys), so every device asks for, and caches, the same address.
+ */
 export function encodeAvatarConfig(config: AvatarConfig): string {
-  return base64Url(JSON.stringify(config));
+  const options = config.options
+    ? Object.fromEntries(Object.entries(config.options).sort(([a], [b]) => a.localeCompare(b)))
+    : undefined;
+  return base64Url(
+    JSON.stringify(
+      options === undefined
+        ? { style: config.style, seed: config.seed }
+        : { style: config.style, seed: config.seed, options },
+    ),
+  );
 }
 
 export function avatarSrc(avatar: AvatarWire | null | undefined): string | null {

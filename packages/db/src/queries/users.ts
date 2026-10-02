@@ -3,8 +3,9 @@
  */
 import { and, eq, gt, isNull, lte, or, sql } from 'drizzle-orm';
 
-import type { Queryable } from '../client';
+import type { Database, Queryable } from '../client';
 import { dbNow } from '../clock';
+import { isUniqueViolation } from '../errors';
 import { session, user } from '../schema/auth';
 import { userSanction } from '../schema/safety';
 
@@ -99,10 +100,19 @@ export async function filterAvailableNicknames(
   return candidates.filter((c) => !takenSet.has(c.toLowerCase()));
 }
 
+export interface NameChoices {
+  /** Optional real name; '' means none (D-028). */
+  realName: string;
+  realNameVisibility: 'nobody' | 'contacts' | 'everyone';
+  nameDisplay: 'nickname' | 'real_name' | 'both';
+}
+
 export interface OnboardingInput {
   nickname: string;
   avatarKind: 'preset' | 'custom' | 'photo';
   avatarConfig: unknown;
+  /** Left unchanged when omitted (for example a real name already taken from Google). */
+  names?: NameChoices;
   now?: Date;
 }
 
@@ -125,6 +135,11 @@ export async function completeOnboarding(
         nickname: input.nickname,
         avatarKind: input.avatarKind,
         avatarConfig: input.avatarConfig,
+        ...(input.names && {
+          name: input.names.realName,
+          realNameVisibility: input.names.realNameVisibility,
+          nameDisplay: input.names.nameDisplay,
+        }),
         onboardedAt: input.now ?? sql`now()`,
       })
       .where(eq(user.id, userId))
@@ -137,18 +152,95 @@ export async function completeOnboarding(
 }
 
 function isNicknameConflict(error: unknown): boolean {
-  for (let current: unknown = error; current; current = (current as { cause?: unknown }).cause) {
-    const candidate = current as { code?: unknown; message?: unknown; constraint?: unknown };
-    if (
-      candidate.code === '23505' &&
-      (candidate.constraint === 'user_nickname_lower_uq' ||
-        (typeof candidate.message === 'string' &&
-          candidate.message.includes('user_nickname_lower_uq')))
-    ) {
-      return true;
-    }
+  return isUniqueViolation(error, 'user_nickname_lower_uq');
+}
+
+export interface ProfileInput extends NameChoices {
+  nickname: string;
+  bio: string;
+  /** Omitted: keep the current picture. */
+  avatar?: { kind: 'preset' | 'custom' | 'photo'; config: unknown };
+}
+
+export type ProfileResult =
+  | { ok: true; publicChanged: boolean }
+  | { ok: false; reason: 'nickname_taken' | 'not_found' | 'not_onboarded' };
+
+/**
+ * Saves profile settings (PROF-01). `publicChanged` says whether what everyone sees (nickname or
+ * picture) changed, so the caller can tell people who share a conversation at once.
+ */
+export async function updateProfile(
+  db: Database,
+  userId: string,
+  input: ProfileInput,
+): Promise<ProfileResult> {
+  try {
+    return await db.transaction(async (tx) => {
+      const [before] = await tx
+        .select({
+          nickname: user.nickname,
+          avatarKind: user.avatarKind,
+          avatarConfig: user.avatarConfig,
+          onboardedAt: user.onboardedAt,
+        })
+        .from(user)
+        .where(eq(user.id, userId))
+        .for('update');
+      if (!before) return { ok: false, reason: 'not_found' } as const;
+      if (!before.onboardedAt) return { ok: false, reason: 'not_onboarded' } as const;
+      await tx
+        .update(user)
+        .set({
+          nickname: input.nickname,
+          name: input.realName,
+          realNameVisibility: input.realNameVisibility,
+          nameDisplay: input.nameDisplay,
+          bio: input.bio,
+          ...(input.avatar && { avatarKind: input.avatar.kind, avatarConfig: input.avatar.config }),
+          updatedAt: sql`now()`,
+        })
+        .where(eq(user.id, userId));
+      const avatarChanged =
+        input.avatar !== undefined &&
+        (input.avatar.kind !== before.avatarKind ||
+          JSON.stringify(input.avatar.config) !== JSON.stringify(before.avatarConfig));
+      return {
+        ok: true,
+        publicChanged: avatarChanged || input.nickname !== before.nickname,
+      } as const;
+    });
+  } catch (error) {
+    if (isNicknameConflict(error)) return { ok: false, reason: 'nickname_taken' };
+    throw error;
   }
-  return false;
+}
+
+export interface ProfileSettings extends NameChoices {
+  nickname: string | null;
+  bio: string;
+  avatarKind: 'preset' | 'custom' | 'photo' | null;
+  avatarConfig: unknown;
+}
+
+/** Everything the profile settings form shows. */
+export async function getProfileSettings(
+  db: Queryable,
+  userId: string,
+): Promise<ProfileSettings | null> {
+  const [row] = await db
+    .select({
+      nickname: user.nickname,
+      realName: user.name,
+      realNameVisibility: user.realNameVisibility,
+      nameDisplay: user.nameDisplay,
+      bio: user.bio,
+      avatarKind: user.avatarKind,
+      avatarConfig: user.avatarConfig,
+    })
+    .from(user)
+    .where(eq(user.id, userId));
+  return row ?? null;
 }
 
 export interface OwnProfile {

@@ -11,7 +11,9 @@ import {
   filterAvailableNicknames,
   getActiveSanctions,
   getConnectionProfile,
+  getProfileSettings,
   isNicknameAvailable,
+  updateProfile,
 } from './users';
 
 let t: TestDatabase;
@@ -160,5 +162,63 @@ describe('memberships', () => {
     await createTestRoom(t.db, owner.id);
     const ids = (await listMemberships(t.db, kim.id)).map((m) => m.conversationId).sort();
     expect(ids).toEqual([a.id, b.id].sort());
+  });
+});
+
+describe('profile settings (PROF-01, PROF-04)', () => {
+  it('onboarding saves the real-name choices when given', async () => {
+    const u = await createTestUser(t.db, { onboarded: false, name: 'From Google' });
+    const result = await completeOnboarding(t.db, u.id, {
+      nickname: `named${u.id.slice(-6)}`,
+      avatarKind: 'custom',
+      avatarConfig: { style: 'lorelei', seed: 'x', options: { hairVariant: 'variant03' } },
+      names: { realName: 'Ava Chen', realNameVisibility: 'contacts', nameDisplay: 'both' },
+    });
+    expect(result).toEqual({ ok: true });
+    expect(await getProfileSettings(t.db, u.id)).toMatchObject({
+      realName: 'Ava Chen',
+      realNameVisibility: 'contacts',
+      nameDisplay: 'both',
+      avatarKind: 'custom',
+    });
+  });
+
+  it('saves edits and says when what everyone sees changed', async () => {
+    const u = await createTestUser(t.db);
+    const current = await getProfileSettings(t.db, u.id);
+    if (!current?.nickname) throw new Error('no profile');
+    const base = {
+      nickname: current.nickname,
+      realName: '',
+      realNameVisibility: 'nobody' as const,
+      nameDisplay: 'nickname' as const,
+      bio: 'Likes chess.',
+    };
+    expect(await updateProfile(t.db, u.id, base)).toEqual({ ok: true, publicChanged: false });
+    expect(await updateProfile(t.db, u.id, { ...base, nickname: `${current.nickname}x` })).toEqual({
+      ok: true,
+      publicChanged: true,
+    });
+    expect(
+      await updateProfile(t.db, u.id, {
+        ...base,
+        nickname: `${current.nickname}x`,
+        avatar: { kind: 'preset', config: { style: 'thumbs', seed: 'new' } },
+      }),
+    ).toEqual({ ok: true, publicChanged: true });
+    expect((await getProfileSettings(t.db, u.id))?.bio).toBe('Likes chess.');
+  });
+
+  it('refuses a nickname someone else has, in any letter case', async () => {
+    const a = await createTestUser(t.db);
+    const b = await createTestUser(t.db);
+    const result = await updateProfile(t.db, b.id, {
+      nickname: (a.nickname ?? '').toUpperCase(),
+      realName: '',
+      realNameVisibility: 'nobody',
+      nameDisplay: 'nickname',
+      bio: '',
+    });
+    expect(result).toEqual({ ok: false, reason: 'nickname_taken' });
   });
 });

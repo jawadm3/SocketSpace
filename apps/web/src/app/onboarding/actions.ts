@@ -3,30 +3,28 @@
 import { redirect } from 'next/navigation';
 
 import { completeOnboarding, filterAvailableNicknames } from '@socketspace/db';
-import { avatarConfigSchema, nicknameSchema, suggestNicknames } from '@socketspace/shared/profile';
+import { nicknameSchema, suggestNicknames } from '@socketspace/shared/profile';
 
 import { formText } from '@/lib/forms';
-import { isGalleryStyle } from '@/server/avatar';
 import { getDb } from '@/server/db';
+import { parseAvatarField, parseNameChoices } from '@/server/profile-form';
 import { getCurrentSession } from '@/server/session';
 
 export interface OnboardingState {
-  nickname?: string;
-  errors?: { nickname?: string; avatar?: string; form?: string };
+  values?: {
+    nickname: string;
+    realName: string;
+    realNameVisibility: 'nobody' | 'contacts' | 'everyone';
+    nameDisplay: 'nickname' | 'real_name' | 'both';
+  };
+  errors?: { nickname?: string; realName?: string; avatar?: string; form?: string };
   suggestions?: string[];
 }
 
-function parseAvatar(raw: FormDataEntryValue | null) {
-  if (typeof raw !== 'string' || raw.length > 2000) return null;
-  try {
-    const parsed = avatarConfigSchema.safeParse(JSON.parse(raw));
-    return parsed.success && isGalleryStyle(parsed.data.style) ? parsed.data : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Saves the nickname and avatar (both required, D-023 and D-024), then opens the app. */
+/**
+ * Saves the nickname, the real-name choices and the picture, then opens the app. A nickname and
+ * a picture are required (D-023, D-024); the real name is optional and private by default.
+ */
 export async function completeOnboardingAction(
   _previous: OnboardingState,
   form: FormData,
@@ -36,19 +34,29 @@ export async function completeOnboardingAction(
 
   const rawNickname = formText(form, 'nickname');
   const nickname = nicknameSchema.safeParse(rawNickname);
-  const avatar = parseAvatar(form.get('avatar'));
+  const names = parseNameChoices(form);
+  const avatar = parseAvatarField(form);
+  const values: NonNullable<OnboardingState['values']> = {
+    nickname: rawNickname,
+    realName: formText(form, 'realName'),
+    realNameVisibility: names.ok ? names.names.realNameVisibility : 'nobody',
+    nameDisplay: names.ok ? names.names.nameDisplay : 'nickname',
+  };
 
-  const errors: OnboardingState['errors'] = {};
-  if (!nickname.success)
+  const errors: NonNullable<OnboardingState['errors']> = {};
+  if (!nickname.success) {
     errors.nickname = nickname.error.issues[0]?.message ?? 'Choose another nickname';
+  }
+  if (!names.ok) errors.realName = names.error;
   if (!avatar) errors.avatar = 'Choose a profile picture to continue';
-  if (!nickname.success || !avatar) return { nickname: rawNickname, errors };
+  if (!nickname.success || !names.ok || !avatar) return { values, errors };
 
   const db = getDb();
   const result = await completeOnboarding(db, current.user.id, {
     nickname: nickname.data,
-    avatarKind: 'preset',
-    avatarConfig: avatar,
+    avatarKind: avatar.kind,
+    avatarConfig: avatar.config,
+    names: names.names,
   });
 
   if (!result.ok && result.reason === 'nickname_taken') {
@@ -56,16 +64,13 @@ export async function completeOnboardingAction(
       await filterAvailableNicknames(db, suggestNicknames(nickname.data, 6))
     ).slice(0, 3);
     return {
-      nickname: rawNickname,
+      values,
       errors: { nickname: 'That nickname is taken. Try one of the suggestions, or another.' },
       suggestions,
     };
   }
-  if (!result.ok)
-    return {
-      nickname: rawNickname,
-      errors: { form: 'Your account could not be found. Please sign in again.' },
-    };
-
+  if (!result.ok) {
+    return { values, errors: { form: 'Your account could not be found. Please sign in again.' } };
+  }
   redirect('/app');
 }

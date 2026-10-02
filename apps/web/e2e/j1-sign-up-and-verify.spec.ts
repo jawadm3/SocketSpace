@@ -21,7 +21,7 @@ test('J1: sign up, onboard, verify, sign out and in, reset the password', async 
   await expect(page).toHaveURL(/\/onboarding$/);
 
   // A nickname alone is not enough: a profile picture is required.
-  await page.getByLabel('Nickname').fill(nickname);
+  await page.getByLabel('Nickname', { exact: true }).fill(nickname);
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByText('Choose a profile picture to continue')).toBeVisible();
 

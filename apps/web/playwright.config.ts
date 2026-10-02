@@ -90,6 +90,9 @@ export default defineConfig({
         INTERNAL_EVENTS_SECRET: internalSecret,
         METRICS_TOKEN: 'z'.repeat(32),
         LOG_LEVEL: 'warn',
+        // Like Render's proxy in production: each test "device" sends its own X-Forwarded-For
+        // (e2e/fixtures.ts), so per-IP connection limits apply per device, not to 127.0.0.1.
+        TRUST_PROXY_HOPS: '1',
       },
     },
   ],
