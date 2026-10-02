@@ -142,6 +142,8 @@ export const messageDeleteAckSchema = z.strictObject({ messageId: uuid, eventSeq
 export const reactionAckSchema = z.strictObject({
   messageId: uuid,
   reactions: z.array(reactionSummarySchema),
+  /** The change's event number, so the reacting tab's cursor has no gap (it gets no broadcast). */
+  eventSeq: seqNumber,
 });
 export const readAckSchema = z.strictObject({ unread: z.number().int().nonnegative() });
 

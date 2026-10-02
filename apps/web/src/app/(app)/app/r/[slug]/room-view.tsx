@@ -1,39 +1,48 @@
 'use client';
 
 /**
- * A room: header, live messages, the composer and the member list (ROOM-02, MSG-01).
+ * A room: header, live messages, who is typing, the composer and the member list with presence
+ * (ROOM-02, MSG-01 to MSG-07, RT-03 to RT-05).
  *
  * History arrives with the page; everything after that arrives live through the shared
  * connection (ChatProvider). Sending is optimistic: a message shows at once as "Sending",
  * becomes a normal message when the server confirms it, or shows the reason it was refused with
- * "Try again" and "Delete".
+ * "Try again" and "Delete". While the room is on screen, it counts as read.
  */
 import { Hash, Lock, Settings, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  useActionState,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type KeyboardEvent,
-} from 'react';
+import { useActionState, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { MessageWire } from '@socketspace/shared/events';
 import { LIMITS } from '@socketspace/shared/limits';
 import type { PublicUser } from '@socketspace/shared/profile';
-import { codePointLength } from '@socketspace/shared/text';
 
+import { MessageBody } from '@/components/message-body';
 import { Alert, Button, buttonClasses } from '@/components/ui';
 import { UserAvatar } from '@/components/user-avatar';
 import { useChat } from '@/lib/chat/provider';
-import type { PendingMessage } from '@/lib/chat/state';
+import {
+  describeTyping,
+  typingUserIds,
+  type PendingMessage,
+  type PresenceStatus,
+} from '@/lib/chat/state';
 
 import { joinRoomAction, leaveRoomAction, type RoomActionState } from '../../room-actions';
+import { Composer } from './composer';
+import {
+  displayName,
+  isRemoved,
+  LocalTime,
+  MessageItem,
+  snippet,
+  useMinute,
+  type MessagePermissions,
+} from './message-item';
 
 type Role = 'owner' | 'moderator' | 'member';
+const RANK: Record<Role, number> = { member: 1, moderator: 2, owner: 3 };
 
 export interface RoomInfo {
   id: string;
@@ -51,63 +60,15 @@ interface MemberEntry {
   joinedAt: string;
 }
 
-/** Times are written in the reader's own time zone, so they are filled in after the page loads. */
-const subscribeNever = () => () => undefined;
-function LocalTime({ iso, withDate = false }: { iso: string; withDate?: boolean }) {
-  const hydrated = useSyncExternalStore(
-    subscribeNever,
-    () => true,
-    () => false,
-  );
-  const date = new Date(iso);
-  const text = withDate
-    ? date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
-    : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  return (
-    <time dateTime={iso} title={hydrated ? date.toLocaleString() : undefined}>
-      {hydrated ? text : ''}
-    </time>
-  );
-}
-
-function displayName(person: PublicUser | undefined): string {
-  if (!person) return 'Someone';
-  return person.realName ? `${person.nickname} · ${person.realName}` : person.nickname;
-}
-
-function MessageItem({
-  message,
-  author,
-  continued,
+function PendingItem({
+  pending,
+  me,
+  original,
 }: {
-  message: MessageWire;
-  author: PublicUser | undefined;
-  continued: boolean;
+  pending: PendingMessage;
+  me: PublicUser;
+  original: MessageWire | undefined;
 }) {
-  const removed = message.deletedAt !== null || message.moderationState === 'removed';
-  return (
-    <li className={`flex gap-3 px-4 ${continued ? 'pt-0.5' : 'pt-3'}`}>
-      <div className="w-10 shrink-0">{continued ? null : <UserAvatar user={author} />}</div>
-      <div className="min-w-0 flex-1">
-        {continued ? null : (
-          <p className="flex items-baseline gap-2">
-            <span className="font-bold text-ink">{displayName(author)}</span>
-            <span className="text-xs text-muted">
-              <LocalTime iso={message.createdAt} />
-            </span>
-          </p>
-        )}
-        {removed ? (
-          <p className="text-sm text-muted italic">Message deleted</p>
-        ) : (
-          <p className="text-[0.95rem] break-words whitespace-pre-wrap text-ink">{message.body}</p>
-        )}
-      </div>
-    </li>
-  );
-}
-
-function PendingItem({ pending, me }: { pending: PendingMessage; me: PublicUser }) {
   const { retry, dismiss } = useChat();
   const failed = pending.status === 'failed';
   return (
@@ -116,17 +77,20 @@ function PendingItem({ pending, me }: { pending: PendingMessage; me: PublicUser 
         <UserAvatar user={me} />
       </div>
       <div className="min-w-0 flex-1">
+        {pending.replyToId && original && !isRemoved(original) ? (
+          <p className="mb-0.5 truncate text-xs text-ink-2">↪ {snippet(original.body)}</p>
+        ) : null}
         <p className="flex items-baseline gap-2">
           <span className="font-bold text-ink">{me.nickname}</span>
           <span className={`text-xs ${failed ? 'font-semibold text-danger' : 'text-muted'}`}>
             {failed ? 'Not sent' : 'Sending…'}
           </span>
         </p>
-        <p
-          className={`text-[0.95rem] break-words whitespace-pre-wrap ${failed ? 'text-ink' : 'text-ink-2 opacity-70'}`}
-        >
-          {pending.body}
-        </p>
+        <MessageBody
+          body={pending.body}
+          myNickname={me.nickname}
+          className={`text-[0.95rem] ${failed ? 'text-ink' : 'text-ink-2 opacity-70'}`}
+        />
         {failed ? (
           <div role="alert" className="mt-1 flex flex-wrap items-center gap-2 text-sm">
             <span className="text-danger">{pending.error?.message}</span>
@@ -157,19 +121,27 @@ function PendingItem({ pending, me }: { pending: PendingMessage; me: PublicUser 
 
 function MessageList({
   room,
-  initialMessages,
+  messages,
+  pending,
+  permissionsFor,
+  editingId,
+  setEditingId,
+  onReply,
 }: {
   room: RoomInfo;
-  initialMessages: MessageWire[];
+  messages: MessageWire[];
+  pending: PendingMessage[];
+  permissionsFor: (message: MessageWire) => MessagePermissions;
+  editingId: string | null;
+  setEditingId: (id: string | null) => void;
+  onReply: (id: string) => void;
 }) {
   const { state, me } = useChat();
-  const conversation = state.conversations[room.id];
-  const messages = conversation?.messages ?? initialMessages;
-  const pending = conversation?.pending ?? [];
   const scroller = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const [unseen, setUnseen] = useState(false);
   const count = messages.length + pending.length;
+  const byId = new Map(messages.map((m) => [m.id, m]));
 
   // Follow new messages only if the reader is already at the bottom (no forced scrolling).
   useLayoutEffect(() => {
@@ -183,7 +155,7 @@ function MessageList({
     <div className="relative min-h-0 flex-1">
       <div
         ref={scroller}
-        className="h-full overflow-y-auto pb-4"
+        className="h-full overflow-y-auto pb-2"
         onScroll={(event) => {
           const element = event.currentTarget;
           atBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
@@ -201,18 +173,35 @@ function MessageList({
                 const previous = messages[index - 1];
                 const continued =
                   previous?.authorId === message.authorId &&
+                  !isRemoved(previous) &&
                   Date.parse(message.createdAt) - Date.parse(previous.createdAt) < 5 * 60_000;
+                const original = message.replyToId ? byId.get(message.replyToId) : undefined;
                 return (
                   <MessageItem
                     key={message.id}
                     message={message}
                     author={state.users[message.authorId]}
+                    original={original}
+                    originalAuthor={original ? state.users[original.authorId]?.nickname : undefined}
                     continued={continued}
+                    permissions={permissionsFor(message)}
+                    editing={editingId === message.id}
+                    onEdit={setEditingId}
+                    onEditDone={() => {
+                      setEditingId(null);
+                      document.getElementById('composer')?.focus();
+                    }}
+                    onReply={onReply}
                   />
                 );
               })}
               {pending.map((p) => (
-                <PendingItem key={p.clientId} pending={p} me={me} />
+                <PendingItem
+                  key={p.clientId}
+                  pending={p}
+                  me={me}
+                  original={p.replyToId ? byId.get(p.replyToId) : undefined}
+                />
               ))}
             </ol>
           </div>
@@ -235,66 +224,57 @@ function MessageList({
   );
 }
 
-function Composer({ room }: { room: RoomInfo }) {
-  const { send } = useChat();
-  const [text, setText] = useState('');
-  const length = codePointLength(text);
-  const tooLong = length > LIMITS.message.bodyMaxChars;
-
-  function submit() {
-    if (text.trim() === '' || tooLong) return;
-    send(room.id, text);
-    setText('');
-  }
-
+/** "Ava is typing…" under the messages; the line keeps its height so nothing jumps. */
+function TypingLine({ conversationId }: { conversationId: string }) {
+  const { state } = useChat();
+  const names = typingUserIds(state, conversationId).map(
+    (id) => state.users[id]?.nickname ?? 'Someone',
+  );
   return (
-    <form
-      className="border-t border-line bg-card p-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-        submit();
-      }}
-    >
-      <label htmlFor="composer" className="sr-only">
-        Message #{room.name}
-      </label>
-      <div className="flex items-end gap-2">
-        <textarea
-          id="composer"
-          rows={1}
-          value={text}
-          placeholder={`Message #${room.name}`}
-          aria-describedby={tooLong ? 'composer-length' : undefined}
-          onChange={(event) => {
-            setText(event.target.value);
-          }}
-          onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {
-            // Enter sends; Shift+Enter starts a new line.
-            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              submit();
-            }
-          }}
-          className="max-h-48 min-h-11 flex-1 resize-none rounded-xl border border-line bg-surface px-3 py-2.5 text-base text-ink [field-sizing:content]"
-        />
-        <Button type="submit" disabled={text.trim() === '' || tooLong}>
-          Send
-        </Button>
-      </div>
-      {length > LIMITS.message.bodyMaxChars - 200 ? (
-        <p
-          id="composer-length"
-          className={`mt-1 text-right text-xs ${tooLong ? 'font-semibold text-danger' : 'text-muted'}`}
-        >
-          {length} / {LIMITS.message.bodyMaxChars}
-        </p>
-      ) : null}
-    </form>
+    <p className="h-6 truncate px-4 text-xs leading-6 text-ink-2" data-testid="typing">
+      {describeTyping(names)}
+    </p>
   );
 }
 
 function CannotPost({ children }: { children: React.ReactNode }) {
   return <div className="border-t border-line bg-card p-4 text-sm text-ink-2">{children}</div>;
+}
+
+const PRESENCE_TEXT: Record<PresenceStatus, string> = {
+  online: 'online',
+  away: 'away',
+  dnd: 'do not disturb',
+  offline: 'offline',
+};
+const PRESENCE_DOT: Record<PresenceStatus, string> = {
+  online: 'bg-emerald-500 border-emerald-500',
+  away: 'bg-amber-400 border-amber-400',
+  dnd: 'bg-danger border-danger',
+  offline: 'bg-card border-muted',
+};
+
+function lastSeenText(iso: string | null, minute: number): string {
+  if (!iso || minute === 0) return '';
+  const minutes = Math.max(0, minute - Math.floor(Date.parse(iso) / 60_000));
+  if (minutes < 1) return 'last seen just now';
+  if (minutes < 60) return `last seen ${String(minutes)} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `last seen ${String(hours)} h ago`;
+  return `last seen ${new Date(iso).toLocaleDateString()}`;
+}
+
+function PresenceDot({ status, lastSeen }: { status: PresenceStatus; lastSeen: string }) {
+  const text = lastSeen ? `${PRESENCE_TEXT[status]}, ${lastSeen}` : PRESENCE_TEXT[status];
+  return (
+    <span
+      role="img"
+      aria-label={text}
+      title={text}
+      data-presence={status}
+      className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full border-2 ${PRESENCE_DOT[status]}`}
+    />
+  );
 }
 
 const ROLE_ORDER: Role[] = ['owner', 'moderator', 'member'];
@@ -305,7 +285,13 @@ const ROLE_TITLE: Record<Role, string> = {
 };
 
 function MemberList({ room, members }: { room: RoomInfo; members: MemberEntry[] }) {
-  const { state } = useChat();
+  const { state, me } = useChat();
+  const minute = useMinute();
+  const statusOf = (userId: string): PresenceStatus => {
+    // Your own dot follows your connection (the server does not echo you to yourself).
+    if (userId === me.id) return state.status === 'connected' ? 'online' : 'offline';
+    return state.presence[userId]?.status ?? 'offline';
+  };
   return (
     <div className="flex flex-col gap-4">
       {ROLE_ORDER.map((role) => {
@@ -319,9 +305,24 @@ function MemberList({ room, members }: { room: RoomInfo; members: MemberEntry[] 
             <ul className="flex flex-col gap-1">
               {group.map((member) => {
                 const person = state.users[member.userId];
+                const status = statusOf(member.userId);
+                const lastSeen =
+                  status === 'offline' && member.userId !== me.id
+                    ? lastSeenText(state.presence[member.userId]?.lastSeenAt ?? null, minute)
+                    : '';
                 return (
-                  <li key={member.userId} className="flex items-center gap-2 px-1 py-0.5">
-                    <UserAvatar user={person} size="sm" />
+                  <li
+                    key={member.userId}
+                    className={`flex items-center gap-2 px-1 py-0.5 ${
+                      status === 'offline' ? 'opacity-70' : ''
+                    }`}
+                  >
+                    <span className="relative">
+                      <UserAvatar user={person} size="sm" />
+                      <span className="absolute -right-0.5 -bottom-0.5 flex rounded-full bg-card p-px">
+                        <PresenceDot status={status} lastSeen={lastSeen} />
+                      </span>
+                    </span>
                     <span className="truncate text-sm">{displayName(person)}</span>
                   </li>
                 );
@@ -370,7 +371,8 @@ export function RoomView({
   initialMembers: MemberEntry[];
   people: PublicUser[];
 }) {
-  const { state, loadConversation, rememberUsers, onMemberEvent } = useChat();
+  const { state, me, loadConversation, rememberUsers, onMemberEvent, setOpenConversation } =
+    useChat();
   const router = useRouter();
   // Live member events adjust the list; a fresh server render replaces it.
   const [members, setMembers] = useState(initialMembers);
@@ -379,14 +381,29 @@ export function RoomView({
     setMembersSource(initialMembers);
     setMembers(initialMembers);
   }
+  const [replyToId, setReplyToId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const sidebarRoom = state.rooms.find((r) => r.id === room.id);
   const name = sidebarRoom?.name ?? room.name;
+  const conversation = state.conversations[room.id];
+  const messages = conversation?.loaded ? conversation.messages : initialMessages;
+  const pending = conversation?.pending ?? [];
 
   // The page's history and people go into the shared state (again after a refresh).
   useEffect(() => {
     rememberUsers(people);
     loadConversation(room.id, initialMessages, room.lastEventSeq);
   }, [room.id, room.lastEventSeq, initialMessages, people, loadConversation, rememberUsers]);
+
+  // While a member has this room on screen, it counts as read (badges clear on every tab).
+  const isMember = membership !== null;
+  useEffect(() => {
+    if (!isMember) return;
+    setOpenConversation(room.id);
+    return () => {
+      setOpenConversation(null);
+    };
+  }, [isMember, room.id, setOpenConversation]);
 
   useEffect(
     () =>
@@ -420,6 +437,32 @@ export function RoomView({
   }, [mutedUntil, router]);
 
   const canModerate = membership?.role === 'owner' || membership?.role === 'moderator';
+  const canTakePart = membership !== null && emailVerified && !membership.mutedUntil;
+  const roles = new Map(members.map((m) => [m.userId, m.role]));
+  const myRank = membership ? RANK[membership.role] : 0;
+  const permissionsFor = (message: MessageWire): MessagePermissions => {
+    const authorRole = roles.get(message.authorId);
+    const mine = message.authorId === me.id;
+    return {
+      canTakePart,
+      // Your own messages (even while muted); otherwise you must outrank the author here.
+      canDelete:
+        membership !== null &&
+        (mine || (myRank >= RANK.moderator && myRank > (authorRole ? RANK[authorRole] : 0))),
+    };
+  };
+  const replyTo = replyToId ? (messages.find((m) => m.id === replyToId) ?? null) : null;
+
+  /** Up arrow in an empty composer: edit your newest message that can still be edited. */
+  const editLast = (): boolean => {
+    const cutoff = Date.now() - LIMITS.message.editWindowMs + 60_000;
+    const last = [...messages]
+      .reverse()
+      .find((m) => m.authorId === me.id && !isRemoved(m) && Date.parse(m.createdAt) > cutoff);
+    if (!last) return false;
+    setEditingId(last.id);
+    return true;
+  };
 
   let footer: React.ReactNode;
   if (!membership) {
@@ -446,7 +489,17 @@ export function RoomView({
       </CannotPost>
     );
   } else {
-    footer = <Composer room={room} />;
+    footer = (
+      <Composer
+        room={{ id: room.id, name }}
+        memberIds={members.map((m) => m.userId)}
+        replyTo={replyTo}
+        onCancelReply={() => {
+          setReplyToId(null);
+        }}
+        onEditLast={editLast}
+      />
+    );
   }
 
   return (
@@ -486,7 +539,16 @@ export function RoomView({
             <Alert tone="info">Confirm your email address to start posting.</Alert>
           </div>
         ) : null}
-        <MessageList room={room} initialMessages={initialMessages} />
+        <MessageList
+          room={room}
+          messages={messages}
+          pending={pending}
+          permissionsFor={permissionsFor}
+          editingId={editingId}
+          setEditingId={setEditingId}
+          onReply={setReplyToId}
+        />
+        <TypingLine conversationId={room.id} />
         {footer}
       </section>
       <aside

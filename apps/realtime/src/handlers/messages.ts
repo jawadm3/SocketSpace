@@ -211,7 +211,7 @@ export function registerMessageHandlers(
         reactions,
         eventSeq: result.message.versionSeq,
       });
-      return ackOk({ messageId, reactions });
+      return ackOk({ messageId, reactions, eventSeq: result.message.versionSeq });
     },
   );
 

@@ -9,11 +9,15 @@ import { avatarBuilder, presetGallery } from '@/server/avatar';
 import { getDb } from '@/server/db';
 import { requireAppUser } from '@/server/session';
 
+import { PresenceForm } from './presence-form';
 import { ProfileForm } from './profile-form';
 
 export const metadata: Metadata = { title: 'Profile settings' };
 
-/** Settings > Profile (PROF-01): nickname, real name and who sees it, bio, picture. */
+/**
+ * Settings > Profile (PROF-01, PROF-02): nickname, real name and who sees it, bio, picture, and
+ * whether others see when you are online.
+ */
 export default async function ProfileSettingsPage() {
   const { user } = await requireAppUser('/app/settings/profile');
   const profile = await getProfileSettings(getDb(), user.id);
@@ -48,6 +52,9 @@ export default async function ProfileSettingsPage() {
           presets={presetGallery(4).map((p) => ({ config: p.config, src: p.dataUri }))}
           builder={avatarBuilder()}
         />
+      </Card>
+      <Card>
+        <PresenceForm showPresence={profile?.showPresence ?? true} />
       </Card>
     </main>
   );

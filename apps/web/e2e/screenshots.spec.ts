@@ -64,6 +64,24 @@ test('room screens at desktop and mobile width', async ({ browser }) => {
     await expect(person.page.getByRole('log').getByText(text.split('\n')[0] ?? text)).toBeVisible();
   }
   await expect(ava.page.getByRole('log').getByText('The body text reads well')).toBeVisible();
+
+  // Formatting, a reply with a mention, a reaction, someone typing, and the action bar.
+  const great = sam.page.locator('li[id^="message-"]').filter({ hasText: 'Great, let us' });
+  await great.hover();
+  await great.getByRole('button', { name: 'Reply' }).click();
+  await sam.page
+    .getByLabel(`Message #${name}`)
+    .fill(`**Agreed**, @${ava.nickname}. The scale lives in \`tokens.css\`.`);
+  await sam.page.getByLabel(`Message #${name}`).press('Enter');
+  const reply = ava.page.locator('li[id^="message-"]').filter({ hasText: 'The scale lives' });
+  await expect(reply).toBeVisible();
+  await reply.hover();
+  await reply.getByRole('button', { name: 'Add reaction' }).click();
+  await ava.page.screenshot({ path: 'test-results/shots/desktop-room-react.png' });
+  await ava.page.getByRole('button', { name: 'React with 🎉' }).click();
+  await sam.page.getByLabel(`Message #${name}`).pressSequentially('One more', { delay: 30 });
+  await expect(ava.page.getByTestId('typing')).not.toHaveText('');
+  await reply.hover();
   await ava.page.screenshot({ path: 'test-results/shots/desktop-room.png' });
 
   await ava.page.setViewportSize({ width: 375, height: 812 });

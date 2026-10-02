@@ -65,7 +65,7 @@ function NavLink({
   );
 }
 
-function RoomLink({ room }: { room: SidebarRoom }) {
+function RoomLink({ room, unread }: { room: SidebarRoom; unread: number }) {
   const pathname = usePathname();
   const href = `/app/r/${room.slug}`;
   const active = pathname === href || pathname.startsWith(`${href}/`);
@@ -75,7 +75,11 @@ function RoomLink({ room }: { room: SidebarRoom }) {
         href={href}
         aria-current={active ? 'page' : undefined}
         className={`flex min-h-9 items-center gap-2 rounded-lg px-3 text-sm ${
-          active ? 'bg-accent-soft font-semibold text-ink' : 'text-ink-2 hover:bg-surface-2'
+          active
+            ? 'bg-accent-soft font-semibold text-ink'
+            : unread > 0
+              ? 'font-bold text-ink hover:bg-surface-2'
+              : 'text-ink-2 hover:bg-surface-2'
         }`}
       >
         {room.visibility === 'private' ? (
@@ -83,7 +87,16 @@ function RoomLink({ room }: { room: SidebarRoom }) {
         ) : (
           <Hash aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted" />
         )}
-        <span className="truncate">{room.name}</span>
+        <span className="flex-1 truncate">{room.name}</span>
+        {unread > 0 ? (
+          <span
+            data-testid="unread-badge"
+            className="min-w-5 rounded-full bg-accent px-1.5 text-center text-xs leading-5 font-bold text-accent-ink"
+          >
+            <span aria-hidden="true">{unread > 99 ? '99+' : unread}</span>
+            <span className="sr-only">, {unread} unread</span>
+          </span>
+        ) : null}
       </Link>
     </li>
   );
@@ -105,7 +118,7 @@ function RoomList() {
   return (
     <ul className="flex flex-col gap-0.5">
       {state.rooms.map((room) => (
-        <RoomLink key={room.id} room={room} />
+        <RoomLink key={room.id} room={room} unread={state.unread[room.id] ?? 0} />
       ))}
     </ul>
   );
@@ -168,6 +181,7 @@ export function Sidebar() {
 /** Small screens: the same destinations in a top bar, and rooms in a disclosure. */
 export function MobileBar() {
   const { state } = useChat();
+  const totalUnread = state.rooms.reduce((sum, r) => sum + (state.unread[r.id] ?? 0), 0);
   return (
     <div className="border-b border-line bg-card md:hidden">
       <div className="airmail-stripe h-1 w-full" aria-hidden="true" />
@@ -205,6 +219,7 @@ export function MobileBar() {
       <details className="px-4 pb-2">
         <summary className="cursor-pointer py-1 text-sm font-semibold text-ink-2">
           Your rooms ({state.rooms.length})
+          {totalUnread > 0 ? ` · ${String(totalUnread)} unread` : ''}
         </summary>
         <div className="pt-1">
           <RoomList />

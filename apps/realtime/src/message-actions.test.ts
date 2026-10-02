@@ -112,16 +112,18 @@ describe('reactions', () => {
   it('toggles, broadcasts the summary, and refuses emoji outside the list', async () => {
     const { sam, room, avaSocket, samSocket } = await twoInARoom();
     const sent = await send(avaSocket, room.id, 'ship it');
-    const updated = nextEvent<{ reactions: { emoji: string; userIds: string[] }[] }>(
-      avaSocket,
-      'reaction:updated',
-    );
+    const updated = nextEvent<{
+      reactions: { emoji: string; userIds: string[] }[];
+      eventSeq: number;
+    }>(avaSocket, 'reaction:updated');
     const ack = await request(samSocket, 'reaction:toggle', { messageId: sent.id, emoji: '🚀' });
     expect(ack).toMatchObject({
       ok: true,
-      data: { reactions: [{ emoji: '🚀', userIds: [sam.id] }] },
+      data: { reactions: [{ emoji: '🚀', userIds: [sam.id] }], eventSeq: sent.eventSeq + 1 },
     });
+    // The reacting tab learns the event number from its acknowledgement (no gap, no resync).
     expect((await updated).reactions).toEqual([{ emoji: '🚀', userIds: [sam.id] }]);
+    expect((await updated).eventSeq).toBe(sent.eventSeq + 1);
     const off = await request(samSocket, 'reaction:toggle', { messageId: sent.id, emoji: '🚀' });
     expect(off).toMatchObject({ ok: true, data: { reactions: [] } });
     expect(

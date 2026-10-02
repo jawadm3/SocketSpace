@@ -82,6 +82,9 @@ gitleaks and `pnpm audit`; CodeQL runs in `codeql.yml`.
 
 Set `TURBO_TELEMETRY_DISABLED=1` and `NEXT_TELEMETRY_DISABLED=1` in the shell to avoid tools writing telemetry config to C:.
 
+Turborepo runs at most 4 tasks at once (`"concurrency": "4"` in `turbo.json`, D-040): with more,
+`pnpm check` ran out of memory on this laptop and crashed in random packages.
+
 ## Conventions
 
 - **TypeScript strict** everywhere (`packages/config/tsconfig.base.json`). Use **TypeScript 6.0.x**, not 7.x: `typescript-eslint` does not support TypeScript 7 yet (peer range `<6.1.0`).

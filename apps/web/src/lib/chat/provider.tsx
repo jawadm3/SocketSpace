@@ -8,8 +8,13 @@
  * - Sending is optimistic: the message shows at once as "Sending", is replaced by the stored copy
  *   when the server acknowledges it, or is marked "Failed" with the reason and a retry button.
  *   A retry re-sends the same client ID, so it can never create a duplicate.
- * - After a reconnect, and whenever a gap in event numbers stays open, it asks the server for
+ * - Edits, deletions and reactions apply when the server acknowledges them; a refusal becomes a
+ *   notice with the server's reason.
+ * - On every (re)connect, and whenever a gap in event numbers stays open, it asks the server for
  *   everything after the last number it applied (`sync:request`).
+ * - The room on screen in a visible tab is "being viewed": its badge clears and its read marker
+ *   follows the newest event (`read:update`), which clears the badge on the person's other tabs.
+ * - Each tab tells the server whether it is in use (`presence:set`: online or away).
  * - People are fetched once each from `/api/users`, which returns real names only where allowed.
  */
 import { useRouter } from 'next/navigation';
@@ -32,6 +37,7 @@ import type {
   MemberWire,
   MessageWire,
 } from '@socketspace/shared/events';
+import type { ReactionEmoji } from '@socketspace/shared/emoji';
 import type { PublicUser } from '@socketspace/shared/profile';
 
 import { connectRealtime, type RealtimeSocket } from '@/lib/realtime-client';
@@ -43,6 +49,7 @@ import {
   type ChatState,
   type SidebarRoom,
 } from './state';
+import { TypingThrottle } from './typing';
 
 export type MemberEvent =
   { type: 'joined' | 'updated'; member: MemberWire } | { type: 'left'; userId: string };
@@ -50,9 +57,19 @@ export type MemberEvent =
 interface ChatContextValue {
   state: ChatState;
   me: PublicUser;
-  send: (conversationId: string, body: string) => void;
+  send: (conversationId: string, body: string, replyToId?: string) => void;
   retry: (clientId: string) => void;
   dismiss: (clientId: string) => void;
+  /** Resolves `true` once the server stored the edit. */
+  editMessage: (messageId: string, body: string) => Promise<boolean>;
+  deleteMessage: (messageId: string) => Promise<boolean>;
+  toggleReaction: (messageId: string, emoji: ReactionEmoji) => void;
+  /** Call on each keystroke that leaves text in the composer. */
+  typing: (conversationId: string) => void;
+  /** Call when the text is sent or cleared. */
+  stoppedTyping: (conversationId: string) => void;
+  /** The room page on screen (or `null` when it closes). */
+  setOpenConversation: (conversationId: string | null) => void;
   loadConversation: (conversationId: string, messages: MessageWire[], lastEventSeq: number) => void;
   rememberUsers: (users: PublicUser[]) => void;
   ensureUsers: (ids: readonly string[]) => void;
@@ -71,6 +88,10 @@ export function useChat(): ChatContextValue {
 /** How long a gap may stay open before asking the server (an overtaking ack usually closes it). */
 const GAP_GRACE_MS = 1500;
 const SEND_TIMEOUT_MS = 15_000;
+/** Read markers wait this long, so a burst of messages becomes one `read:update`. */
+const READ_DELAY_MS = 400;
+/** The server accepts one `presence:set` per person every 5 seconds. */
+const PRESENCE_MIN_GAP_MS = 5100;
 
 function toSidebarRoom(conversation: ConversationWire): SidebarRoom | null {
   if (conversation.kind !== 'room' || !conversation.slug || !conversation.name) return null;
@@ -79,6 +100,7 @@ function toSidebarRoom(conversation: ConversationWire): SidebarRoom | null {
     slug: conversation.slug,
     name: conversation.name,
     visibility: conversation.visibility,
+    lastEventSeq: conversation.lastEventSeq,
   };
 }
 
@@ -88,17 +110,24 @@ const noticeId = () => {
   return `n${String(noticeCounter)}`;
 };
 
+const tabStatus = (): 'online' | 'away' =>
+  document.visibilityState === 'visible' ? 'online' : 'away';
+
 export function ChatProvider({
   me,
   rooms,
+  unread,
   children,
 }: {
   me: PublicUser;
   rooms: SidebarRoom[];
+  unread: Record<string, number>;
   children: ReactNode;
 }) {
   const router = useRouter();
-  const [state, dispatch] = useReducer(chatReducer, undefined, () => initialChatState(rooms, [me]));
+  const [state, dispatch] = useReducer(chatReducer, undefined, () =>
+    initialChatState(rooms, [me], { meId: me.id, unread }),
+  );
   // Socket handlers run outside React's render, so they read the latest state from here.
   const stateRef = useRef(state);
   useLayoutEffect(() => {
@@ -107,14 +136,19 @@ export function ChatProvider({
   const socketRef = useRef<RealtimeSocket | null>(null);
   const memberListeners = useRef(new Map<string, Set<(event: MemberEvent) => void>>());
 
-  // A server render (after an action, or a refresh) brings the authoritative room list.
-  const roomsKey = JSON.stringify(rooms);
+  // A server render (after an action, or a refresh) brings the authoritative rooms and counts.
+  const roomsKey = JSON.stringify([rooms, unread]);
   const lastRoomsKey = useRef(roomsKey);
   useEffect(() => {
     if (roomsKey === lastRoomsKey.current) return;
     lastRoomsKey.current = roomsKey;
-    dispatch({ type: 'rooms-set', rooms: JSON.parse(roomsKey) as SidebarRoom[] });
+    const [nextRooms, nextUnread] = JSON.parse(roomsKey) as [SidebarRoom[], Record<string, number>];
+    dispatch({ type: 'rooms-set', rooms: nextRooms, unread: nextUnread });
   }, [roomsKey]);
+
+  const notifyError = useCallback((text: string) => {
+    dispatch({ type: 'notice', notice: { id: noticeId(), tone: 'error', text } });
+  }, []);
 
   // People: fetch each unknown person once, in batches.
   const requested = useRef(new Set<string>([me.id]));
@@ -172,7 +206,7 @@ export function ChatProvider({
               if (!ack.ok) return;
               for (const result of ack.data.results) {
                 if (result.reset) {
-                  // Too much was missed: reload the page's history from the server.
+                  // Too much was missed: reload the page's history and counts from the server.
                   router.refresh();
                   continue;
                 }
@@ -190,11 +224,34 @@ export function ChatProvider({
     [ensureUsers, router],
   );
 
+  // Presence: this tab is "online" while visible and "away" while hidden, sent no more often
+  // than the server accepts (only the latest state matters).
+  const presenceRef = useRef<{
+    sent: 'online' | 'away';
+    sentAt: number;
+    timer: ReturnType<typeof setTimeout> | null;
+  }>({ sent: 'online', sentAt: 0, timer: null });
+  const reportPresence = useCallback(() => {
+    const tracker = presenceRef.current;
+    if (tracker.timer) return; // already scheduled; it sends whatever is current then
+    const run = () => {
+      tracker.timer = null;
+      const socket = socketRef.current;
+      const wanted = tabStatus();
+      if (!socket?.connected || wanted === tracker.sent) return;
+      tracker.sent = wanted;
+      tracker.sentAt = Date.now();
+      socket.emit('presence:set', { status: wanted }, () => undefined);
+    };
+    const wait = tracker.sentAt + PRESENCE_MIN_GAP_MS - Date.now();
+    if (wait <= 0) run();
+    else tracker.timer = setTimeout(run, wait);
+  }, []);
+
   // The connection.
   useEffect(() => {
     let socket: RealtimeSocket | null = null;
     let cancelled = false;
-    let helloCount = 0;
 
     connectRealtime().then(
       (connected) => {
@@ -206,20 +263,21 @@ export function ChatProvider({
         socketRef.current = connected;
 
         connected.on('server:hello', () => {
-          helloCount += 1;
           dispatch({ type: 'status', status: 'connected' });
-          // After a reconnect, catch up on everything that happened while away.
-          if (helloCount > 1) {
-            resync(
-              Object.entries(stateRef.current.conversations).map(([conversationId, c]) => ({
-                conversationId,
-                afterEventSeq: c.lastEventSeq,
-              })),
-            );
-          }
+          // A new connection starts "online"; say so if this tab is hidden.
+          presenceRef.current.sent = 'online';
+          reportPresence();
+          // Catch up on everything since the page was rendered or the connection dropped.
+          resync(
+            Object.entries(stateRef.current.conversations).map(([conversationId, c]) => ({
+              conversationId,
+              afterEventSeq: c.lastEventSeq,
+            })),
+          );
         });
         connected.on('disconnect', () => {
           dispatch({ type: 'status', status: 'reconnecting' });
+          dispatch({ type: 'presence-cleared' });
         });
         connected.on('connect_error', () => {
           dispatch({ type: 'status', status: 'reconnecting' });
@@ -232,11 +290,34 @@ export function ChatProvider({
         });
 
         connected.on('message:new', ({ message }) => {
-          dispatch({ type: 'message', message });
+          dispatch({ type: 'message', message, live: true });
           ensureUsers([message.authorId]);
         });
         connected.on('message:updated', ({ message }) => {
           dispatch({ type: 'message', message });
+        });
+        connected.on('message:deleted', ({ conversationId, messageId, eventSeq }) => {
+          dispatch({
+            type: 'message-deleted',
+            conversationId,
+            messageId,
+            eventSeq,
+            deletedAt: new Date().toISOString(),
+          });
+        });
+        connected.on('reaction:updated', ({ conversationId, messageId, reactions, eventSeq }) => {
+          dispatch({ type: 'reactions', conversationId, messageId, reactions, eventSeq });
+          ensureUsers(reactions.flatMap((r) => r.userIds));
+        });
+        connected.on('read:updated', ({ conversationId, userId, seq }) => {
+          if (userId === me.id) dispatch({ type: 'read', conversationId, seq });
+        });
+        connected.on('typing', ({ conversationId, userId, typing }) => {
+          dispatch({ type: 'typing', conversationId, userId, typing, now: Date.now() });
+          if (typing) ensureUsers([userId]);
+        });
+        connected.on('presence', ({ userId, status, lastSeenAt }) => {
+          dispatch({ type: 'presence', userId, status, lastSeenAt });
         });
 
         connected.on('conversation:joined', ({ conversation }) => {
@@ -290,14 +371,7 @@ export function ChatProvider({
         });
         connected.on('moderation:notice', ({ kind, reason, until }) => {
           const when = until ? ` until ${new Date(until).toLocaleString()}` : '';
-          dispatch({
-            type: 'notice',
-            notice: {
-              id: noticeId(),
-              tone: 'error',
-              text: `Your account was ${kind}${when}: ${reason}`,
-            },
-          });
+          notifyError(`Your account was ${kind}${when}: ${reason}`);
         });
       },
       () => {
@@ -310,7 +384,7 @@ export function ChatProvider({
       socketRef.current = null;
       socket?.close();
     };
-  }, [ensureUsers, resync, router]);
+  }, [ensureUsers, me.id, notifyError, reportPresence, resync, router]);
 
   // Gaps: give an overtaking event a moment to arrive, then ask the server.
   const gaps = conversationsWithGaps(state);
@@ -325,39 +399,144 @@ export function ChatProvider({
     };
   }, [gapKey, resync]);
 
-  const emitSend = useCallback((conversationId: string, clientId: string, body: string) => {
-    const socket = socketRef.current;
-    if (!socket) {
-      dispatch({
-        type: 'pending-failed',
-        clientId,
-        error: { code: 'UNAVAILABLE', message: 'Not sent: no connection. Try again.' },
-      });
-      return;
-    }
-    socket
-      .timeout(SEND_TIMEOUT_MS)
-      .emitWithAck('message:send', { conversationId, clientId, body })
-      .then(
-        (ack: Ack<AckData<'message:send'>>) => {
-          if (ack.ok) dispatch({ type: 'message', message: ack.data.message });
-          else dispatch({ type: 'pending-failed', clientId, error: ack.error });
-        },
-        () => {
-          dispatch({
-            type: 'pending-failed',
-            clientId,
-            error: { code: 'UNAVAILABLE', message: 'Not sent yet: no answer from the server.' },
-          });
-        },
-      );
+  // Which room is being viewed: open on screen, in a tab the person can see.
+  const openRef = useRef<string | null>(null);
+  const updateViewing = useCallback(() => {
+    dispatch({
+      type: 'viewing',
+      conversationId: document.visibilityState === 'visible' ? openRef.current : null,
+    });
+  }, []);
+  const setOpenConversation = useCallback(
+    (conversationId: string | null) => {
+      openRef.current = conversationId;
+      updateViewing();
+    },
+    [updateViewing],
+  );
+  useEffect(() => {
+    const onVisibility = () => {
+      updateViewing();
+      reportPresence();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [reportPresence, updateViewing]);
+
+  // Read markers: the viewed room is read up to its newest event.
+  const readSent = useRef(new Map<string, number>());
+  const viewing = state.viewing;
+  const viewedSeq = viewing ? (state.conversations[viewing]?.lastEventSeq ?? 0) : 0;
+  const connected = state.status === 'connected';
+  useEffect(() => {
+    if (!viewing || !connected || viewedSeq === 0) return;
+    if ((readSent.current.get(viewing) ?? 0) >= viewedSeq) return;
+    const timer = setTimeout(() => {
+      const socket = socketRef.current;
+      if (!socket?.connected) return;
+      readSent.current.set(viewing, viewedSeq);
+      socket
+        .timeout(SEND_TIMEOUT_MS)
+        .emitWithAck('read:update', { conversationId: viewing, seq: viewedSeq })
+        .then(
+          (ack: Ack<AckData<'read:update'>>) => {
+            if (!ack.ok) return;
+            // Messages that arrived while the room was on screen are read too.
+            const stillViewing = stateRef.current.viewing === viewing;
+            dispatch({
+              type: 'read',
+              conversationId: viewing,
+              seq: viewedSeq,
+              unread: stillViewing ? 0 : ack.data.unread,
+            });
+          },
+          () => {
+            readSent.current.delete(viewing); // try again on the next change
+          },
+        );
+    }, READ_DELAY_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [viewing, viewedSeq, connected]);
+
+  // Typing: expire other people's indicators, and throttle our own signals.
+  const hasTypists = Object.values(state.typing).some((t) => Object.keys(t).length > 0);
+  useEffect(() => {
+    if (!hasTypists) return;
+    const timer = setInterval(() => {
+      dispatch({ type: 'typing-expired', now: Date.now() });
+    }, 1000);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [hasTypists]);
+  const typingThrottle = useRef<TypingThrottle | null>(null);
+  useEffect(() => {
+    const throttle = new TypingThrottle((conversationId, typing) => {
+      socketRef.current?.emit('typing:set', { conversationId, typing });
+    });
+    typingThrottle.current = throttle;
+    return () => {
+      throttle.dispose();
+      typingThrottle.current = null;
+    };
+  }, []);
+  const typing = useCallback((conversationId: string) => {
+    // Only while connected: a signal dropped now would hold back the next one for 3 seconds.
+    if (socketRef.current?.connected) typingThrottle.current?.typing(conversationId);
+  }, []);
+  const stoppedTyping = useCallback((conversationId: string) => {
+    typingThrottle.current?.stopped(conversationId);
   }, []);
 
+  const emitSend = useCallback(
+    (conversationId: string, clientId: string, body: string, replyToId?: string) => {
+      const socket = socketRef.current;
+      if (!socket) {
+        dispatch({
+          type: 'pending-failed',
+          clientId,
+          error: { code: 'UNAVAILABLE', message: 'Not sent: no connection. Try again.' },
+        });
+        return;
+      }
+      socket
+        .timeout(SEND_TIMEOUT_MS)
+        .emitWithAck('message:send', {
+          conversationId,
+          clientId,
+          body,
+          ...(replyToId ? { replyToId } : {}),
+        })
+        .then(
+          (ack: Ack<AckData<'message:send'>>) => {
+            if (ack.ok) dispatch({ type: 'message', message: ack.data.message });
+            else dispatch({ type: 'pending-failed', clientId, error: ack.error });
+          },
+          () => {
+            dispatch({
+              type: 'pending-failed',
+              clientId,
+              error: { code: 'UNAVAILABLE', message: 'Not sent yet: no answer from the server.' },
+            });
+          },
+        );
+    },
+    [],
+  );
+
   const send = useCallback(
-    (conversationId: string, body: string) => {
+    (conversationId: string, body: string, replyToId?: string) => {
       const clientId = crypto.randomUUID();
-      dispatch({ type: 'pending-added', pending: { clientId, conversationId, body } });
-      emitSend(conversationId, clientId, body);
+      dispatch({
+        type: 'pending-added',
+        pending: { clientId, conversationId, body, ...(replyToId ? { replyToId } : {}) },
+      });
+      typingThrottle.current?.stopped(conversationId);
+      emitSend(conversationId, clientId, body, replyToId);
     },
     [emitSend],
   );
@@ -368,7 +547,7 @@ export function ChatProvider({
         const pending = conversation.pending.find((p) => p.clientId === clientId);
         if (!pending) continue;
         dispatch({ type: 'pending-retried', clientId });
-        emitSend(pending.conversationId, clientId, pending.body);
+        emitSend(pending.conversationId, clientId, pending.body, pending.replyToId);
         return;
       }
     },
@@ -378,6 +557,82 @@ export function ChatProvider({
   const dismiss = useCallback((clientId: string) => {
     dispatch({ type: 'pending-dismissed', clientId });
   }, []);
+
+  /** Sends an acknowledged event; a refusal or timeout becomes a notice and resolves `null`. */
+  const request = useCallback(
+    async <T,>(run: (socket: RealtimeSocket) => Promise<Ack<T>>): Promise<T | null> => {
+      const socket = socketRef.current;
+      if (!socket?.connected) {
+        notifyError('Not connected to live chat. Try again in a moment.');
+        return null;
+      }
+      try {
+        const ack = await run(socket);
+        if (ack.ok) return ack.data;
+        notifyError(ack.error.message);
+      } catch {
+        notifyError('No answer from the server. Try again.');
+      }
+      return null;
+    },
+    [notifyError],
+  );
+
+  const editMessage = useCallback(
+    async (messageId: string, body: string) => {
+      const data = await request<AckData<'message:edit'>>((socket) =>
+        socket.timeout(SEND_TIMEOUT_MS).emitWithAck('message:edit', { messageId, body }),
+      );
+      if (data) dispatch({ type: 'message', message: data.message });
+      return data !== null;
+    },
+    [request],
+  );
+
+  const deleteMessage = useCallback(
+    async (messageId: string) => {
+      const conversationId = Object.values(stateRef.current.conversations)
+        .flatMap((c) => c.messages)
+        .find((m) => m.id === messageId)?.conversationId;
+      const data = await request<AckData<'message:delete'>>((socket) =>
+        socket.timeout(SEND_TIMEOUT_MS).emitWithAck('message:delete', { messageId }),
+      );
+      if (data && conversationId) {
+        dispatch({
+          type: 'message-deleted',
+          conversationId,
+          messageId,
+          eventSeq: data.eventSeq,
+          deletedAt: new Date().toISOString(),
+        });
+      }
+      return data !== null;
+    },
+    [request],
+  );
+
+  const toggleReaction = useCallback(
+    (messageId: string, emoji: ReactionEmoji) => {
+      const conversationId = Object.values(stateRef.current.conversations)
+        .flatMap((c) => c.messages)
+        .find((m) => m.id === messageId)?.conversationId;
+      void request<AckData<'reaction:toggle'>>((socket) =>
+        socket.timeout(SEND_TIMEOUT_MS).emitWithAck('reaction:toggle', { messageId, emoji }),
+      ).then((data) => {
+        if (data && conversationId) {
+          dispatch({
+            type: 'reactions',
+            conversationId,
+            messageId,
+            reactions: data.reactions,
+            eventSeq: data.eventSeq,
+          });
+        }
+      });
+    },
+    [request],
+  );
+
   const loadConversation = useCallback(
     (conversationId: string, messages: MessageWire[], lastEventSeq: number) => {
       dispatch({ type: 'conversation-loaded', conversationId, messages, lastEventSeq });
@@ -407,6 +662,12 @@ export function ChatProvider({
       send,
       retry,
       dismiss,
+      editMessage,
+      deleteMessage,
+      toggleReaction,
+      typing,
+      stoppedTyping,
+      setOpenConversation,
       loadConversation,
       rememberUsers,
       ensureUsers,
@@ -419,6 +680,12 @@ export function ChatProvider({
       send,
       retry,
       dismiss,
+      editMessage,
+      deleteMessage,
+      toggleReaction,
+      typing,
+      stoppedTyping,
+      setOpenConversation,
       loadConversation,
       rememberUsers,
       ensureUsers,

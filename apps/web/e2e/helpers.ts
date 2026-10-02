@@ -98,3 +98,36 @@ export async function newVerifiedPerson(browser: Browser, label: string): Promis
   });
   return { context, page, email, nickname };
 }
+
+export const shortId = (): string => String(Date.now()).slice(-6);
+
+/** Creates a room and returns its path (for example /app/r/design-123456). */
+export async function createRoom(
+  page: Page,
+  name: string,
+  visibility: 'Public' | 'Private',
+): Promise<string> {
+  await page.goto('/app/rooms/new');
+  await page.getByLabel('Name').fill(name);
+  await page.getByRole('radio', { name: new RegExp(`^${visibility}`) }).check();
+  await page.getByRole('button', { name: 'Create room' }).click();
+  await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
+  return new URL(page.url()).pathname;
+}
+
+export function sidebar(page: Page) {
+  return page.getByRole('complementary', { name: 'Rooms and navigation' });
+}
+
+export async function say(page: Page, room: string, text: string): Promise<void> {
+  const composer = page.getByLabel(`Message #${room}`);
+  await composer.fill(text);
+  await composer.press('Enter');
+}
+
+/** Joins a public room from Explore and waits for its page. */
+export async function joinFromExplore(page: Page, name: string, roomPath: string): Promise<void> {
+  await page.goto(`/app/explore?q=${encodeURIComponent(name)}`);
+  await page.getByRole('button', { name: `Join ${name}` }).click();
+  await expect(page).toHaveURL(roomPath);
+}

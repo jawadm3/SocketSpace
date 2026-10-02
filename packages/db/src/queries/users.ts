@@ -224,6 +224,8 @@ export interface ProfileSettings extends NameChoices {
   bio: string;
   avatarKind: 'preset' | 'custom' | 'photo' | null;
   avatarConfig: unknown;
+  /** False in invisible mode (PROF-02). */
+  showPresence: boolean;
 }
 
 /** Everything the profile settings form shows. */
@@ -240,6 +242,7 @@ export async function getProfileSettings(
       bio: user.bio,
       avatarKind: user.avatarKind,
       avatarConfig: user.avatarConfig,
+      showPresence: user.showPresence,
     })
     .from(user)
     .where(eq(user.id, userId));

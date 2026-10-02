@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-import { filterAvailableNicknames, updateProfile } from '@socketspace/db';
+import { filterAvailableNicknames, setShowPresence, updateProfile } from '@socketspace/db';
 import { nicknameSchema, suggestNicknames } from '@socketspace/shared/profile';
 
 import { formText } from '@/lib/forms';
@@ -63,4 +63,32 @@ export async function updateProfileAction(
   }
   revalidatePath('/app', 'layout');
   return { message: 'Saved.' };
+}
+
+export interface PresenceVisibilityState {
+  message?: string;
+  error?: string;
+}
+
+/**
+ * Invisible mode (PROF-02): with "Show when I'm online" off, everyone sees this person as offline.
+ * The realtime server learns it at once through `user.updated` and tells their contacts.
+ */
+export async function setPresenceVisibilityAction(
+  _previous: PresenceVisibilityState,
+  form: FormData,
+): Promise<PresenceVisibilityState> {
+  const current = await getCurrentSession();
+  if (!current || current.user.isAnonymous) redirect('/sign-in');
+  if (!current.user.onboardedAt) redirect('/onboarding');
+
+  const show = form.get('showPresence') === 'on';
+  try {
+    await setShowPresence(getDb(), current.user.id, show);
+  } catch {
+    return { error: 'That could not be saved. Please try again.' };
+  }
+  await getNotifier().notify({ type: 'user.updated', userId: current.user.id });
+  revalidatePath('/app/settings/profile');
+  return { message: show ? 'People can see when you are online.' : 'You now appear offline.' };
 }
