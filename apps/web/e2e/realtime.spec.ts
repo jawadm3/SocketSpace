@@ -25,7 +25,9 @@ test('signing a device out elsewhere disconnects it immediately (AUTH-06)', asyn
   const laptopPage = await laptop.newPage();
   await signUp(laptopPage, email);
   await completeOnboarding(laptopPage, `dev${String(Date.now()).slice(-6)}`);
-  await expect(laptopPage.getByText('Connected to live chat')).toBeVisible({ timeout: 15_000 });
+  await expect(
+    laptopPage.getByRole('status').filter({ hasText: 'Connected to live chat' }),
+  ).toBeVisible({ timeout: 15_000 });
 
   // Device 2: sign in with the same account.
   const phone = await newDevice(browser);

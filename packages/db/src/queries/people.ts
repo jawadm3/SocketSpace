@@ -31,6 +31,7 @@ const personColumns = {
   avatarConfig: user.avatarConfig,
   image: user.image,
   status: user.status,
+  role: user.role,
 };
 
 export interface PersonRow {
@@ -43,6 +44,8 @@ export interface PersonRow {
   avatarConfig: unknown;
   image: string | null;
   status: 'active' | 'suspended' | 'banned' | 'deleted';
+  /** Site role, for permission checks on the server. Never sent to browsers. */
+  role: 'user' | 'admin';
 }
 
 /**

@@ -7,21 +7,8 @@ import { redirect } from 'next/navigation';
 import { uuid } from '@socketspace/shared/primitives';
 
 import { getAuth } from '@/server/auth-instance';
-import { getDb } from '@/server/db';
-import { getWebEnv } from '@/server/env';
-import { getLogger } from '@/server/logger-instance';
-import { createRealtimeNotifier } from '@/server/realtime-events';
+import { getNotifier } from '@/server/notifier';
 import { getCurrentSession } from '@/server/session';
-
-function notifier() {
-  const env = getWebEnv();
-  return createRealtimeNotifier({
-    url: env.REALTIME_INTERNAL_URL ?? env.REALTIME_PUBLIC_URL,
-    secret: env.INTERNAL_EVENTS_SECRET,
-    db: getDb(),
-    logger: getLogger(),
-  });
-}
 
 /**
  * Signs out one session (AUTH-06). The browser sends only the session ID; the token is looked up
@@ -41,7 +28,7 @@ export async function revokeSessionAction(form: FormData): Promise<void> {
   if (!target) return;
 
   await auth.api.revokeSession({ headers: requestHeaders, body: { token: target.token } });
-  await notifier().notify({
+  await getNotifier().notify({
     type: 'session.revoked',
     userId: current.user.id,
     sessionIds: [target.id],
@@ -62,7 +49,7 @@ export async function revokeOtherSessionsAction(): Promise<void> {
   );
   if (others.length === 0) return;
   await auth.api.revokeOtherSessions({ headers: requestHeaders });
-  await notifier().notify({
+  await getNotifier().notify({
     type: 'session.revoked',
     userId: current.user.id,
     sessionIds: others.slice(0, 100).map((s) => s.id),

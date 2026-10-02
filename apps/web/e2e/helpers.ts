@@ -1,9 +1,11 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { expect, type Page } from '@playwright/test';
+import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
 
 import { E2E } from '../playwright.config';
+
+import { newDevice } from './fixtures';
 
 let counter = 0;
 
@@ -66,4 +68,33 @@ export async function completeOnboarding(page: Page, nickname: string): Promise<
   await page.getByLabel('Nickname').fill(nickname);
   await page.getByAltText(/^Picture 1 /).click();
   await page.getByRole('button', { name: 'Continue' }).click();
+}
+
+export interface Person {
+  context: BrowserContext;
+  page: Page;
+  email: string;
+  nickname: string;
+}
+
+/**
+ * Someone on their own device who has signed up, finished onboarding, confirmed their email and
+ * holds a live connection: ready to chat.
+ */
+export async function newVerifiedPerson(browser: Browser, label: string): Promise<Person> {
+  const context = await newDevice(browser);
+  const page = await context.newPage();
+  const email = newEmail(label);
+  counter += 1;
+  const nickname = `${label}${String(Date.now()).slice(-6)}${String(counter)}`;
+  await signUp(page, email);
+  await completeOnboarding(page, nickname);
+  await expect(page).toHaveURL(/\/app$/);
+  await page.goto(await waitForMailLink(email, 'verify-email'));
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(page.getByText('Please confirm your email address')).toHaveCount(0);
+  await expect(page.getByRole('status').filter({ hasText: 'Connected to live chat' })).toBeVisible({
+    timeout: 15_000,
+  });
+  return { context, page, email, nickname };
 }

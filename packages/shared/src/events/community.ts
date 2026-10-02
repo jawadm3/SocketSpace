@@ -66,6 +66,9 @@ export const memberWireSchema = z.strictObject({
   joinedAt: isoDateTime,
 });
 
+export type ConversationWire = z.infer<typeof conversationWireSchema>;
+export type MemberWire = z.infer<typeof memberWireSchema>;
+
 export const notificationWireSchema = z.strictObject({
   id: uuid,
   type: z.enum(NOTIFICATION_TYPES),

@@ -997,12 +997,17 @@ export async function inviteCreate(
   });
 }
 
+export interface InviteListItem extends InviteSummary {
+  /** Past its expiry time, by the database clock. */
+  expired: boolean;
+}
+
 /** Invites of a room: moderators and owners see all, members see their own. */
 export async function inviteList(
   db: Database,
   actorId: string,
   conversationId: string,
-): Promise<RoomResult<{ invites: InviteSummary[] }>> {
+): Promise<RoomResult<{ invites: InviteListItem[] }>> {
   const clock = dbNow();
   return db.transaction(async (tx) => {
     const loaded = await load(tx, conversationId, actorId, clock);
@@ -1014,7 +1019,10 @@ export async function inviteList(
       loaded.membership?.role === 'owner' ||
       loaded.membership?.role === 'moderator';
     const invites = await tx
-      .select(inviteColumns)
+      .select({
+        ...inviteColumns,
+        expired: sql<boolean>`coalesce(${invite.expiresAt} <= ${clock}, false)`,
+      })
       .from(invite)
       .where(
         and(
