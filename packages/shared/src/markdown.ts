@@ -9,8 +9,8 @@
  *   A backslash shows the next character as it is: \*not italic\*.
  *
  * The parser uses no backtracking regular expressions. In the worst case (many unclosed markers)
- * its work grows with the square of the length; messages are at most 4,000 characters, which a
- * test parses in a few milliseconds.
+ * its work grows with the square of the length; messages are at most 4,000 characters, which took
+ * about 0.2 s in the worst case on a busy CI runner.
  * The server uses the same tree to find @mentions, so a name inside `code` is never a mention.
  */
 import { NICKNAME_PATTERN } from './profile';

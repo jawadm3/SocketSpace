@@ -109,7 +109,8 @@ Local machine: Windows 11 Home, Node.js 22.13.0, 2026-10-02.
 - **Markdown-lite** (`packages/shared/src/markdown.ts`): one parser for browser and server. It
   produces a tree, never HTML: bold, italic, strike, code, code blocks, quotes, https links,
   @mentions, backslash escapes. 12 tests, including hostile input (`<img onerror>`, `javascript:`
-  links) and 4,000 characters of unclosed markers parsed in well under 200 ms. One real bug found
+  links) and 4,000 characters of unclosed markers (about 0.2 s worst case on a busy CI runner;
+  the test allows one second). One real bug found
   by a test and fixed: `**bold *and italic***` closed the bold too early.
 - **Database** (`message-actions.ts`, `read-state.ts`): edit (author, 24 hours on the database
   clock, still allowed to post; earlier text kept), delete as a tombstone (author, outranking room

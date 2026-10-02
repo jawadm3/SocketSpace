@@ -121,7 +121,9 @@ describe('hostile input stays text (SEC-06)', () => {
     for (const body of nasty) {
       const started = performance.now();
       parseMarkdownLite(body.slice(0, 4000));
-      expect(performance.now() - started).toBeLessThan(200);
+      // Guards against runaway (exponential) work, which would take minutes. The worst input
+      // measured about 0.2 s on a busy CI runner (run 37047642552); one second leaves room.
+      expect(performance.now() - started).toBeLessThan(1000);
     }
   });
 });
