@@ -95,7 +95,14 @@ Turborepo runs at most 4 tasks at once (`"concurrency": "4"` in `turbo.json`, D-
 - **Documentation** is written for a non-specialist: plain English, short sentences, every term explained, new terms added to `docs/glossary.md`.
 - **Version-specific tool docs**: tool behaviour may differ from memory. Before changing tool config, check the installed version's own docs or schema (for example `node_modules/turbo/docs/` and `node_modules/turbo/schema.json`). Turborepo's auto-generated `AGENTS.md` is switched off (`"agentGuidance": false` in `turbo.json`); this file is the single source of agent guidance.
 - **Never invent** test results, measurements, users or history. Record real output as evidence.
-- **Invisible characters in code:** escapes for bidi, zero-width or combining characters can land in files as the literal characters. Run `node scripts/check-source-chars.mjs` (part of `pnpm lint:root`) after writing such code.
+- **Invisible characters and backslash escapes:** escapes get mangled on the way into files. Unicode
+  escapes for bidi, zero-width, BOM or combining characters (for example a U+0300 to U+036F regex
+  range) can land as the literal characters, even through the Write and Edit tools. In Python or
+  shell heredocs run through Bash, doubled backslashes collapse: a regex word boundary became a
+  literal backspace, a newline escape became a real line break. Prefer the Write tool for code with
+  backslashes; in scripts build a backslash with `chr(92)` (Python) or `String.fromCharCode(92)`
+  (Node). Afterwards run `node scripts/check-source-chars.mjs` (part of `pnpm lint:root`) and check
+  the line with `grep` or `od -c`.
 - **Queries live in `packages/db`.** Apps import query operators (`eq`, `sql`, ...) from `@socketspace/db`, never `drizzle-orm` directly. Time checks in SQL use the database clock (D-027).
 - **Logging:** never log payloads, message text, tokens or raw database errors (they repeat query parameters); log error names and codes (D-033).
 
@@ -115,8 +122,39 @@ These are the rules that hold regardless of the final stack (the stack itself is
 - **Never read `.env` files** and never handle secret values. Only `.env.example` (names and descriptions, no values) is committed.
 - **Never create accounts** on external services. Give the owner exact step-by-step instructions instead.
 - **Free tiers only.** No spending.
-- Work only inside `D:\mini project\socketspace\`. Keep tools and caches on D: (see `docs/technical/storage.md`).
+- Work only inside this repository's folder (on the owner's machine: `D:\mini project\socketspace\`).
+  On the owner's machine keep tools and caches on D: (see `docs/technical/storage.md`); on any other
+  machine keep them inside the repository folder where the tools allow it.
 - **v1/ is excluded** from all v2 tooling: workspace, lint, type checks, tests, builds, Docker, deployments. Never add it back.
 - Git: commit and push to `main` after milestones; never force-push, never rewrite pushed history, never push secrets.
 - One mandatory approval stop: after Stage B. After approval, continue without asking for routine decisions.
 - Parallel agents only for bounded, independent work. Describe their reviews as "a separate agent with an independent context, same underlying model".
+
+## Sessions and handover
+
+The project spans many sessions, possibly on different machines and Claude accounts. Only the
+repository carries state between them, so nothing important may live only in a chat.
+
+- **Context nearly full (about 90 to 95 percent):** finish or shelve the current slice so the tree is
+  committed and pushed (nothing half-edited), update `PROGRESS.md` ("Exact next step", local state),
+  then end the reply with a fenced, ready-to-paste prompt for the next session and the recommended
+  effort level (see the effort guide in `PROGRESS.md`). Do not start a new stage in a nearly full
+  session.
+- **Usage limit near, or the owner says to save:** check usage if a tool for it is available, run the
+  tests to record the honest state, write `PROGRESS.md` so a fresh session can resume from it alone
+  (including what experiments already showed), move useful scratchpad tools into the repository,
+  commit (a clearly labelled work-in-progress commit is fine) and push. Do not finish the sub-task
+  first.
+
+## Working with collaborators
+
+More than one person (each with their own Claude account) may work on this repository.
+
+- Each collaborator clones the repository and runs `pnpm install`, `pnpm setup:local` and
+  `pnpm db:start` once. Secrets are generated per machine and never shared or committed.
+- Collaborators work on their own branch and merge through a pull request; CI runs on every pull
+  request. The owner's sessions may push to `main` as described above.
+- Before starting, pull the latest `main` and read `PROGRESS.md`. Claim a step by writing your name
+  next to it under "In progress" in `PROGRESS.md` and pushing, so two people never work on the same
+  step.
+- Record every decision in `docs/development/decisions.md`, not only in a chat.
