@@ -225,6 +225,8 @@ The owner approved the stack and added the product changes below. They are also 
 
 - **Stage:** C. **Status:** Accepted.
 - **Why:** database driver errors repeat the query's parameters, which for `message:send` include the message text. Handler failures log `{ name, code }` and nothing else; a test checks that a unique marker sent as a message never appears in the logs, and that no token does either.
+- **Web app too (Stage C close-out):** the web logger still wrote an error's message. It now reduces every error to its name and code in the same way (`apps/web/src/server/log.test.ts`).
+- **Correlation IDs instead of content:** to trace a problem without logging content, every realtime HTTP response carries an `X-Request-Id` that is also written on any log line about that request, and every log line about a connection carries its Socket.IO `socketId`.
 
 ## D-034: Smaller tooling choices in Stage C
 

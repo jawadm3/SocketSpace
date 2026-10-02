@@ -28,6 +28,8 @@ checklist. We aim at the intent of level 2.
 **Audit log**: A record of who did what and when. _Example:_ the visitor book at a reception desk.
 Every moderator action is written to one.
 
+**Better Auth**: The sign-in library SocketSpace runs inside its own web app (nothing is handed to an outside sign-in company). It handles passwords, email verification, password resets, passkeys, guests and "Sign in with Google"-style buttons, and stores everything in our database. _Example:_ a lock and key system you install and keep the master key for, instead of renting one from a security firm.
+
 **Broadcast**: Sending one message to everyone who is listening. _Example:_ a shop's loudspeaker
 announcement reaches every customer. v1 broadcast every chat message to everyone, which is why it
 was not really "1-to-1".
@@ -55,6 +57,8 @@ you can use it. Render's free servers take about a minute.
 numbered save point in a video game.
 
 **Container image**: A sealed package holding a program and everything it needs to run, which any container host can start the same way. _Example:_ a ready meal in a sealed tray: heat it anywhere and it tastes the same. SocketSpace builds one image for each app.
+
+**Correlation ID (request ID)**: A random label given to one request or one connection and written on every log line about it, so all the lines can be found together without logging what anyone said. SocketSpace returns it in the `X-Request-Id` header. _Example:_ the ticket number a help desk gives you: staff can find your case without you repeating the whole story.
 
 **CORS (Cross-Origin Resource Sharing)**: Browser rules about which websites may talk to a server.
 _Example:_ a receptionist checking which company's badge you wear. CORS is enforced by browsers
@@ -90,6 +94,8 @@ on any ship, train or lorry.
 **EXIF**: Hidden information stored inside photos, such as the camera model and sometimes the GPS
 location where it was taken. _Example:_ a postmark on a letter revealing where it was posted. We
 remove it from every uploaded image.
+
+**File-system race (time-of-check to time-of-use)**: A bug where a program checks a file ("does it exist?") and then acts on it, and something changes the file in between. The fix is to ask the operating system to do both in one step, for example "create this file, but fail if it already exists" (the exclusive flag `wx`). _Example:_ checking a parking space is free, walking back to your car, and finding someone took it; reserving it in one step avoids that.
 
 **Formatter (Prettier)**: A tool that rewrites code layout into one consistent style. _Example:_ a
 tidy-up that lines all the books on a shelf the same way.
@@ -156,6 +162,8 @@ trays instead of three separate toolboxes.
 
 **MoSCoW**: A way to prioritise: Must have, Should have, Could have, Won't have (this time).
 
+**Mutation check**: Deliberately breaking the code a test protects, to prove the test notices. A test that still passes against broken code was not testing anything. _Example:_ pressing the test button on a smoke alarm.
+
 **Nonce**: A random value used once. The page's security policy only lets scripts run that carry this request's nonce, so an injected script, which cannot guess it, does not run. _Example:_ a password that changes every time the door opens.
 
 **OAuth / social sign-in**: Signing in with an account you already have elsewhere (Google, Facebook, GitHub...). The other site confirms who you are; we never see your password there. _Example:_ showing a passport issued by another country instead of filling in a new identity form.
@@ -186,9 +194,13 @@ service that fetches the bricks you list.
 **PGlite**: A real PostgreSQL database compiled to run inside a program, with nothing to install.
 _Example:_ a pocket-sized practice version of the real thing. Used for tests.
 
+**pino / structured logging**: Structured logging writes each log entry as data (one JSON object per line, with named fields) instead of free text, so tools can search and count entries. pino is the fast Node.js logger the realtime server uses; it can blank out sensitive fields ("redaction"). _Example:_ a form with labelled boxes instead of a handwritten note: easy to file and search.
+
 **pnpm store**: pnpm's single warehouse of downloaded packages, linked into each project.
 _Example:_ a library lending the same book to many readers. Ours is `.pnpm-store` inside the
 project.
+
+**PostgreSQL**: A widely used, free, open-source database. SocketSpace keeps accounts, rooms and messages in it: locally in `.cache/postgres`, in tests in PGlite or a throwaway database, and in production on Neon. _Example:_ a very organised filing cabinet that many clerks can use at once without mixing up each other's papers.
 
 **Presence**: Showing whether someone is online, away or offline. _Example:_ the "open/closed" sign
 on a shop door.
@@ -204,6 +216,8 @@ finished pages to the shared folder.
 **Rate limit / token bucket**: A cap on how often someone can do something. A token bucket gives
 each person a small bucket of tokens that refills slowly; each action spends one. _Example:_ a
 coffee loyalty card that allows a few free refills per hour.
+
+**Redis**: A very fast in-memory data store, often used to pass messages between servers. SocketSpace can use it to link several realtime servers (the Redis adapter); the free deployment runs one server and does not need it. _Example:_ a shared noticeboard between several office buildings.
 
 **Remote (git)**: The address of the shared copy of the repository. _Example:_ the postal address
 you send your work to.
@@ -278,7 +292,11 @@ contrast, keyboard use, screen-reader labels and more).
 **WebSocket**: A web connection that stays open so both sides can send messages at any time.
 _Example:_ a walkie-talkie channel that stays on.
 
+**Windows command-line quoting**: On Windows a program receives its arguments as one line of text and splits it back into pieces itself, using rules about spaces, double quotes and backslashes. Getting the quoting wrong can merge, split or change arguments (for example a folder path ending in `\`). _Example:_ reading out a list over the phone: you must say where each item starts and ends, or "New York, Paris" becomes three cities.
+
 **Workspace (pnpm)**: The projects that make up a monorepo, listed in `pnpm-workspace.yaml`.
 _Example:_ the list of trays in the toolbox. v1 is deliberately not on it.
 
 **X-Forwarded-For**: A request header listing the IP addresses a request passed through. Only the entries added by our own trusted proxy can be believed, because a visitor can write anything into it. _Example:_ a parcel's chain of postmarks: you trust the stamps added by the post office, not the ones the sender drew on.
+
+**Zod / schema validation**: A schema is a precise description of what valid data looks like (which fields, which types, how long). Zod is the TypeScript library SocketSpace uses to write schemas once in `packages/shared` and check every incoming event and request against them on both ends. Unknown fields are refused. _Example:_ a customs form that rejects any parcel whose label does not match the form exactly.

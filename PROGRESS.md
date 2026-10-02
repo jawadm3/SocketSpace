@@ -1,13 +1,13 @@
 # PROGRESS
 
-_Last updated: 2026-10-02, end of session 2 (Stage C: all six milestones built, CI green; stage close-out tasks remain)._
+_Last updated: 2026-10-02, session 3 (Stage C closed; Stage D is next)._
 
 ## Current stage
 
-**Stage C: foundations. All six milestones (C1 to C6) are built, tested and pushed, and CI is green
-on `main`.** Not yet closed: four CodeQL alerts in developer scripts must be fixed, and the
-stage paperwork (STEP-C log, requirements matrix, storage notes, changelog) must be written. See
-"Exact next step".
+**Stage C (foundations) is complete.** All six milestones are built, tested and pushed; CI is green
+on `main`; CodeQL has no open alerts; the step log, requirements matrix, storage notes, glossary
+and changelog are up to date. **Next: Stage D (community mode), starting with D1.** See "Exact next
+step".
 
 ## Owner decisions (2026-10-01)
 
@@ -45,7 +45,7 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
   criteria); stage plan with risk register; STEP-B log.
 - Owner review incorporated (D-021 to D-025) across all documents.
 
-### Stage C: foundations (built 2026-10-02; close-out pending)
+### Stage C: foundations (2026-10-02, sessions 2 and 3; log: `docs/development/steps/STEP-C-foundations.md`)
 
 - **C1 tooling** (`94e79d9`): pinned, SHA-256-verified gitleaks 8.30.1; pre-commit hook; env
   validation helper; `CHANGELOG.md`.
@@ -67,9 +67,20 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
 - **C6 CI** (`2792e87`, `4d31e43`): `ci.yml` (checks, PostgreSQL + Redis tests, E2E, Docker
   smoke tests, gitleaks, audit) and `codeql.yml`; actions pinned to SHAs; web Dockerfile
   (Next.js standalone, opt-in).
-- **Docs in this commit:** decisions D-029 to D-034, 26 new glossary terms, realtime protocol
+- **Docs** (`4cd3d42`): decisions D-029 to D-034, 26 new glossary terms, realtime protocol
   updated (`session:ended`, `user.sessions_revoked`, session check on connect), CLAUDE.md
   commands and conventions.
+- **Close-out (session 3):**
+  - CodeQL fixes (`47d9449`, D-035): exclusive file creation in `setup:local` and the gitleaks
+    installer (checksum verified in memory first), correct Windows argument quoting in
+    `db:start`. Three high alerts fixed; the medium "network data to file" alert, inherent to any
+    downloader, dismissed as "won't fix" with a link to D-035. **0 open alerts.**
+  - Gaps found by checking every "done when" against a real test, then closed: request and socket
+    IDs on log lines (OBS-01), a restart-and-resync test (HIST-01), web logger reduced to error
+    names and codes (D-033), a Microsoft no-auto-link test (AUTH-13, shown to fail when the rule is
+    removed), and a verification-link reuse test (AUTH-02).
+  - STEP-C log (with the Better Auth upstream report text), requirements matrix (50 Done, 35 In
+    progress, 92 Planned of 177), storage notes re-measured, 9 glossary terms, changelog.
 
 ## Verified (with evidence)
 
@@ -86,48 +97,44 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
 | Database tests on PGlite and real PostgreSQL 17.9                           | 46/46 on both (`TEST_DATABASE_URL` against `db:start`).                                                                                                                                      |
 | Shared contract and authorisation tests                                     | 136/136 (52 of them the authorisation table).                                                                                                                                                |
 | `pnpm check` after C3                                                       | 7/7 Turborepo tasks successful.                                                                                                                                                              |
-| Test counts at the end of session 2                                         | shared 136, db 53 (PGlite and PostgreSQL 17.9), web 44, realtime 36 (+2 Redis tests in CI).                                                                                                  |
+| Test counts at the end of Stage C (session 3)                               | shared 136, db 53, web 49, realtime 39 (+2 Redis tests in CI); identical on PGlite and PostgreSQL 17.9. `pnpm check`: 13/13 tasks.                                                           |
+| CodeQL clean                                                                | Alerts #1 to #4 fixed by `47d9449`; #5 dismissed with reason (D-035); 0 open.                                                                                                                |
+| Windows quoting fix                                                         | Round trip through `Start-Process`: old helper 2/6 arguments intact, new 6/6; `db:start`/`db:stop` cycle works.                                                                              |
 | Journeys J1, J11, SEC-05 headers, live connection, AUTH-06 revocation       | Playwright 5/5 locally and in CI (run 36956890831).                                                                                                                                          |
-| CI green on `main`                                                          | Run 36956890831 on `4d31e43`: all 6 jobs succeeded; the two-instance Redis test ran (2 tests).                                                                                               |
+| CI green on `main`                                                          | Run 36956890831 on `4d31e43` and run 37013142109 on `47d9449`: all 6 jobs succeeded; Redis tests ran; E2E 5/5; 34 commits scanned, no leaks.                                                 |
 | Docker images                                                               | CI smoke test: both run as `node`; healthz 200; handshake without Origin 403, with web origin 200; metrics without token 401; readyz database+keys true; realtime exit code 0 after SIGTERM. |
 | Foreign-origin probe from v1 now fails                                      | `connection.test.ts` and the Docker smoke test (403).                                                                                                                                        |
 
 ## In progress
 
-- Stage C close-out (see "Exact next step"). Nothing is half-edited in the code.
+- Nothing. Stage C is closed and nothing is half-edited.
 
 ## Known problems and things waiting for the owner
 
-1. **CodeQL: 4 open alerts, all in developer scripts** (none in the apps). Fix first next session:
-   - `scripts/tools/gitleaks.mjs:80`: file-system race (high) and network data written to a file
-     (medium). Plan: verify the download's SHA-256 in memory, write it with exclusive create into a
-     fresh temporary folder, unpack, delete; no exists-then-write. (Streaming the zip into bsdtar
-     was tried and does not work for zip files.) The medium alert may remain after the fix; record a
-     disposition (the bytes are checksum-verified before they touch disk).
-   - `scripts/setup-local.mjs:65`: file-system race (high). Plan: write with `flag: 'wx'`, handle
-     EEXIST, roll back if only one of the two files could be created.
-   - `packages/db/scripts/local-pg.mjs:65`: incomplete sanitisation (high). Plan: replace the
-     quote helper with correct Windows command-line quoting (double the backslashes before a quote).
-2. **pnpm state file on C:** (1 KB). Optional owner fix:
+1. **pnpm state file on C:** (1 KB). Optional owner fix:
    `pnpm config set --global state-dir "D:/mini project/.pnpm-state"`.
-3. **Optional:** test OAuth apps (for example GitHub, Google) with a `localhost` callback to try
+2. **Optional:** test OAuth apps (for example GitHub, Google) with a `localhost` callback to try
    social sign-in locally before Stage H.
-4. **Optional, owner's GitHub account:** report the Better Auth stale-cookie behaviour upstream
-   (D-030); and switch on Dependabot security alerts in the repository settings.
-5. **Accepted advisory:** one moderate `pnpm audit` finding (old esbuild inside drizzle-kit's dev
+3. **Optional, owner's GitHub account:** report the Better Auth stale-cookie behaviour upstream
+   (D-030; ready-to-paste text in `STEP-C-foundations.md`, "Upstream report"); and switch on
+   Dependabot security alerts in the repository settings.
+4. **Accepted advisory:** one moderate `pnpm audit` finding (old esbuild inside drizzle-kit's dev
    loader, never used in production; D-034).
 
 ## Exact next step
 
-1. Fix the three scripts above, push, and confirm CodeQL shows no open high alerts.
-2. Stage C close-out: write `docs/development/steps/STEP-C-foundations.md` (goal, what was built,
-   decisions, problems and fixes, tests with real results, next); update
-   `qa/requirements_matrix.md` (C requirements to Done with evidence: AUTH-01..09/12/13 partly,
-   PROF-03/05, RT-01/02/07/08, HIST-01, RECON-03, MSG-10, SEC-01/03/04/05/08/09/10/11/13, OBS-01/02/04,
-   REL-01/02/03, DEV-01/03, CI-01/02, TEST-01/02); update `docs/technical/storage.md` (measured:
-   `.cache/ms-playwright` 707 MB, `.cache/postgres` 75 MB, `.cache/tools` 30 MB, mail folders);
-   update `CHANGELOG.md`; commit and push; check CI is green.
-3. Then Stage D (community mode), starting with D1 (onboarding screens, profiles, rooms).
+Stage D, milestone **D1: profiles and rooms** (`docs/development/plan.md`). Suggested order:
+
+1. **Viewer-aware user objects:** one server function that turns a user row into what a given
+   viewer may see (nickname, avatar, real name only when `realNameForViewer` allows it; D-024,
+   PROF-04), used by every page and event that shows a person.
+2. **Onboarding screens:** optional real name with visibility and display choice, avatar gallery
+   with at least 24 CC0 presets (PROF-06, now 16) and the avatar builder (PROF-07), theme step.
+3. **Rooms:** create (public/private), explore, join, leave; roles; invites with expiry, uses and
+   revoke; room mute and ban; room settings (ROOM-01 to ROOM-06). Each membership change sends an
+   internal event (outbox fallback) so live sockets join or leave rooms.
+4. Tests first-class as in Stage C: db integration, realtime multi-client, E2E journeys from
+   `qa/acceptance_criteria.md`; add a check script for SEC-01 once new HTTP routes appear.
 
 Local state: run `pnpm db:start` before tests against PostgreSQL or E2E (it was stopped at the
 end of session 2). `apps/web/.env.local` and `apps/realtime/.env.local` exist (generated by

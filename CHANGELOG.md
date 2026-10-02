@@ -17,7 +17,7 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
 
 ### Added
 
-- **Stage C (foundations), in progress**
+- **Stage C (foundations), 2026-10-02**
   - Secret scanning: a pinned, checksum-verified gitleaks 8.30.1 (`scripts/tools/gitleaks.mjs`),
     run by a git pre-commit hook (`.githooks/pre-commit`) and by `pnpm secrets:scan`.
   - Environment validation helper (`packages/shared/src/env.ts`): programs stop at start-up with
@@ -33,16 +33,8 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
     limits, internal events, health and metrics endpoints, graceful shutdown, Docker image.
   - CI on GitHub Actions (checks, PostgreSQL and Redis tests, end-to-end tests, Docker smoke tests,
     secret scan, dependency audit) and CodeQL.
-
-### Fixed
-
-- Signing in while the browser still held the cookie of an ended session silently signed the
-  person out again (Stage C, D-030).
-
-### Security
-
-- Cross-site sign-in requests are refused (login CSRF), Facebook and Microsoft sign-ins never take
-  over an existing account by email, and logs never contain message text or tokens (D-029, D-033).
+  - Log correlation IDs: every realtime HTTP response carries an `X-Request-Id`, and log lines
+    about a connection carry its `socketId`.
 - **Stage B (analysis and design), 2026-10-01**
   - v1 analysis with runtime evidence, brief critique, free-tier research, architecture, data
     model, real-time protocol, security design, product design, three visual directions,
@@ -55,6 +47,23 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
 ### Changed
 
 - v1 moved into `v1/` with its history preserved, and excluded from all v2 tooling.
+
+### Fixed
+
+- Signing in while the browser still held the cookie of an ended session silently signed the
+  person out again (Stage C, D-030).
+- `pnpm db:start` quoted Windows command-line arguments incorrectly (a path ending in `\` was
+  mangled); `pnpm setup:local` and the gitleaks installer checked for a file before writing it,
+  leaving a gap for a race (CodeQL findings, D-035).
+
+### Security
+
+- Cross-site sign-in requests are refused (login CSRF), Facebook and Microsoft sign-ins never take
+  over an existing account by email, and logs never contain message text or tokens (D-029, D-033).
+- The web app's logs no longer include error messages, which can repeat database query
+  parameters such as an email address (D-033).
+- The gitleaks download is checked against its pinned SHA-256 in memory, before anything is
+  written to disk (D-035).
 
 ## [1.0.0]: 2025 (the original mini project)
 
