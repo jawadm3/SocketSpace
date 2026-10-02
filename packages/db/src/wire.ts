@@ -4,9 +4,10 @@
  */
 import type { MessageWire } from '@socketspace/shared/events';
 
+import type { ReactionSummary } from './queries/message-actions';
 import type { MessageRow } from './queries/messages';
 
-export function toMessageWire(row: MessageRow): MessageWire {
+export function toMessageWire(row: MessageRow, reactions: ReactionSummary[] = []): MessageWire {
   const removed = row.moderationState === 'removed' || row.deletedAt !== null;
   return {
     id: row.id,
@@ -24,7 +25,7 @@ export function toMessageWire(row: MessageRow): MessageWire {
     deletedBy: row.deletedBy,
     moderationState: row.moderationState,
     createdAt: row.createdAt.toISOString(),
-    // Reactions are loaded in Stage D.
-    reactions: [],
+    // Reaction emoji come from the allow-list (checked before they are stored).
+    reactions: removed ? [] : (reactions as MessageWire['reactions']),
   };
 }

@@ -17,6 +17,8 @@ export interface ConnectionProfile {
   emailVerified: boolean;
   onboarded: boolean;
   nickname: string | null;
+  /** False in invisible mode: others always see this person as offline (PROF-02). */
+  showPresence: boolean;
 }
 
 /** What the realtime server needs to know about a user when they connect. */
@@ -33,6 +35,7 @@ export async function getConnectionProfile(
       emailVerified: user.emailVerified,
       onboardedAt: user.onboardedAt,
       nickname: user.nickname,
+      showPresence: user.showPresence,
     })
     .from(user)
     .where(eq(user.id, userId));
@@ -285,4 +288,17 @@ export async function isSessionActive(
       and(eq(session.id, sessionId), eq(session.userId, userId), gt(session.expiresAt, sql`now()`)),
     );
   return row !== undefined;
+}
+
+/** Records when someone was last online, to the minute (shown as "last seen"). */
+export async function touchLastSeen(db: Queryable, userId: string): Promise<void> {
+  await db
+    .update(user)
+    .set({ lastSeenAt: sql`date_trunc('minute', now())` })
+    .where(eq(user.id, userId));
+}
+
+/** Switches invisible mode (PROF-02): `false` hides when this person is online. */
+export async function setShowPresence(db: Queryable, userId: string, show: boolean): Promise<void> {
+  await db.update(user).set({ showPresence: show }).where(eq(user.id, userId));
 }

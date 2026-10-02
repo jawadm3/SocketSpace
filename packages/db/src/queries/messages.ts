@@ -4,7 +4,9 @@
  * Only the realtime server writes messages (decision D-016), so there is one writer and one order.
  * See docs/architecture/data-model.md, "How a message gets its number".
  */
-import { and, asc, eq, gt, inArray, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, lte, ne, or, sql, type SQL } from 'drizzle-orm';
+
+import { extractMentions } from '@socketspace/shared/markdown';
 
 import type { Database, Queryable } from '../client';
 import { dbNow } from '../clock';
@@ -12,7 +14,7 @@ import { isUniqueViolation } from '../errors';
 import { newId } from '../schema/_common';
 import { user } from '../schema/auth';
 import { conversation, conversationMember, roomBan } from '../schema/conversations';
-import { message } from '../schema/messages';
+import { mention, message } from '../schema/messages';
 import { block } from '../schema/social';
 import { userSanction } from '../schema/safety';
 
@@ -47,7 +49,14 @@ export type SendRefusal =
   | { reason: 'client_id_conflict' };
 
 export type SendMessageResult =
-  { ok: true; message: MessageRow; duplicate: boolean } | ({ ok: false } & SendRefusal);
+  | {
+      ok: true;
+      message: MessageRow;
+      duplicate: boolean;
+      /** People @mentioned in this message (new messages only; empty for a re-send). */
+      mentions: string[];
+    }
+  | ({ ok: false } & SendRefusal);
 
 async function findByClientId(
   db: Queryable,
@@ -65,7 +74,7 @@ function duplicateOrConflict(existing: MessageRow, conversationId: string): Send
   // The same client ID used for a different conversation is a client bug or a probe: refuse it
   // rather than returning a message from another conversation.
   return existing.conversationId === conversationId
-    ? { ok: true, message: existing, duplicate: true }
+    ? { ok: true, message: existing, duplicate: true, mentions: [] }
     : { ok: false, reason: 'client_id_conflict' };
 }
 
@@ -134,8 +143,19 @@ export async function sendMessage(
         .update(conversation)
         .set({ lastEventSeq: seq, lastMessageAt: input.now ?? clock })
         .where(eq(conversation.id, conv.id));
+      // Writing in a conversation means you have read it up to here.
+      await tx
+        .update(conversationMember)
+        .set({ lastReadSeq: sql`greatest(${conversationMember.lastReadSeq}, ${seq})` })
+        .where(
+          and(
+            eq(conversationMember.conversationId, conv.id),
+            eq(conversationMember.userId, input.authorId),
+          ),
+        );
+      const mentions = await saveMentions(tx, saved);
 
-      return { ok: true, message: saved, duplicate: false } as const;
+      return { ok: true, message: saved, duplicate: false, mentions } as const;
     });
   } catch (error) {
     // Two copies of the same re-send racing each other: the second hits the unique key on
@@ -149,7 +169,7 @@ export async function sendMessage(
   }
 }
 
-interface PostCheck {
+export interface PostCheck {
   conversationId: string;
   conversationKind: 'room' | 'dm';
   archived: boolean;
@@ -159,7 +179,7 @@ interface PostCheck {
 }
 
 /** Returns the first reason the author may not post here, or `null` if they may. */
-async function checkCanPost(tx: Queryable, check: PostCheck): Promise<SendRefusal | null> {
+export async function checkCanPost(tx: Queryable, check: PostCheck): Promise<SendRefusal | null> {
   if (check.archived) return { reason: 'conversation_archived' };
 
   const [author] = await tx
@@ -260,6 +280,45 @@ async function checkCanPost(tx: Queryable, check: PostCheck): Promise<SendRefusa
   }
 
   return null;
+}
+
+/**
+ * Records who a message @mentions (MSG-06): nicknames found outside code, matched without regard
+ * to letter case, limited to members of the conversation, never the author, and never someone who
+ * blocked the author (SAFE-01). Returns the IDs of the people mentioned.
+ */
+export async function saveMentions(
+  tx: Queryable,
+  saved: Pick<MessageRow, 'id' | 'conversationId' | 'authorId' | 'body'>,
+): Promise<string[]> {
+  const nicknames = extractMentions(saved.body);
+  if (nicknames.length === 0) return [];
+  const people = await tx
+    .select({ id: user.id })
+    .from(user)
+    .innerJoin(
+      conversationMember,
+      and(
+        eq(conversationMember.userId, user.id),
+        eq(conversationMember.conversationId, saved.conversationId),
+      ),
+    )
+    .where(
+      and(
+        inArray(sql`lower(${user.nickname})`, nicknames),
+        ne(user.id, saved.authorId),
+        sql`not exists (select 1 from ${block}
+          where ${block.blockerId} = ${user.id} and ${block.blockedId} = ${saved.authorId})`,
+      ),
+    );
+  const ids = people.map((p) => p.id);
+  if (ids.length > 0) {
+    await tx
+      .insert(mention)
+      .values(ids.map((userId) => ({ messageId: saved.id, userId })))
+      .onConflictDoNothing();
+  }
+  return ids;
 }
 
 export interface EventsSince {

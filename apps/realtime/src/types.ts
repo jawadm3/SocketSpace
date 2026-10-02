@@ -6,6 +6,7 @@ import type { ClientToServerEvents, ServerToClientEvents } from '@socketspace/sh
 import type { TokenBuckets, ViolationCounter } from './limits';
 import type { Logger } from './logger';
 import type { Metrics } from './metrics';
+import type { PresenceTracker } from './presence';
 
 /** What the server knows about each authenticated connection. */
 export interface SocketData {
@@ -15,6 +16,8 @@ export interface SocketData {
   guest: boolean;
   ip: string;
   violations: ViolationCounter;
+  /** False in invisible mode (PROF-02). */
+  showPresence: boolean;
 }
 
 /** No events travel between instances except through the adapter. */
@@ -39,6 +42,7 @@ export interface HandlerContext {
   logger: Logger;
   metrics: Metrics;
   buckets: TokenBuckets;
+  presence: PresenceTracker;
   /** Called after database work, so the outbox is drained opportunistically (never on a timer). */
   afterDatabaseWork: () => void;
 }

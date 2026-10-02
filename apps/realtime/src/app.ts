@@ -23,6 +23,7 @@ import {
   isSessionActive,
   listMemberships,
   pingDatabase,
+  touchLastSeen,
   type Database,
 } from '@socketspace/db';
 import { PROTOCOL_VERSION } from '@socketspace/shared/events';
@@ -37,10 +38,17 @@ import { ABUSE, LIMITS } from '@socketspace/shared/limits';
 import type { RealtimeEnv } from './env';
 import { describeError, InFlight } from './handlers/define';
 import { registerMessageHandlers } from './handlers/messages';
+import {
+  announcePresence,
+  conversationRoomsOf,
+  registerPresenceHandlers,
+  sendPresenceSnapshot,
+} from './handlers/presence';
 import { applyInternalEvent, OutboxDrainer, ReplayGuard } from './internal';
 import { ConnectionTracker, TokenBuckets, ViolationCounter } from './limits';
 import type { Logger } from './logger';
 import { Metrics } from './metrics';
+import { PresenceTracker } from './presence';
 import { clientIp, isAllowedOrigin } from './network';
 import { verifyConnectionToken, type KeySource } from './token';
 import { rooms, type HandlerContext, type IoServer } from './types';
@@ -131,6 +139,7 @@ export function createRealtimeServer(deps: RealtimeDeps): RealtimeServer {
   });
   const replay = new ReplayGuard(2 * 60_000);
   const inFlight = new InFlight();
+  const presence = new PresenceTracker();
   let stopping = false;
 
   const httpServer = createServer((req, res) => {
@@ -163,13 +172,14 @@ export function createRealtimeServer(deps: RealtimeDeps): RealtimeServer {
   });
   if (deps.redis) io.adapter(createAdapter(deps.redis.pub, deps.redis.sub));
 
-  const outbox = new OutboxDrainer({ db, io, logger, metrics });
+  const outbox = new OutboxDrainer({ db, io, logger, metrics, presence });
   const ctx: HandlerContext = {
     db,
     io,
     logger,
     metrics,
     buckets,
+    presence,
     afterDatabaseWork: () => {
       outbox.maybeDrain();
     },
@@ -246,6 +256,7 @@ export function createRealtimeServer(deps: RealtimeDeps): RealtimeServer {
         guest: profile.isAnonymous,
         ip,
         violations: new ViolationCounter(ABUSE.violationWindowMs),
+        showPresence: profile.showPresence,
       };
       await socket.join([
         rooms.user(userId),
@@ -272,6 +283,33 @@ export function createRealtimeServer(deps: RealtimeDeps): RealtimeServer {
     // Socket.IO's per-connection ID ties together every log line about one connection.
     logger.debug({ socketId: socket.id, userId: socket.data.userId }, 'connection accepted');
     registerMessageHandlers(socket, ctx, inFlight);
+    registerPresenceHandlers(socket, ctx, inFlight);
+
+    // Presence: tell people who share a conversation, and show this tab who is online.
+    const conversationRooms = conversationRoomsOf(socket);
+    const arrived = presence.connect(socket.data.userId, socket.id, socket.data.showPresence);
+    if (arrived) announcePresence(io, conversationRooms, arrived);
+    sendPresenceSnapshot(
+      ctx,
+      {
+        userId: socket.data.userId,
+        emit: ({ userId, status }) => {
+          socket.emit('presence', { userId, status, lastSeenAt: null });
+        },
+      },
+      conversationRooms,
+    );
+    socket.on('disconnecting', () => {
+      // Rooms are still known here (they are gone by 'disconnect').
+      const left = presence.disconnect(socket.data.userId, socket.id);
+      if (!left) return;
+      announcePresence(io, conversationRoomsOf(socket), left, new Date().toISOString());
+      if (left.status === 'offline') {
+        touchLastSeen(db, socket.data.userId).catch((error: unknown) => {
+          logger.warn({ error: describeError(error) }, 'last seen not saved');
+        });
+      }
+    });
     socket.on('disconnect', (reason) => {
       metrics.connections -= 1;
       tracker.release(socket.data.userId, socket.data.ip);
@@ -356,7 +394,7 @@ export function createRealtimeServer(deps: RealtimeDeps): RealtimeServer {
         sendJson(res, 409, { error: 'replayed' });
         return;
       }
-      await applyInternalEvent({ io, db }, event.data);
+      await applyInternalEvent({ io, db, presence }, event.data);
       metrics.increment('ss_internal_events_total', { result: 'applied', type: event.data.type });
       res.writeHead(204, { 'Cache-Control': 'no-store' });
       res.end();

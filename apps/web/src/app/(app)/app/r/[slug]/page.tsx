@@ -6,6 +6,7 @@ import { cache } from 'react';
 import {
   getPublicUsers,
   getRoomForViewer,
+  listReactions,
   listRecentMessages,
   listRoomMembers,
   toMessageWire,
@@ -64,6 +65,10 @@ export default async function RoomPage({ params }: { params: Promise<{ slug: str
     listRecentMessages(db, room.id, { limit: 50 }),
     listRoomMembers(db, room.id, { limit: 200 }),
   ]);
+  const reactions = await listReactions(
+    db,
+    messages.map((m) => m.id),
+  );
   const people = await getPublicUsers(db, user.id, [
     ...new Set([...members.map((m) => m.userId), ...messages.map((m) => m.authorId)]),
   ]);
@@ -88,7 +93,7 @@ export default async function RoomPage({ params }: { params: Promise<{ slug: str
           : null
       }
       emailVerified={user.emailVerified}
-      initialMessages={messages.map(toMessageWire)}
+      initialMessages={messages.map((m) => toMessageWire(m, reactions.get(m.id) ?? []))}
       initialMembers={members.map((m) => ({
         userId: m.userId,
         role: m.role,

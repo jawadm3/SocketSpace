@@ -1,5 +1,9 @@
 /**
- * Sending messages and catching up after a reconnect.
+ * Sending and changing messages, reactions, read state, and catching up after a reconnect.
+ *
+ * `message:edit`, `message:delete`, `reaction:toggle` (MSG-02, MSG-03, MSG-05) take a new event
+ * number in the database and are broadcast to the conversation, so open tabs update at once and
+ * resync carries them. `read:update` (RT-05) moves the reader's marker and tells their other tabs.
  *
  * `message:send` (MSG-01, RT-02, RECON-03): every permission is checked by the database inside the
  * same transaction that numbers the message (packages/db sendMessage). A re-send with the same
@@ -9,22 +13,53 @@
  * only for conversations the person belongs to.
  */
 import {
+  deleteMessage,
+  editMessage,
   filterMemberConversations,
   listEventsSince,
+  listReactions,
+  markRead,
   sendMessage,
+  toggleReaction,
   toMessageWire,
+  type MessageActionRefusal,
   type SendRefusal,
 } from '@socketspace/db';
+import type { DenyReason } from '@socketspace/shared/authz';
 import { ackError, ackOk, type Ack } from '@socketspace/shared/errors';
 import { LIMITS } from '@socketspace/shared/limits';
 
 import { rooms, type HandlerContext, type IoSocket } from '../types';
 import { registerHandler, type InFlight } from './define';
 
+const DENIED: Partial<Record<DenyReason, string>> = {
+  role: 'Only the author, a room moderator or an admin can delete this message.',
+  target_rank: 'You cannot delete messages from someone with the same or a higher role.',
+  dm: 'In a direct message you can only delete your own messages.',
+  not_member: 'You are not a member of this conversation.',
+  room_banned: 'You are banned from this room.',
+  unverified: 'Please confirm your email address first.',
+};
+
 /** Plain-English refusals; `until` becomes `retryAfterMs` so the browser can say when. */
-export function refusalToAck(refusal: SendRefusal, nowMs: number): Ack<never> {
+export function refusalToAck(
+  refusal: SendRefusal | MessageActionRefusal,
+  nowMs: number,
+): Ack<never> {
   const after = (until: Date | null) => (until ? Math.max(0, until.getTime() - nowMs) : undefined);
   switch (refusal.reason) {
+    case 'message_not_found':
+      return ackError('NOT_FOUND', 'This message no longer exists.');
+    case 'not_author':
+      return ackError('FORBIDDEN', 'You can only edit your own messages.');
+    case 'deleted':
+      return ackError('CONFLICT', 'This message was deleted.');
+    case 'too_late':
+      return ackError('FORBIDDEN', 'Messages can only be edited for 24 hours.');
+    case 'too_many_reactions':
+      return ackError('CONFLICT', 'This message already has 20 different reactions.');
+    case 'denied':
+      return ackError('FORBIDDEN', DENIED[refusal.deny] ?? 'You are not allowed to do that here.');
     case 'conversation_not_found':
       return ackError('NOT_FOUND', 'This conversation does not exist.');
     case 'reply_not_found':
@@ -70,7 +105,12 @@ export function registerMessageHandlers(
     ctx.afterDatabaseWork();
     if (!result.ok) return refusalToAck(result, Date.now());
 
-    const message = toMessageWire(result.message);
+    const message = toMessageWire(
+      result.message,
+      result.duplicate
+        ? ((await listReactions(ctx.db, [result.message.id])).get(result.message.id) ?? [])
+        : [],
+    );
     if (!result.duplicate) {
       ctx.metrics.increment('ss_messages_total');
       // Everyone in the conversation, including the sender's other tabs, but not this socket
@@ -100,6 +140,10 @@ export function registerMessageHandlers(
         cursor.afterEventSeq,
         LIMITS.sync.eventsPerConversation,
       );
+      const reactions = await listReactions(
+        ctx.db,
+        since.messages.map((m) => m.id),
+      );
       results.push(
         since.reset
           ? { conversationId: cursor.conversationId, events: [], reset: true }
@@ -107,12 +151,86 @@ export function registerMessageHandlers(
               conversationId: cursor.conversationId,
               events: since.messages.map((row) => ({
                 type: 'message' as const,
-                message: toMessageWire(row),
+                message: toMessageWire(row, reactions.get(row.id) ?? []),
               })),
             },
       );
     }
     ctx.afterDatabaseWork();
     return ackOk({ results });
+  });
+
+  registerHandler(socket, ctx, inFlight, 'message:edit', async ({ messageId, body }, editor) => {
+    const result = await editMessage(ctx.db, {
+      messageId,
+      editorId: editor.data.userId,
+      body,
+    });
+    ctx.afterDatabaseWork();
+    if (!result.ok) return refusalToAck(result, Date.now());
+    const reactions = (await listReactions(ctx.db, [messageId])).get(messageId) ?? [];
+    const message = toMessageWire(result.message, reactions);
+    if (result.changed) {
+      editor
+        .to(rooms.conversation(message.conversationId))
+        .emit('message:updated', { message, eventSeq: message.eventSeq });
+    }
+    return ackOk({ message });
+  });
+
+  registerHandler(socket, ctx, inFlight, 'message:delete', async ({ messageId }, actor) => {
+    const result = await deleteMessage(ctx.db, { messageId, actorId: actor.data.userId });
+    ctx.afterDatabaseWork();
+    if (!result.ok) return refusalToAck(result, Date.now());
+    const { conversationId, versionSeq } = result.message;
+    if (result.changed) {
+      actor
+        .to(rooms.conversation(conversationId))
+        .emit('message:deleted', { conversationId, messageId, eventSeq: versionSeq });
+    }
+    return ackOk({ messageId, eventSeq: versionSeq });
+  });
+
+  registerHandler(
+    socket,
+    ctx,
+    inFlight,
+    'reaction:toggle',
+    async ({ messageId, emoji }, reactor) => {
+      const result = await toggleReaction(ctx.db, {
+        messageId,
+        userId: reactor.data.userId,
+        emoji,
+      });
+      ctx.afterDatabaseWork();
+      if (!result.ok) return refusalToAck(result, Date.now());
+      const reactions = toMessageWire(result.message, result.reactions).reactions;
+      reactor.to(rooms.conversation(result.message.conversationId)).emit('reaction:updated', {
+        conversationId: result.message.conversationId,
+        messageId,
+        reactions,
+        eventSeq: result.message.versionSeq,
+      });
+      return ackOk({ messageId, reactions });
+    },
+  );
+
+  registerHandler(socket, ctx, inFlight, 'read:update', async ({ conversationId, seq }, reader) => {
+    const result = await markRead(ctx.db, {
+      conversationId,
+      userId: reader.data.userId,
+      seq,
+    });
+    ctx.afterDatabaseWork();
+    if (!result.ok) return ackError('FORBIDDEN', 'You are not a member of this conversation.');
+    if (result.moved) {
+      // The person's other tabs clear their unread badge too.
+      reader.to(rooms.user(reader.data.userId)).emit('read:updated', {
+        conversationId,
+        userId: reader.data.userId,
+        seq: result.lastReadSeq,
+      });
+    }
+    return ackOk({ unread: result.unread });
   });
 }

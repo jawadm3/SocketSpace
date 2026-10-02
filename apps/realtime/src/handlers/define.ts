@@ -92,6 +92,30 @@ export class InFlight {
   }
 }
 
+/**
+ * For fire-and-forget events (`typing:set`): no acknowledgement, so extra events beyond the rate
+ * are dropped silently and invalid payloads ignored (realtime-protocol.md, rate limits).
+ */
+export function registerSignal<E extends 'typing:set'>(
+  socket: IoSocket,
+  ctx: HandlerContext,
+  event: E,
+  handler: (payload: ClientPayload<E>, socket: IoSocket) => void,
+): void {
+  const spec: BucketSpec = RATE_LIMITS[event];
+  const schema = CLIENT_EVENTS[event].payload;
+  const listen = socket.on.bind(socket) as unknown as (
+    name: string,
+    listener: (...args: unknown[]) => void,
+  ) => void;
+  listen(event, (payload: unknown) => {
+    if (ctx.buckets.take(`${socket.data.userId}:${event}`, spec) > 0) return;
+    const parsed = schema.safeParse(payload);
+    if (!parsed.success) return;
+    handler(parsed.data as ClientPayload<E>, socket);
+  });
+}
+
 export function registerHandler<E extends AckedClientEventName>(
   socket: IoSocket,
   ctx: HandlerContext,

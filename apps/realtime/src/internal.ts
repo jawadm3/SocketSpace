@@ -19,11 +19,14 @@ import { internalEventSchema, type InternalEvent } from '@socketspace/shared/int
 import { describeError } from './handlers/define';
 import type { Logger } from './logger';
 import type { Metrics } from './metrics';
+import type { PresenceTracker } from './presence';
 import { rooms, type IoServer } from './types';
 
 export interface InternalEventDeps {
   io: IoServer;
   db: Queryable;
+  /** When given, profile changes also update invisible mode (PROF-02). */
+  presence?: PresenceTracker;
 }
 
 /** Disconnects every socket in a room after telling it why. Works across instances with Redis. */
@@ -100,6 +103,15 @@ export async function applyInternalEvent(
         ...memberships.map((m) => rooms.conversation(m.conversationId)),
       ];
       io.to(targets).emit('user:updated', { user: nicknameOnly(person) });
+      // Invisible mode may have changed: others now see the person online, or offline.
+      const change = deps.presence?.setVisible(event.userId, person.showPresence);
+      if (change) {
+        io.to(targets.slice(1)).emit('presence', {
+          userId: change.userId,
+          status: change.status,
+          lastSeenAt: null,
+        });
+      }
       return;
     }
     case 'member.added': {
@@ -205,7 +217,13 @@ export class OutboxDrainer {
   private running = false;
 
   constructor(
-    private readonly deps: { db: Database; io: IoServer; logger: Logger; metrics: Metrics },
+    private readonly deps: {
+      db: Database;
+      io: IoServer;
+      logger: Logger;
+      metrics: Metrics;
+      presence?: PresenceTracker;
+    },
     private readonly minIntervalMs = 10_000,
   ) {}
 

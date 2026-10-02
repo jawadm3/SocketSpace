@@ -32,6 +32,7 @@ const personColumns = {
   image: user.image,
   status: user.status,
   role: user.role,
+  showPresence: user.showPresence,
 };
 
 export interface PersonRow {
@@ -46,6 +47,8 @@ export interface PersonRow {
   status: 'active' | 'suspended' | 'banned' | 'deleted';
   /** Site role, for permission checks on the server. Never sent to browsers. */
   role: 'user' | 'admin';
+  /** False in invisible mode. Never sent to browsers. */
+  showPresence: boolean;
 }
 
 /**

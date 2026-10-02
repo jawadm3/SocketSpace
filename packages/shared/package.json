@@ -14,6 +14,7 @@
     "./events": "./src/events/index.ts",
     "./internal-events": "./src/internal-events.ts",
     "./limits": "./src/limits.ts",
+    "./markdown": "./src/markdown.ts",
     "./primitives": "./src/primitives.ts",
     "./profile": "./src/profile.ts",
     "./realtime-token": "./src/realtime-token.ts",

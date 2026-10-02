@@ -58,7 +58,11 @@ export interface Harness {
   createSession: (userId: string) => Promise<string>;
   connect: (
     token: string | undefined,
-    options?: { origin?: string | null },
+    options?: {
+      origin?: string | null;
+      /** Runs before the server's hello, to catch events sent right after it. */
+      onBeforeHello?: (socket: ClientSocket) => void;
+    },
   ) => Promise<ClientSocket>;
   /** Signs in `userId` with a fresh session and token and connects. */
   connectAs: (userId: string) => Promise<ClientSocket>;
@@ -177,6 +181,7 @@ export async function startHarness(overrides: Record<string, string> = {}): Prom
         ...(origin !== null && { extraHeaders: { origin } }),
       });
       clients.push(socket);
+      options.onBeforeHello?.(socket);
       // Resolve once the server has also said hello, so tests never miss that first event.
       socket.once('server:hello', (hello: Hello) => {
         hellos.set(socket, hello);

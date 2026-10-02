@@ -37,6 +37,7 @@ describe('getConnectionProfile', () => {
       emailVerified: false,
       onboarded: true,
       nickname: u.nickname,
+      showPresence: true,
     });
     expect(await getConnectionProfile(t.db, newId())).toBeNull();
   });
