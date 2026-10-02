@@ -61,13 +61,24 @@ It must run on free hosting tiers only.
 
 Run from the repository root. Package manager is **pnpm** (not npm, not npx).
 
-| Command                                      | What it does                                                |
-| -------------------------------------------- | ----------------------------------------------------------- |
-| `pnpm install`                               | Install all dependencies (store is `./.pnpm-store`, on D:). |
-| `pnpm check`                                 | Lint, type-check and test every package (via Turborepo).    |
-| `pnpm lint` / `pnpm typecheck` / `pnpm test` | One of the above on its own.                                |
-| `pnpm build`                                 | Build every package.                                        |
-| `pnpm format` / `pnpm format:check`          | Format with Prettier / check formatting.                    |
+| Command                                      | What it does                                                                                                                                   |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`                               | Install all dependencies (store is `./.pnpm-store`, on D:); also enables the gitleaks pre-commit hook.                                         |
+| `pnpm setup:local`                           | Create `apps/web/.env.local` and `apps/realtime/.env.local` with local addresses and generated dev secrets (never printed, never overwritten). |
+| `pnpm db:start` / `db:stop` / `db:status`    | Local PostgreSQL 17.9 on 127.0.0.1:54329 (data in `.cache/postgres`).                                                                          |
+| `pnpm db:migrate:local` / `db:seed:local`    | Apply migrations / demo rooms to the local database.                                                                                           |
+| `pnpm check`                                 | Lint (incl. `lint:root`: scripts and the invisible-character check), type-check and test every package.                                        |
+| `pnpm lint` / `pnpm typecheck` / `pnpm test` | One of the above on its own.                                                                                                                   |
+| `pnpm build`                                 | Build the web app (Next.js) and bundle the realtime server (`apps/realtime/dist/server.mjs`).                                                  |
+| `pnpm dev`                                   | Run both apps in development (after `setup:local`, `db:start`, `db:migrate:local`).                                                            |
+| `pnpm --filter @socketspace/web e2e`         | Playwright journeys against production builds (needs `db:start` and `pnpm build`).                                                             |
+| `pnpm format` / `pnpm format:check`          | Format with Prettier / check formatting.                                                                                                       |
+| `pnpm secrets:scan`                          | gitleaks over the full git history.                                                                                                            |
+
+Tests use PGlite by default. Set `TEST_DATABASE_URL=postgres://socketspace@127.0.0.1:54329/postgres` to
+run the same suites against the local PostgreSQL (each test file creates and drops its own database).
+CI (`.github/workflows/ci.yml`) runs checks, PostgreSQL + Redis tests, E2E, Docker smoke tests,
+gitleaks and `pnpm audit`; CodeQL runs in `codeql.yml`.
 
 Set `TURBO_TELEMETRY_DISABLED=1` and `NEXT_TELEMETRY_DISABLED=1` in the shell to avoid tools writing telemetry config to C:.
 
@@ -81,6 +92,9 @@ Set `TURBO_TELEMETRY_DISABLED=1` and `NEXT_TELEMETRY_DISABLED=1` in the shell to
 - **Documentation** is written for a non-specialist: plain English, short sentences, every term explained, new terms added to `docs/glossary.md`.
 - **Version-specific tool docs**: tool behaviour may differ from memory. Before changing tool config, check the installed version's own docs or schema (for example `node_modules/turbo/docs/` and `node_modules/turbo/schema.json`). Turborepo's auto-generated `AGENTS.md` is switched off (`"agentGuidance": false` in `turbo.json`); this file is the single source of agent guidance.
 - **Never invent** test results, measurements, users or history. Record real output as evidence.
+- **Invisible characters in code:** escapes for bidi, zero-width or combining characters can land in files as the literal characters. Run `node scripts/check-source-chars.mjs` (part of `pnpm lint:root`) after writing such code.
+- **Queries live in `packages/db`.** Apps import query operators (`eq`, `sql`, ...) from `@socketspace/db`, never `drizzle-orm` directly. Time checks in SQL use the database clock (D-027).
+- **Logging:** never log payloads, message text, tokens or raw database errors (they repeat query parameters); log error names and codes (D-033).
 
 ## Architecture rules
 

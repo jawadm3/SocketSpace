@@ -192,3 +192,45 @@ The owner approved the stack and added the product changes below. They are also 
 - **Audit log (`moderation_action`) has no foreign keys,** and its trigger refuses UPDATE always, and DELETE only for rows younger than 365 days. A foreign-key action (`SET NULL`) would need an UPDATE, which an append-only table must refuse, and a log entry must outlive what it describes. The 365-day rule lets the daily retention job remove expired rows without weakening the guarantee for recent ones. TRUNCATE is refused too.
 - **New table `auth_lockout`:** the per-account sign-in lockout from `security.md` 3.1, keyed by a hash of the email (no addresses stored).
 - **Sequence numbers without gaps:** `sendMessage` locks the conversation row, checks for a re-sent client ID **before** taking a number, and rolls back on any refusal. A re-send or a refused message never uses up a number, so a gap in `eventSeq` always means a missed event.
+
+## D-029: Extra sign-in protections on top of Better Auth's defaults
+
+- **Stage:** C. **Status:** Accepted.
+- **Login CSRF:** Better Auth checks a request's `Origin` only when it carries cookies. A cross-site page could therefore sign a visitor into an account the attacker controls. Every state-changing auth request is now refused when its `Origin` is not our own or the browser marks it `Sec-Fetch-Site: cross-site` (found by an integration test that expected 403 and got 200).
+- **Endpoints switched off over HTTP:** profile, email and session changes go through our own validated server actions (which also disconnect live sockets), and provider access tokens are never handed to browsers (`/update-user`, `/update-session`, `/change-email`, `/delete-user`, `/revoke-session(s)`, `/revoke-other-sessions`, `/get-access-token`, `/refresh-token`, `/account-info`, `/verify-password`, `/token`).
+- **Facebook and Microsoft never auto-link (D-022):** leaving them off `trustedProviders` is not enough, because Better Auth also links when the provider says the email is verified. Both providers' `mapProfileToUser` forces `emailVerified: false`; a stubbed OAuth round trip proves a Facebook sign-in with a "verified" matching email does not reach the existing account.
+- **Breached-password check fails closed:** if Have I Been Pwned cannot be reached, sign-up with a password is refused with "try again later" (social sign-in still works). Safer than silently accepting unchecked passwords; revisit if it causes trouble.
+
+## D-030: Dropping dead session cookies before sign-in (workaround for a Better Auth behaviour)
+
+- **Stage:** C. **Status:** Accepted.
+- **Problem:** found by the end-to-end test. A browser still holding the cookie of a session that ended (for example after a password reset elsewhere) signs in successfully, but Better Auth's guest (anonymous) plugin then looks the old session up, finds nothing, and appends "delete the session cookie" headers that cancel the fresh one. The person is silently signed out again.
+- **Fix:** a `before` hook on session-starting paths removes a session cookie that no longer matches a live session from the request. A live guest cookie is kept, so upgrading a guest to a full account still works. Regression tests cover both.
+- **Upstream:** worth reporting to Better Auth (1.7.6). Filing an issue needs the owner's GitHub account; the description is in `docs/development/steps/STEP-C-foundations.md`.
+
+## D-031: Realtime server bundled into one file; small Docker images
+
+- **Stage:** C. **Status:** Accepted.
+- **Decision:** esbuild bundles the realtime server and all its dependencies into `dist/server.mjs` (3.3 MB). The image holds only Node.js 22 and that file, runs as the `node` user and receives SIGTERM directly. The web app also gets a Dockerfile (Next.js standalone output, switched on with `NEXT_OUTPUT=standalone`) as a portable alternative to Vercel (risk R1). Both are built and smoke-tested in CI only (no Docker on the laptop).
+
+## D-032: Protocol refinements found while building
+
+- **Stage:** C. **Status:** Accepted. `realtime-protocol.md` updated.
+- `session:revoked` became **`session:ended`** with a reason (`revoked`, `banned`, `suspended`, `deleted`, `server_shutdown`, `abuse`) and an optional `reconnectAfterMs`, so one event covers revocation, sanctions, abuse and graceful shutdown.
+- A new internal event, **`user.sessions_revoked`**, disconnects every socket of a person (password reset, "sign out everywhere").
+- On connect the server also checks that the **session behind the token still exists**, so a token issued just before a sign-out cannot open a connection during its remaining minutes.
+- The token endpoint answers with the realtime server's address as well as the token, so no server address is compiled into the browser bundle.
+
+## D-033: Logs carry error names and codes only
+
+- **Stage:** C. **Status:** Accepted.
+- **Why:** database driver errors repeat the query's parameters, which for `message:send` include the message text. Handler failures log `{ name, code }` and nothing else; a test checks that a unique marker sent as a message never appears in the logs, and that no token does either.
+
+## D-034: Smaller tooling choices in Stage C
+
+- **Stage:** C. **Status:** Accepted.
+- **`typedRoutes` off** in Next.js: route types exist only after a build, so plain type checks and lint disagreed with the build about the same code (a CI trap). Links are few and covered by end-to-end tests.
+- **Per-device IP addresses in end-to-end tests:** every test and every extra "device" sends its own `X-Forwarded-For` from the documentation range 203.0.113.0/24; otherwise tests share one address and trip each other's sign-in rate limits, which work as designed.
+- **`X-Forwarded-For` trust:** Vercel overwrites this header, so per-IP limits are reliable there. A self-hosted `next start` keeps whatever a visitor sends; `.env.example` says to put an overwriting proxy in front (the per-account lockout still applies).
+- **Install scripts reviewed and allowed** for the `@embedded-postgres/<platform>` packages (identical symlink step in every package); esbuild's stays blocked.
+- **Known advisory accepted:** `pnpm audit` reports one moderate issue in an old esbuild (≤0.24.2) used only by drizzle-kit's development loader. It concerns esbuild's local development server, which that loader never starts; nothing of it runs in production. CI fails only on high and critical advisories.

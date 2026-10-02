@@ -1,15 +1,17 @@
 # Real-time protocol and flows
 
-_Stage B, 2026-10-01. Proposed for approval. In Stage C every event below becomes a Zod schema in
-`packages/shared/src/events/`, and Socket.IO's TypeScript event maps are derived from those
-schemas, so the browser and the server cannot disagree about a payload's shape._
+_Stage B, 2026-10-01; updated in Stage C (2026-10-02, decision D-032). Every event below is a Zod
+schema in `packages/shared/src/events/`, and Socket.IO's TypeScript event maps are derived from
+those schemas, so the browser and the server cannot disagree about a payload's shape._
 
 ## Connecting
 
 1. The browser asks the web app for a connection token: `POST /api/realtime/token` (same-site
    cookie, so only a signed-in browser gets one). The token is a JWT signed with the web app's
    private key, valid for **5 minutes**, with claims `sub` (user ID), `sid` (session ID), `role`,
-   `aud = socketspace-realtime`, `iss = <web origin>`.
+   `aud = socketspace-realtime`, `iss = <web origin>`, plus `guest` (true for guest accounts). The
+   response also carries the realtime server's address, so no address is built into the browser
+   bundle.
 2. The browser connects to the realtime server with `auth: { token }` (in the handshake body,
    never in the URL, so it does not appear in logs).
 3. The server, before accepting:
@@ -17,8 +19,10 @@ schemas, so the browser and the server cannot disagree about a payload's shape._
      gap found in v1, where CORS did not protect the WebSocket);
    - verifies the token signature with the web app's public keys (JWKS, cached), audience,
      issuer and expiry;
-   - checks the user is `active`, not banned or suspended, and under the connection caps (10 per
-     user, 20 per IP address);
+   - checks that the session behind the token still exists (a token issued just before a sign-out
+     cannot connect during its remaining minutes), that the user is `active`, not banned or
+     suspended, and under the connection caps (10 per user, 20 per IP address, 30 new connections
+     per IP per minute);
    - loads the user's conversation memberships and active sanctions from the database, joins the
      socket to one Socket.IO room per conversation plus a private room `user:<id>`.
 4. The server sends `server:hello` with the protocol version and server time.
@@ -77,22 +81,22 @@ fetches real names it is allowed to see once per person over HTTP (cached). See 
 
 ### Server → client
 
-| Event                                                                | Payload                                                                    | Sent to                                                                    |
-| -------------------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `server:hello`                                                       | `{ protocolVersion, serverTime, userId }`                                  | the connecting socket                                                      |
-| `message:new`                                                        | `{ message, eventSeq }`                                                    | conversation room                                                          |
-| `message:updated`                                                    | `{ message, eventSeq }` (edit, moderation state change)                    | conversation room                                                          |
-| `message:deleted`                                                    | `{ conversationId, messageId, eventSeq }`                                  | conversation room                                                          |
-| `reaction:updated`                                                   | `{ conversationId, messageId, reactions, eventSeq }`                       | conversation room                                                          |
-| `typing`                                                             | `{ conversationId, userId, typing }` (auto-expires after 6 s)              | conversation room, except sender                                           |
-| `read:updated`                                                       | `{ conversationId, userId, seq }`                                          | DM partner (if both allow read receipts); the user's own other tabs        |
-| `delivery:updated`                                                   | `{ conversationId, userId, seq }`                                          | DM partner                                                                 |
-| `presence`                                                           | `{ userId, status, lastSeenAt }`                                           | users who share a conversation or are contacts (never for invisible users) |
-| `conversation:joined` / `conversation:left` / `conversation:updated` | `{ conversation }` / `{ conversationId }`                                  | the user's private room                                                    |
-| `member:joined` / `member:left` / `member:updated`                   | `{ conversationId, member }`                                               | conversation room                                                          |
-| `notification:new`                                                   | `{ notification }`                                                         | the user's private room                                                    |
-| `moderation:notice`                                                  | `{ kind: 'warned' \| 'muted' \| 'suspended' \| 'banned', reason, until? }` | the user's private room                                                    |
-| `session:revoked`                                                    | `{}` then disconnect                                                       | sockets of that session                                                    |
+| Event                                                                | Payload                                                                                                                              | Sent to                                                                    |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| `server:hello`                                                       | `{ protocolVersion, serverTime, userId }`                                                                                            | the connecting socket                                                      |
+| `message:new`                                                        | `{ message, eventSeq }`                                                                                                              | conversation room                                                          |
+| `message:updated`                                                    | `{ message, eventSeq }` (edit, moderation state change)                                                                              | conversation room                                                          |
+| `message:deleted`                                                    | `{ conversationId, messageId, eventSeq }`                                                                                            | conversation room                                                          |
+| `reaction:updated`                                                   | `{ conversationId, messageId, reactions, eventSeq }`                                                                                 | conversation room                                                          |
+| `typing`                                                             | `{ conversationId, userId, typing }` (auto-expires after 6 s)                                                                        | conversation room, except sender                                           |
+| `read:updated`                                                       | `{ conversationId, userId, seq }`                                                                                                    | DM partner (if both allow read receipts); the user's own other tabs        |
+| `delivery:updated`                                                   | `{ conversationId, userId, seq }`                                                                                                    | DM partner                                                                 |
+| `presence`                                                           | `{ userId, status, lastSeenAt }`                                                                                                     | users who share a conversation or are contacts (never for invisible users) |
+| `conversation:joined` / `conversation:left` / `conversation:updated` | `{ conversation }` / `{ conversationId }`                                                                                            | the user's private room                                                    |
+| `member:joined` / `member:left` / `member:updated`                   | `{ conversationId, member }`                                                                                                         | conversation room                                                          |
+| `notification:new`                                                   | `{ notification }`                                                                                                                   | the user's private room                                                    |
+| `moderation:notice`                                                  | `{ kind: 'warned' \| 'muted' \| 'suspended' \| 'banned', reason, until? }`                                                           | the user's private room                                                    |
+| `session:ended`                                                      | `{ reason, reconnectAfterMs? }` then disconnect; reason is `revoked`, `banned`, `suspended`, `deleted`, `server_shutdown` or `abuse` | sockets of that session, person or server                                  |
 
 ### Delivery states (what the little ticks mean)
 
@@ -264,14 +268,14 @@ sequenceDiagram
 `x-ss-signature = HMAC-SHA256(INTERNAL_EVENTS_SECRET, timestamp + "." + body)`. Requests older than
 60 seconds, or with a reused event ID, are rejected.
 
-| Event                                                     | Effect                                                                                    |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `member.added` / `member.removed` / `member.role_changed` | Join or remove that user's sockets to or from the conversation room; broadcast `member:*` |
-| `conversation.updated` / `conversation.deleted`           | Broadcast; remove sockets from the room                                                   |
-| `user.sanctioned` / `user.unsanctioned`                   | Update the in-memory sanction cache; notify; disconnect if suspended or banned            |
-| `session.revoked` / `user.deleted`                        | Disconnect affected sockets                                                               |
-| `message.moderated`                                       | Broadcast `message:updated` (removed or restored) with a new `eventSeq`                   |
-| `block.created`                                           | Leave any random session with that person; refuse DMs                                     |
+| Event                                                        | Effect                                                                                    |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `member.added` / `member.removed` / `member.role_changed`    | Join or remove that user's sockets to or from the conversation room; broadcast `member:*` |
+| `conversation.updated` / `conversation.deleted`              | Broadcast; remove sockets from the room                                                   |
+| `user.sanctioned` / `user.unsanctioned`                      | Update the in-memory sanction cache; notify; disconnect if suspended or banned            |
+| `session.revoked` / `user.sessions_revoked` / `user.deleted` | Disconnect that session's sockets / all of the person's sockets                           |
+| `message.moderated`                                          | Broadcast `message:updated` (removed or restored) with a new `eventSeq`                   |
+| `block.created`                                              | Leave any random session with that person; refuse DMs                                     |
 
 Delivery: 3 attempts with back-off inside the web request; if all fail, the event goes to
 `realtime_outbox` (see the data model).

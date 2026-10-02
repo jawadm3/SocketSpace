@@ -22,6 +22,27 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
     run by a git pre-commit hook (`.githooks/pre-commit`) and by `pnpm secrets:scan`.
   - Environment validation helper (`packages/shared/src/env.ts`): programs stop at start-up with
     a message naming each missing or malformed variable, never its value.
+  - Database: Drizzle schema (32 tables), reviewed migrations, append-only audit log, gap-free
+    message numbering with idempotent client IDs, local PostgreSQL 17.9 without Docker.
+  - Shared contracts: Zod schemas for every real-time event, error codes, profile rules, signed
+    internal events, authorisation module.
+  - Web app (Next.js 16): sign-up and sign-in with Better Auth (email, passkeys, guests, social
+    providers), verification, password reset, onboarding, sessions page, nonce-based CSP, realtime
+    connection tokens.
+  - Realtime server (Socket.IO): authenticated connections, message sending and resync, rate
+    limits, internal events, health and metrics endpoints, graceful shutdown, Docker image.
+  - CI on GitHub Actions (checks, PostgreSQL and Redis tests, end-to-end tests, Docker smoke tests,
+    secret scan, dependency audit) and CodeQL.
+
+### Fixed
+
+- Signing in while the browser still held the cookie of an ended session silently signed the
+  person out again (Stage C, D-030).
+
+### Security
+
+- Cross-site sign-in requests are refused (login CSRF), Facebook and Microsoft sign-ins never take
+  over an existing account by email, and logs never contain message text or tokens (D-029, D-033).
 - **Stage B (analysis and design), 2026-10-01**
   - v1 analysis with runtime evidence, brief critique, free-tier research, architecture, data
     model, real-time protocol, security design, product design, three visual directions,
