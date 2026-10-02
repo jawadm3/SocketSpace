@@ -54,6 +54,17 @@ function run(command, args, options = {}) {
 }
 
 /**
+ * Quotes one argument for a Windows command line, following the rules programs use to split it
+ * back into arguments (CommandLineToArgvW). Backslashes are literal except just before a double
+ * quote, so a run of backslashes before a quote, or before the closing quote, is doubled.
+ * Example: C:\dir\ becomes "C:\dir\\", and a"b becomes "a\"b".
+ */
+function quoteWindowsArgument(value) {
+  if (value !== '' && !/[\s"]/.test(value)) return value;
+  return `"${value.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`;
+}
+
+/**
  * On Windows, pg_ctl starts the server with handle inheritance switched on, so the long-lived
  * server would inherit every inheritable handle this Node process holds, including the output
  * pipe to whoever started us. That pipe would then never close, and a terminal pipe or CI log
@@ -62,8 +73,7 @@ function run(command, args, options = {}) {
  * server, a descendant, so the script waits for pg_ctl alone with WaitForExit.)
  */
 function startDetachedOnWindows(exe, args) {
-  const quote = (value) => `"${value.replace(/"/g, '\\"')}"`;
-  const argumentLine = args.map((a) => (/[\s"]/.test(a) ? quote(a) : a)).join(' ');
+  const argumentLine = args.map(quoteWindowsArgument).join(' ');
   const ps = (value) => `'${value.replace(/'/g, "''")}'`;
   const script =
     `$p = Start-Process -FilePath ${ps(exe)} -ArgumentList ${ps(argumentLine)} ` +

@@ -3,13 +3,14 @@
 //
 // The binary is downloaded once into .cache/tools/ (inside the project, on the D: drive) and reused.
 // The SHA-256 hashes below were copied from the official gitleaks_8.30.1_checksums.txt release file
-// on 2026-10-02 and are compared before anything is unpacked, so a tampered download is refused.
+// on 2026-10-02 and are compared in memory before the download is written to disk, so a tampered
+// download is refused. Only the unpacked binary is kept.
 //
 // Usage: node scripts/tools/gitleaks.mjs <gitleaks arguments>
 //   e.g. node scripts/tools/gitleaks.mjs git --redact -v .
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -71,33 +72,42 @@ async function install() {
   if (!asset) {
     throw new Error(`No pinned gitleaks build for ${key}. Add one to scripts/tools/gitleaks.mjs.`);
   }
-  const downloads = join(toolsDir, 'downloads');
-  mkdirSync(downloads, { recursive: true });
-  const archive = join(downloads, asset.file);
+  const url = `https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/${asset.file}`;
+  const bytes = await download(url);
 
-  if (!existsSync(archive)) {
-    const url = `https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/${asset.file}`;
-    writeFileSync(archive, await download(url));
-  }
-
-  const actual = createHash('sha256').update(readFileSync(archive)).digest('hex');
+  // Check the bytes in memory, before anything touches the disk.
+  const actual = createHash('sha256').update(bytes).digest('hex');
   if (actual !== asset.sha256) {
     throw new Error(
       `Checksum mismatch for ${asset.file}: expected ${asset.sha256}, got ${actual}. Refusing to run it.`,
     );
   }
 
-  mkdirSync(installDir, { recursive: true });
-  // Windows 10+ ships bsdtar as System32\tar.exe, which can unpack .zip files.
-  // Git Bash's GNU tar cannot, so call the system one explicitly on Windows.
-  const tar =
-    process.platform === 'win32'
-      ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe')
-      : 'tar';
-  const binary = process.platform === 'win32' ? 'gitleaks.exe' : 'gitleaks';
-  const result = spawnSync(tar, ['-xf', archive, '-C', installDir, binary], { stdio: 'inherit' });
-  if (result.status !== 0 || !existsSync(exe)) {
-    throw new Error(`Could not unpack ${asset.file} with ${tar}.`);
+  // tar needs the archive as a file (it cannot read a .zip from a pipe), so write the verified
+  // bytes into a fresh, uniquely named folder that only this run uses, with the exclusive flag
+  // 'wx' (fail if anything is already there). The folder is deleted afterwards.
+  mkdirSync(toolsDir, { recursive: true });
+  const workDir = mkdtempSync(join(toolsDir, 'download-'));
+  try {
+    const archive = join(workDir, asset.file);
+    writeFileSync(archive, bytes, { flag: 'wx' });
+
+    mkdirSync(installDir, { recursive: true });
+    // Windows 10+ ships bsdtar as System32\tar.exe, which can unpack .zip files.
+    // Git Bash's GNU tar cannot, so call the system one explicitly on Windows.
+    const tar =
+      process.platform === 'win32'
+        ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe')
+        : 'tar';
+    const binary = process.platform === 'win32' ? 'gitleaks.exe' : 'gitleaks';
+    const result = spawnSync(tar, ['-xf', archive, '-C', installDir, binary], {
+      stdio: 'inherit',
+    });
+    if (result.status !== 0 || !existsSync(exe)) {
+      throw new Error(`Could not unpack ${asset.file} with ${tar}.`);
+    }
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
   }
   console.error(`[gitleaks] installed ${VERSION} at ${installDir}`);
 }

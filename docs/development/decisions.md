@@ -234,3 +234,12 @@ The owner approved the stack and added the product changes below. They are also 
 - **`X-Forwarded-For` trust:** Vercel overwrites this header, so per-IP limits are reliable there. A self-hosted `next start` keeps whatever a visitor sends; `.env.example` says to put an overwriting proxy in front (the per-account lockout still applies).
 - **Install scripts reviewed and allowed** for the `@embedded-postgres/<platform>` packages (identical symlink step in every package); esbuild's stays blocked.
 - **Known advisory accepted:** `pnpm audit` reports one moderate issue in an old esbuild (≤0.24.2) used only by drizzle-kit's development loader. It concerns esbuild's local development server, which that loader never starts; nothing of it runs in production. CI fails only on high and critical advisories.
+
+## D-035: CodeQL findings in developer scripts
+
+- **Stage:** C (close-out). **Status:** Accepted.
+- **What CodeQL found:** four alerts, all in scripts that run on a developer's computer, none in the apps.
+  - **File-system race** (high) in `scripts/setup-local.mjs` and `scripts/tools/gitleaks.mjs`: each script checked whether a file existed and then wrote it. In the gap between the two steps another program could create the file. **Fix:** no check at all. Files are written with the exclusive flag `wx`, so the operating system refuses the write if the file is already there. `setup:local` removes what it created if only one of its two files could be written (they share a secret).
+  - **Incomplete sanitisation** (high) in `packages/db/scripts/local-pg.mjs`: the helper that quotes arguments for a Windows command line escaped double quotes but not the backslashes in front of them. A round-trip test through `Start-Process` showed the old helper mangled 4 of 6 sample arguments (for example a folder path ending in `\`). **Fix:** the standard Windows rule (double a run of backslashes that comes before a quote or the closing quote); the same test passes 6 of 6.
+  - **Network data written to a file** (medium) in `scripts/tools/gitleaks.mjs`. **Disposition: accepted, dismissed as "won't fix".** Any downloader has to write what it downloads, and this one only writes bytes whose SHA-256 already matches the hash pinned in the script. The check now happens in memory before anything touches the disk; the archive goes into a fresh private folder that is deleted after unpacking.
+- **Evidence:** `STEP-C-foundations.md`, "CodeQL close-out".
