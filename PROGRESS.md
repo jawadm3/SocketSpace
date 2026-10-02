@@ -147,6 +147,7 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
 | Journeys J1, J11, SEC-05 headers, live connection, AUTH-06 revocation       | Playwright 5/5 locally and in CI (run 36956890831).                                                                                                                                                |
 | CI green after D1 and D2 server side                                        | Run 37048118755 on `bd13d82`: all 6 jobs succeeded (checks, PostgreSQL + Redis, E2E, Docker, gitleaks, audit); CodeQL green, 0 open alerts.                                                        |
 | Stage D2 complete locally (session 4)                                       | `pnpm check` 13/13 (shared 160, db 97, realtime 56 +2 Redis, web 93); same on PostgreSQL 17.9; E2E 9/9 in 41.3 s including J2 (typing, unread on two tabs, presence, invisible mode) and J3 (new). |
+| CI green after D2                                                           | Run 37054784622 on `8f790f4`: all 6 jobs succeeded (E2E 9 passed in 35.7 s); CodeQL green; 0 open code-scanning and 0 open Dependabot alerts.                                                      |
 | Raw-HTML lint ban fires (SEC-06)                                            | Probe file with `dangerouslySetInnerHTML`: ESLint "Raw HTML is not allowed", exit 1 (probe deleted).                                                                                               |
 | Dependabot alerts                                                           | 75 alerts, all in the archived `v1/package-lock.json`, dismissed as "not used" with a comment (owner decision, 2026-10-02); 0 open.                                                                |
 | Stage D2 server side locally                                                | `pnpm check` 13/13: shared 160, db 97, web 64, realtime 56 (+2 Redis); same on PostgreSQL 17.9; E2E 8/8 (27.7 s).                                                                                  |
@@ -157,7 +158,7 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
 
 ## In progress
 
-- Nothing is half-edited. D2 is complete; CI for the D2 push is recorded below once it ran.
+- Nothing. D2 is complete and pushed; nothing is half-edited.
 
 ## Known problems and things waiting for the owner
 
