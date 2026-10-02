@@ -242,7 +242,7 @@ describe('rate limits (SEC-02)', () => {
     expect(allowed).toBeGreaterThanOrEqual(10);
     expect(allowed).toBeLessThanOrEqual(11);
     const limited = acks.find((a) => !a.ok);
-    if (!limited || limited.ok) throw new Error('expected sends beyond the burst to be limited');
+    if (!limited) throw new Error('expected sends beyond the burst to be limited');
     expect(limited.error.code).toBe('RATE_LIMITED');
     expect(limited.error.retryAfterMs).toBeGreaterThan(0);
     expect(limited.error.retryAfterMs).toBeLessThanOrEqual(1000);
