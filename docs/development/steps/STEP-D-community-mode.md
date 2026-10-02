@@ -294,6 +294,7 @@ D-041.
 | New web tests                 | outbox 9, history route 3, older pages in state 2                                                                                                                                                                               |
 | End-to-end                    | 11 of 11 in 1.4 min, including J4 (new) and the 10,000-message history test (new)                                                                                                                                               |
 | 10,000 messages (HIST-04)     | at most 24 message rows in the page; whole history scrolled one screen per frame: p95 30.6 ms, worst 51.2 ms, 1 of 548 frames over 50 ms; start reached after 100 page requests, 18.6 s (development laptop, headless Chromium) |
+| CI (GitHub runner)            | run 37058505770: all 6 jobs green; E2E 11 of 11; 10,000 messages: p95 33.4 ms, worst 54.3 ms, 1 of 548 frames over 50 ms                                                                                                        |
 | Screens inspected             | room offline (banner, a waiting message, everyone shown offline), room at phone width                                                                                                                                           |
 
 ## What comes next
