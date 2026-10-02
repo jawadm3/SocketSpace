@@ -1,12 +1,12 @@
 # PROGRESS
 
-_Last updated: 2026-10-01 (Stage B approved; Stage C is next)._
+_Last updated: 2026-10-02 (Stage C in progress: C1 to C3 done and pushed; C4 next)._
 
 ## Current stage
 
-**Stage B is approved.** The owner approved the stack on 2026-10-01 and answered the open
-decisions. The next stage is **Stage C: foundations**. Per the brief, work now continues without
-asking for routine decisions.
+**Stage C: foundations, in progress.** Milestones C1 (tooling), C2 (database) and C3 (shared
+contracts) are done, tested and pushed. Next: C4 (web app shell with Better Auth), then C5
+(realtime server) and C6 (CI).
 
 ## Owner decisions (2026-10-01)
 
@@ -44,6 +44,19 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
   criteria); stage plan with risk register; STEP-B log.
 - Owner review incorporated (D-021 to D-025) across all documents.
 
+### Stage C: foundations (in progress, 2026-10-02)
+
+- **C1 tooling** (`94e79d9`): pinned, SHA-256-verified gitleaks 8.30.1 in `.cache/tools`; git
+  pre-commit hook (`.githooks/`, enabled by `pnpm install`); `pnpm secrets:scan`; env validation
+  helper; `CHANGELOG.md`.
+- **C2 database** (`b5c2f8b`): Drizzle schema for all 32 tables; reviewed migrations (0000 init,
+  0001 append-only audit log); `sendMessage` with gap-free sequence numbers and idempotent client
+  IDs; PGlite test harness plus real-PostgreSQL mode (`TEST_DATABASE_URL`); local PostgreSQL 17.9
+  via `pnpm --filter @socketspace/db db:start` (D-026); migrate and seed scripts.
+- **C3 shared contracts** (`38e940e`): Zod schemas for every event; error codes and acks; text
+  clean-up; nickname, real-name and avatar rules; signed internal events; authorisation module
+  with table-driven tests; source check against invisible/bidi characters.
+
 ## Verified (with evidence)
 
 | What                                                                        | Evidence                                                            |
@@ -54,24 +67,31 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
 | pnpm store on D: inside the project                                         | store at `D:\mini project\socketspace\.pnpm-store\v11`.             |
 | v1 behaviour problems                                                       | Raw outputs in `docs/analysis/evidence/`.                           |
 | Stages A and B pushed                                                       | `main` on GitHub; tag `v1.0.0`; release page live.                  |
+| Full git history has no secrets (Stage C start)                             | gitleaks 8.30.1: 24 commits scanned, "no leaks found".              |
+| Pre-commit hook blocks secrets                                              | Fake AWS-style key staged: hook exit 1, value redacted.             |
+| Database tests on PGlite and real PostgreSQL 17.9                           | 46/46 on both (`TEST_DATABASE_URL` against `db:start`).             |
+| Shared contract and authorisation tests                                     | 136/136 (52 of them the authorisation table).                       |
+| `pnpm check` after C3                                                       | 7/7 Turborepo tasks successful.                                     |
 
 ## In progress
 
-- Nothing. Ready to start Stage C.
+- Stage C, milestone C4 (web app shell): Next.js 16, Better Auth (email/password, verification,
+  reset, passkeys, social providers from env, guests), onboarding gate, security headers and CSP,
+  `/api/realtime/token`.
 
 ## Known problems and things waiting for the owner
 
 1. **pnpm state file on C:** (1 KB). Optional owner fix (machine setting):
    `pnpm config set --global state-dir "D:/mini project/.pnpm-state"`.
-2. **gitleaks not installed.** First task of Stage C (portable binary in `.cache/tools`).
-3. **Optional for Stage C:** test OAuth apps (for example GitHub, Google) with a `localhost`
+2. **Optional for Stage C:** test OAuth apps (for example GitHub, Google) with a `localhost`
    callback, if the owner wants social sign-in tested locally before deployment.
 
 ## Exact next step
 
-Start Stage C, milestone C1: gitleaks (portable binary in `.cache/tools`, pre-commit hook, CI job),
-`.env.example`, environment validation helper, `CHANGELOG.md`, Playwright browsers path on D:.
-Then C2 (Drizzle schema including the D-021 to D-025 user fields, migrations, PGlite tests).
+Milestone C4: scaffold Next.js 16 in `apps/web`; Better Auth with the Drizzle adapter and UUID v7
+IDs; email driver (file-based mail catcher locally); `apps/web/.env.example`; onboarding gate;
+security headers and CSP; `/api/realtime/token`; Playwright (browsers in `.cache/ms-playwright`)
+with an automated journey J1. Then C5 (realtime server) and C6 (CI).
 
 ## Effort guide (from Anthropic's Claude Code docs, checked 2026-10-01)
 
