@@ -10,7 +10,7 @@
  * `createRealtimeServer` takes its dependencies explicitly so tests can run it on a random port
  * with an in-memory database and local signing keys.
  */
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -134,8 +134,12 @@ export function createRealtimeServer(deps: RealtimeDeps): RealtimeServer {
   let stopping = false;
 
   const httpServer = createServer((req, res) => {
+    // A fresh ID for every request, returned to the caller and written on any log line about it,
+    // so a reported problem can be matched to its log entry (OBS-01).
+    const requestId = randomUUID();
+    res.setHeader('X-Request-Id', requestId);
     void handleHttp(req, res).catch((error: unknown) => {
-      logger.error({ error: describeError(error) }, 'http handler failed');
+      logger.error({ requestId, error: describeError(error) }, 'http handler failed');
       if (!res.headersSent) sendJson(res, 500, { error: 'internal' });
     });
   });
@@ -250,7 +254,7 @@ export function createRealtimeServer(deps: RealtimeDeps): RealtimeServer {
       ]);
       next();
     })().catch((error: unknown) => {
-      logger.warn({ error: describeError(error) }, 'connection check failed');
+      logger.warn({ socketId: socket.id, error: describeError(error) }, 'connection check failed');
       next(
         refusal('UNAVAILABLE', 'The chat server could not check your connection. Retrying soon.'),
       );
@@ -265,10 +269,16 @@ export function createRealtimeServer(deps: RealtimeDeps): RealtimeServer {
       serverTime: new Date().toISOString(),
       userId: socket.data.userId,
     });
+    // Socket.IO's per-connection ID ties together every log line about one connection.
+    logger.debug({ socketId: socket.id, userId: socket.data.userId }, 'connection accepted');
     registerMessageHandlers(socket, ctx, inFlight);
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
       metrics.connections -= 1;
       tracker.release(socket.data.userId, socket.data.ip);
+      logger.debug(
+        { socketId: socket.id, userId: socket.data.userId, reason },
+        'connection closed',
+      );
     });
   });
 

@@ -56,6 +56,11 @@ export interface Harness {
   ) => Promise<ClientSocket>;
   /** Signs in `userId` with a fresh session and token and connects. */
   connectAs: (userId: string) => Promise<ClientSocket>;
+  /**
+   * Stops the server gracefully and starts a new one (new port, empty memory) on the same database
+   * and signing keys, like a deploy or a crash-and-restart. `server` and `url` then point at it.
+   */
+  restart: () => Promise<void>;
   close: () => Promise<void>;
 }
 
@@ -106,15 +111,18 @@ export async function startHarness(overrides: Record<string, string> = {}): Prom
     },
   });
 
-  const server = createRealtimeServer({
-    env,
-    db: database.db,
-    keys: createLocalJWKSet({ keys: [jwk] }),
-    checkKeys: () => Promise.resolve(true),
-    logger,
-  });
-  const port = await server.listen(0, '127.0.0.1');
-  const url = `http://127.0.0.1:${String(port)}`;
+  const start = async () => {
+    const created = createRealtimeServer({
+      env,
+      db: database.db,
+      keys: createLocalJWKSet({ keys: [jwk] }),
+      checkKeys: () => Promise.resolve(true),
+      logger,
+    });
+    const port = await created.listen(0, '127.0.0.1');
+    return { created, url: `http://127.0.0.1:${String(port)}` };
+  };
+  let { created: server, url } = await start();
   const clients: ClientSocket[] = [];
 
   const signToken: Harness['signToken'] = async (claims, key = privateKey) => {
@@ -174,13 +182,21 @@ export async function startHarness(overrides: Record<string, string> = {}): Prom
   return {
     db: database.db,
     env,
-    server,
-    url,
+    get server() {
+      return server;
+    },
+    get url() {
+      return url;
+    },
     logs,
     signToken,
     createSession,
     connect,
     connectAs,
+    restart: async () => {
+      await server.stop();
+      ({ created: server, url } = await start());
+    },
     close: async () => {
       for (const client of clients) client.close();
       await server.stop();

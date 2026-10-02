@@ -129,7 +129,7 @@ export function registerHandler<E extends AckedClientEventName>(
       reply(ackError('RATE_LIMITED', 'You are doing that too fast. Please wait a moment.', waitMs));
       if (violations >= ABUSE.violationsBeforeDisconnect) {
         ctx.logger.warn(
-          { userId: socket.data.userId, event },
+          { socketId: socket.id, userId: socket.data.userId, event },
           'disconnecting socket after repeated rate-limit violations',
         );
         socket.emit('session:ended', { reason: 'abuse' });
@@ -150,7 +150,7 @@ export function registerHandler<E extends AckedClientEventName>(
       .then(reply, (error: unknown) => {
         const unavailable = isUnavailableError(error);
         ctx.logger.error(
-          { error: describeError(error), event, userId: socket.data.userId },
+          { socketId: socket.id, error: describeError(error), event, userId: socket.data.userId },
           'event handler failed',
         );
         reply(

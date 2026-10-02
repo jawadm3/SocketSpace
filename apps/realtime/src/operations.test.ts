@@ -1,6 +1,6 @@
 /**
- * Internal events, health and metrics endpoints, the outbox and graceful shutdown
- * (AUTH-06, OBS-02, OBS-04, REL-01).
+ * Internal events, health and metrics endpoints, log correlation IDs, the outbox, graceful shutdown
+ * and restarts (AUTH-06, OBS-01, OBS-02, OBS-04, REL-01, HIST-01).
  */
 import { v4 as uuidv4 } from 'uuid';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -171,6 +171,70 @@ describe('HTTP endpoints (OBS-02, OBS-04)', () => {
 
   it('answers 404 for anything else', async () => {
     expect((await fetch(`${h.url}/admin`)).status).toBe(404);
+  });
+});
+
+describe('log correlation IDs (OBS-01)', () => {
+  it('gives every HTTP response its own request ID', async () => {
+    const first = await fetch(`${h.url}/healthz`);
+    const second = await fetch(`${h.url}/nowhere`);
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    expect(first.headers.get('x-request-id')).toMatch(uuid);
+    expect(second.headers.get('x-request-id')).toMatch(uuid);
+    expect(first.headers.get('x-request-id')).not.toBe(second.headers.get('x-request-id'));
+  });
+
+  it('writes the socket ID on every log line about a connection', async () => {
+    const user = await createTestUser(h.db);
+    const socket = await h.connectAs(user.id);
+    const socketId = socket.id;
+    socket.close();
+    await new Promise((done) => setTimeout(done, 50));
+    const lines = h.logs
+      .map((line) => JSON.parse(line) as { msg?: string; socketId?: string; userId?: string })
+      .filter((entry) => entry.socketId === socketId);
+    expect(lines.map((entry) => entry.msg)).toEqual(['connection accepted', 'connection closed']);
+    expect(lines.every((entry) => entry.userId === user.id)).toBe(true);
+  });
+});
+
+describe('restarts (HIST-01)', () => {
+  it('keeps acknowledged messages: a new server on the same database resyncs them', async () => {
+    const own = await startHarness();
+    const ava = await createTestUser(own.db);
+    const sam = await createTestUser(own.db);
+    const room = await createTestRoom(own.db, ava.id, [sam.id]);
+    const before = await own.connectAs(ava.id);
+    for (const body of ['first', 'second']) {
+      const ack = await request(before, 'message:send', {
+        conversationId: room.id,
+        clientId: uuidv4(),
+        body,
+      });
+      expect(ack.ok).toBe(true);
+    }
+    const oldUrl = own.url;
+
+    await own.restart();
+    expect(own.url).not.toBe(oldUrl);
+
+    const samSocket = await own.connectAs(sam.id);
+    const sync = await request<{
+      results: { events: { message: { body: string | null } }[] }[];
+    }>(samSocket, 'sync:request', { cursors: [{ conversationId: room.id, afterEventSeq: 0 }] });
+    if (!sync.ok) throw new Error(sync.error.message);
+    expect(sync.data.results[0]?.events.map((e) => e.message.body)).toEqual(['first', 'second']);
+
+    // Numbering continues where it stopped: no gap and no reuse after the restart.
+    const after = await own.connectAs(ava.id);
+    const third = await request<{ message: { seq: number } }>(after, 'message:send', {
+      conversationId: room.id,
+      clientId: uuidv4(),
+      body: 'third',
+    });
+    if (!third.ok) throw new Error(third.error.message);
+    expect(third.data.message.seq).toBe(3);
+    await own.close();
   });
 });
 
