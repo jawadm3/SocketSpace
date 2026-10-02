@@ -6,6 +6,8 @@
   "type": "module",
   "dependencies": {
     "@better-auth/passkey": "^1.7.6",
+    "@dicebear/core": "^10.7.0",
+    "@dicebear/styles": "^10.6.0",
     "better-auth": "^1.7.6"
   }
 }

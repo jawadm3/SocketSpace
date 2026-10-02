@@ -15,7 +15,7 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint lint:root",
-    "lint:root": "eslint scripts eslint.config.mjs vitest.config.ts",
+    "lint:root": "eslint scripts eslint.config.mjs vitest.config.ts && node scripts/check-source-chars.mjs",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "check": "turbo run lint lint:root typecheck test",

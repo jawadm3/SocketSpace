@@ -6,9 +6,18 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./env": "./src/env.ts",
+    "./authz": "./src/authz.ts",
     "./domain": "./src/domain.ts",
-    "./limits": "./src/limits.ts"
+    "./emoji": "./src/emoji.ts",
+    "./env": "./src/env.ts",
+    "./errors": "./src/errors.ts",
+    "./events": "./src/events/index.ts",
+    "./internal-events": "./src/internal-events.ts",
+    "./limits": "./src/limits.ts",
+    "./primitives": "./src/primitives.ts",
+    "./profile": "./src/profile.ts",
+    "./realtime-token": "./src/realtime-token.ts",
+    "./text": "./src/text.ts"
   },
   "scripts": {
     "lint": "eslint .",
