@@ -74,6 +74,9 @@ describe('joining (ROOM-02)', () => {
       ownerSocket,
       'member:joined',
     );
+    // Presence (RT-03): each learns that the other is online, without reconnecting.
+    const samOnline = nextEvent<{ userId: string; status: string }>(ownerSocket, 'presence');
+    const ownerOnline = nextEvent<{ userId: string; status: string }>(samSocket, 'presence');
     await h.postEvent({
       ...eventBase(),
       type: 'member.added',
@@ -86,6 +89,8 @@ describe('joining (ROOM-02)', () => {
     expect(member).toMatchObject({ role: 'member', user: { id: sam.id, nickname: sam.nickname } });
     // One broadcast reaches many viewers, so it never carries a real name (D-024).
     expect(member.user).not.toHaveProperty('realName');
+    expect(await samOnline).toMatchObject({ userId: sam.id, status: 'online' });
+    expect(await ownerOnline).toMatchObject({ userId: owner.id, status: 'online' });
 
     const delivered = nextEvent<{ message: MessageWire }>(samSocket, 'message:new');
     await request(ownerSocket, 'message:send', {

@@ -17,6 +17,7 @@ import {
 import { internalEventSchema, type InternalEvent } from '@socketspace/shared/internal-events';
 
 import { describeError } from './handlers/define';
+import { sendPresenceSnapshot } from './handlers/presence';
 import type { Logger } from './logger';
 import type { Metrics } from './metrics';
 import type { PresenceTracker } from './presence';
@@ -126,6 +127,30 @@ export async function applyInternalEvent(
           conversationId: event.conversationId,
           member,
         });
+      }
+      if (deps.presence) {
+        // Presence is normally exchanged on connect; a live join happens later, so the room
+        // learns whether the newcomer is online, and the newcomer learns who is online there.
+        const status = deps.presence.visibleStatus(event.userId);
+        if (status !== 'offline') {
+          io.to(rooms.conversation(event.conversationId))
+            .except(rooms.user(event.userId))
+            .emit('presence', {
+              userId: event.userId,
+              status,
+              lastSeenAt: null,
+            });
+        }
+        sendPresenceSnapshot(
+          { io, presence: deps.presence },
+          {
+            userId: event.userId,
+            emit: (online) => {
+              io.to(rooms.user(event.userId)).emit('presence', { ...online, lastSeenAt: null });
+            },
+          },
+          [rooms.conversation(event.conversationId)],
+        );
       }
       return;
     }
