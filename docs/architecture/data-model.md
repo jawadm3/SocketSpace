@@ -167,6 +167,8 @@ AND NOT EXISTS (room ban) AND author is active and not muted`. If the `WHERE` fa
 **`attachment`**: `uploader_id`, `message_id` (null until the message is sent), `storage_key`,
 `thumb_key`, `mime` (always `image/webp` after re-encoding), `width`, `height`, `bytes`, `sha256`,
 `status` (`pending`, `attached`, `removed`). Pending uploads older than 24 hours are deleted.
+A profile photo is an attached row with no message; the profile's `avatar_config` holds its ID.
+`thumb_key` is unused: one file per picture is stored (D-043).
 
 **`link_preview`**: cache keyed by a hash of the normalised URL: `title`, `description`,
 `site_name`, `status` (`ok`, `blocked`, `error`), `fetched_at`, `expires_at` (7 days).

@@ -8,18 +8,19 @@ leaving bits in every room of the house.
 
 ## What lives on D: (inside the project folder)
 
-| What                     | Where                                      | Why it is here                                                                                                                                        |
-| ------------------------ | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Source code, docs, tests | `D:\mini project\socketspace\`             | The project itself.                                                                                                                                   |
-| pnpm package store       | `D:\mini project\socketspace\.pnpm-store\` | pnpm downloads each package version once into this "store" and links it into `node_modules`. Set by `storeDir` in `pnpm-workspace.yaml`. Git-ignored. |
-| pnpm metadata cache      | `D:\mini project\socketspace\.cache\pnpm\` | pnpm's cache of registry information. Set by `cacheDir` in `pnpm-workspace.yaml`. Git-ignored.                                                        |
-| Installed packages       | `node_modules\` folders                    | Links into the store. Regenerable with `pnpm install`. Git-ignored.                                                                                   |
-| Turborepo cache          | `.turbo\` folders                          | Remembers task results so unchanged work is skipped. Git-ignored.                                                                                     |
-| Vitest/Vite cache        | `node_modules\.vite\`                      | Test runner cache. Regenerable.                                                                                                                       |
-| Playwright browsers      | `.cache\ms-playwright\`                    | The browser the end-to-end tests drive. `scripts/tools/playwright.mjs` sets `PLAYWRIGHT_BROWSERS_PATH` to this folder. Git-ignored.                   |
-| Local PostgreSQL         | `.cache\postgres\17\`                      | Data folder and log of the development database (`pnpm db:start`, decision D-026). Delete it (with the server stopped) to start from empty.           |
-| gitleaks                 | `.cache\tools\gitleaks-8.30.1\`            | The secret scanner, downloaded once and checked against a pinned SHA-256 (`scripts/tools/gitleaks.mjs`). Only the program is kept, not the download.  |
-| Local mail folders       | `.cache\dev-mail\`, `.cache\e2e-mail\`     | Emails "sent" during development and end-to-end tests are saved here as files instead of being sent (the file mail catcher, `/dev/mail`).             |
+| What                     | Where                                      | Why it is here                                                                                                                                          |
+| ------------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Source code, docs, tests | `D:\mini project\socketspace\`             | The project itself.                                                                                                                                     |
+| pnpm package store       | `D:\mini project\socketspace\.pnpm-store\` | pnpm downloads each package version once into this "store" and links it into `node_modules`. Set by `storeDir` in `pnpm-workspace.yaml`. Git-ignored.   |
+| pnpm metadata cache      | `D:\mini project\socketspace\.cache\pnpm\` | pnpm's cache of registry information. Set by `cacheDir` in `pnpm-workspace.yaml`. Git-ignored.                                                          |
+| Installed packages       | `node_modules\` folders                    | Links into the store. Regenerable with `pnpm install`. Git-ignored.                                                                                     |
+| Turborepo cache          | `.turbo\` folders                          | Remembers task results so unchanged work is skipped. Git-ignored.                                                                                       |
+| Vitest/Vite cache        | `node_modules\.vite\`                      | Test runner cache. Regenerable.                                                                                                                         |
+| Playwright browsers      | `.cache\ms-playwright\`                    | The browser the end-to-end tests drive. `scripts/tools/playwright.mjs` sets `PLAYWRIGHT_BROWSERS_PATH` to this folder. Git-ignored.                     |
+| Local PostgreSQL         | `.cache\postgres\17\`                      | Data folder and log of the development database (`pnpm db:start`, decision D-026). Delete it (with the server stopped) to start from empty.             |
+| gitleaks                 | `.cache\tools\gitleaks-8.30.1\`            | The secret scanner, downloaded once and checked against a pinned SHA-256 (`scripts/tools/gitleaks.mjs`). Only the program is kept, not the download.    |
+| Local mail folders       | `.cache\dev-mail\`, `.cache\e2e-mail\`     | Emails "sent" during development and end-to-end tests are saved here as files instead of being sent (the file mail catcher, `/dev/mail`).               |
+| Uploaded pictures        | `.cache\uploads\`, `.cache\e2e-uploads\`   | Re-encoded pictures stored by the `local` storage driver in development and end-to-end tests (D-043). The end-to-end folder is emptied before each run. |
 
 ### Measured sizes (2026-10-02, end of Stage C)
 

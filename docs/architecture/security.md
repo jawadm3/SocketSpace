@@ -106,10 +106,15 @@ nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Polic
 - File type decided by **magic bytes**, not the file name or the browser's claim.
 - Decoded and re-encoded to WebP with sharp (`limitInputPixels`, metadata dropped, orientation
   applied), which removes EXIF/GPS data and destroys most "polyglot" tricks.
-- Stored under random keys; served from the storage provider's own domain (not ours) with
-  `Content-Type: image/webp` and `nosniff`. Images in private rooms use private storage and
-  short-lived signed URLs.
-- Upload rate limit: 20 per hour per user.
+- Stored under random keys in private storage. Browsers load every picture from our own
+  `/api/media/<id>`, which checks on each request that this viewer may see it, and sends it with
+  `Content-Type: image/webp`, `nosniff` and a policy that allows it nothing if opened as a page.
+  No storage address ever reaches a browser (D-043; this replaced the earlier idea of serving
+  from the storage provider's domain with signed addresses).
+- Upload rate limit: 20 per hour per user, counting refused files. Uploads need a confirmed
+  email address and must come from our own pages (Origin check).
+- A deleted message's pictures can no longer be loaded; a daily clean-up deletes those files and
+  uploads never used within 24 hours.
 
 ### 3.8 Link previews without SSRF
 
@@ -125,6 +130,11 @@ Server-side fetching is risky: a malicious link could make our server request
 5. Extract only title, description and site name (text). No preview images in v2 (each one would
    be another fetch to secure and a tracking pixel for the link's owner).
 6. Results cached for 7 days; never fetched in random mode (links are blocked there).
+7. The browser never names an address to fetch: it names a message, and the server reads the
+   links from that message's own text, only for a viewer who may read it (D-043).
+8. One fetch per link however many people open the message at once (the first request claims
+   the address, the others ask again a moment later), and at most 20 new fetches a minute per
+   person, so a message cannot turn our server into a source of traffic against another site.
 
 ### 3.9 Secrets, supply chain and CI (ASVS V13 "Configuration", V15 "Secure coding and architecture")
 

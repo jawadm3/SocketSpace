@@ -1,13 +1,19 @@
 # PROGRESS
 
-_Last updated: 2026-10-03, session 4 (Stage D in progress: D1 to D4 done; D5 next)._
+_Last updated: 2026-10-03, session 5 on the `continuation` branch (Stage D complete: D1 to D5
+done; Stage E next)._
 
 ## Current stage
 
-**Stage D (community mode) is in progress.** D1 (profiles and rooms), D2 (messaging), D3
-(history and reliability) and D4 (DMs, notifications, search) are done and tested end to end;
-**next is D5: media and link previews** (see "Exact next step").
-Stage C is complete and closed. Step log: `docs/development/steps/STEP-D-community-mode.md`.
+**Stage D (community mode) is complete.** D1 (profiles and rooms), D2 (messaging), D3 (history
+and reliability), D4 (DMs, notifications, search) and D5 (pictures, photo avatars, link previews)
+are done and tested end to end, and the stage's exit criteria are met (step log, "Stage D
+close-out"). **Next is Stage E: random mode and safety** (see "Exact next step").
+
+**D5 lives on the `continuation` branch**, not on `main`: it was built by a session that was not
+told it runs on the owner's account (CLAUDE.md, "Branches"). The owner reviews it in the draft
+pull request jawadm3/SocketSpace#1; decision D-043 is marked for that review.
+Step log: `docs/development/steps/STEP-D-community-mode.md`.
 
 ## Owner decisions (2026-10-01)
 
@@ -82,7 +88,7 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
   - STEP-C log (with the Better Auth upstream report text), requirements matrix (50 Done, 35 In
     progress, 92 Planned of 177), storage notes re-measured, 9 glossary terms, changelog.
 
-### Stage D: community mode (in progress; log: `docs/development/steps/STEP-D-community-mode.md`)
+### Stage D: community mode (complete; log: `docs/development/steps/STEP-D-community-mode.md`)
 
 - **D1 profiles and rooms** (`3570c15`, `7b5fc4f`, `1652b83`, `3d52162`; D-036, D-037):
   - Rooms in the database: create, join, leave, explore with search, settings, roles and
@@ -153,42 +159,61 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
   - Requirements matrix: 82 Done (one "to be kept current"), 33 In progress, 62 Planned of 177.
     NOTIF-02 waits for a hand check in a real browser (Stage G).
 
+- **D5 pictures, photo avatars and link previews** (session 5, `continuation` branch; D-043):
+  - Image pipeline (sharp): real type from the first bytes, 4 MB and 25 megapixel limits,
+    re-encoded to WebP with every piece of metadata removed; fakes, oversized and damaged files
+    refused with a reason.
+  - `POST /api/uploads` (own pages only, confirmed email, 20 an hour) and `GET /api/media/<id>`
+    (permission checked on every request). Storage drivers: Vercel Blob with private access,
+    a local folder, memory.
+  - Pictures in messages (button or paste, preview with upload state, text optional), kept in
+    the outbox across reloads; a deleted message removes its pictures.
+  - A photo as profile picture ("Upload a photo" tab in onboarding and settings), cropped to a
+    256-pixel square, shown to others at once.
+  - Text-only link previews fetched by the server: private and special addresses refused in
+    IPv4 and IPv6, every redirect re-checked, the checked address is the one connected to,
+    3 seconds, 512 KB, 7-day cache, one fetch per link however many readers.
+  - Found and fixed on the way: two readers caused two fetches of one link (now one, by a
+    claim in the cache); three visual faults seen in screenshots.
+  - Requirements matrix: 88 Done (one "to be kept current"), 32 In progress, 57 Planned of 177.
+
 ## Verified (with evidence)
 
-| What                                                                        | Evidence                                                                                                                                                                                                                                                                                                                                                             |
-| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pipeline works                                                              | `pnpm check`: 3/3 Turborepo tasks successful; 1 Vitest test passed.                                                                                                                                                                                                                                                                                                  |
-| v1 excluded from workspace, Turborepo, TypeScript, Vitest, ESLint, Prettier | "Tests run" table in STEP-A.                                                                                                                                                                                                                                                                                                                                         |
-| v1 history preserved                                                        | `git log --follow -- v1/server.js` reaches `0ef4f61`.                                                                                                                                                                                                                                                                                                                |
-| pnpm store on D: inside the project                                         | store at `D:\mini project\socketspace\.pnpm-store\v11`.                                                                                                                                                                                                                                                                                                              |
-| v1 behaviour problems                                                       | Raw outputs in `docs/analysis/evidence/`.                                                                                                                                                                                                                                                                                                                            |
-| Stages A and B pushed                                                       | `main` on GitHub; tag `v1.0.0`; release page live.                                                                                                                                                                                                                                                                                                                   |
-| Full git history has no secrets (Stage C start)                             | gitleaks 8.30.1: 24 commits scanned, "no leaks found".                                                                                                                                                                                                                                                                                                               |
-| Pre-commit hook blocks secrets                                              | Fake AWS-style key staged: hook exit 1, value redacted.                                                                                                                                                                                                                                                                                                              |
-| Database tests on PGlite and real PostgreSQL 17.9                           | 46/46 on both (`TEST_DATABASE_URL` against `db:start`).                                                                                                                                                                                                                                                                                                              |
-| Shared contract and authorisation tests                                     | 136/136 (52 of them the authorisation table).                                                                                                                                                                                                                                                                                                                        |
-| `pnpm check` after C3                                                       | 7/7 Turborepo tasks successful.                                                                                                                                                                                                                                                                                                                                      |
-| Test counts at the end of Stage C (session 3)                               | shared 136, db 53, web 49, realtime 39 (+2 Redis tests in CI); identical on PGlite and PostgreSQL 17.9. `pnpm check`: 13/13 tasks.                                                                                                                                                                                                                                   |
-| CodeQL clean                                                                | Alerts #1 to #4 fixed by `47d9449`; #5 dismissed with reason (D-035); 0 open.                                                                                                                                                                                                                                                                                        |
-| Windows quoting fix                                                         | Round trip through `Start-Process`: old helper 2/6 arguments intact, new 6/6; `db:start`/`db:stop` cycle works.                                                                                                                                                                                                                                                      |
-| Journeys J1, J11, SEC-05 headers, live connection, AUTH-06 revocation       | Playwright 5/5 locally and in CI (run 36956890831).                                                                                                                                                                                                                                                                                                                  |
-| CI green after D1 and D2 server side                                        | Run 37048118755 on `bd13d82`: all 6 jobs succeeded (checks, PostgreSQL + Redis, E2E, Docker, gitleaks, audit); CodeQL green, 0 open alerts.                                                                                                                                                                                                                          |
-| CI green after D3                                                           | Run 37058505770 on `4f19ce0` (D3 plus the CLAUDE.md handover rules): all 6 jobs succeeded; E2E 11 passed in 1.5 min; on the CI runner the 10,000-message test gave p95 33.4 ms, worst 54.3 ms, 1 of 548 frames over 50 ms. CodeQL green; 0 open code-scanning and Dependabot alerts. (Run 37058395720 on `3d12f46` was cancelled by CI when the newer push arrived.) |
-| Stage D4 complete locally (session 4)                                       | `pnpm check` 13/13 (shared 160, db 107, realtime 59 +2 Redis, web 114); same on PostgreSQL 17.9; E2E 13/13 in 1.6 min including J6 and search.                                                                                                                                                                                                                       |
-| Stage D3 complete locally (session 4)                                       | `pnpm check` 13/13 (shared 160, db 97, realtime 56 +2 Redis, web 107); same on PostgreSQL 17.9; E2E 11/11 in 1.4 min including J4 and the 10,000-message test (p95 frame 30.6 ms, at most 24 rows in the page).                                                                                                                                                      |
-| Stage D2 complete locally (session 4)                                       | `pnpm check` 13/13 (shared 160, db 97, realtime 56 +2 Redis, web 93); same on PostgreSQL 17.9; E2E 9/9 in 41.3 s including J2 (typing, unread on two tabs, presence, invisible mode) and J3 (new).                                                                                                                                                                   |
-| CI green after D2                                                           | Run 37054784622 on `8f790f4`: all 6 jobs succeeded (E2E 9 passed in 35.7 s); CodeQL green; 0 open code-scanning and 0 open Dependabot alerts.                                                                                                                                                                                                                        |
-| Raw-HTML lint ban fires (SEC-06)                                            | Probe file with `dangerouslySetInnerHTML`: ESLint "Raw HTML is not allowed", exit 1 (probe deleted).                                                                                                                                                                                                                                                                 |
-| Dependabot alerts                                                           | 75 alerts, all in the archived `v1/package-lock.json`, dismissed as "not used" with a comment (owner decision, 2026-10-02); 0 open.                                                                                                                                                                                                                                  |
-| Stage D2 server side locally                                                | `pnpm check` 13/13: shared 160, db 97, web 64, realtime 56 (+2 Redis); same on PostgreSQL 17.9; E2E 8/8 (27.7 s).                                                                                                                                                                                                                                                    |
-| Stage D1 locally                                                            | `pnpm check` 13/13: shared 148, db 85, web 64, realtime 45 (+2 Redis); E2E 8/8 (J1, J2, J5, J11 x2, headers, live connection, sign-out elsewhere).                                                                                                                                                                                                                   |
-| CI green on `main`                                                          | Run 36956890831 on `4d31e43` and run 37013142109 on `47d9449`: all 6 jobs succeeded; Redis tests ran; E2E 5/5; 34 commits scanned, no leaks.                                                                                                                                                                                                                         |
-| Docker images                                                               | CI smoke test: both run as `node`; healthz 200; handshake without Origin 403, with web origin 200; metrics without token 401; readyz database+keys true; realtime exit code 0 after SIGTERM.                                                                                                                                                                         |
-| Foreign-origin probe from v1 now fails                                      | `connection.test.ts` and the Docker smoke test (403).                                                                                                                                                                                                                                                                                                                |
+| What                                                                        | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Pipeline works                                                              | `pnpm check`: 3/3 Turborepo tasks successful; 1 Vitest test passed.                                                                                                                                                                                                                                                                                                                                                      |
+| v1 excluded from workspace, Turborepo, TypeScript, Vitest, ESLint, Prettier | "Tests run" table in STEP-A.                                                                                                                                                                                                                                                                                                                                                                                             |
+| v1 history preserved                                                        | `git log --follow -- v1/server.js` reaches `0ef4f61`.                                                                                                                                                                                                                                                                                                                                                                    |
+| pnpm store on D: inside the project                                         | store at `D:\mini project\socketspace\.pnpm-store\v11`.                                                                                                                                                                                                                                                                                                                                                                  |
+| v1 behaviour problems                                                       | Raw outputs in `docs/analysis/evidence/`.                                                                                                                                                                                                                                                                                                                                                                                |
+| Stages A and B pushed                                                       | `main` on GitHub; tag `v1.0.0`; release page live.                                                                                                                                                                                                                                                                                                                                                                       |
+| Full git history has no secrets (Stage C start)                             | gitleaks 8.30.1: 24 commits scanned, "no leaks found".                                                                                                                                                                                                                                                                                                                                                                   |
+| Pre-commit hook blocks secrets                                              | Fake AWS-style key staged: hook exit 1, value redacted.                                                                                                                                                                                                                                                                                                                                                                  |
+| Database tests on PGlite and real PostgreSQL 17.9                           | 46/46 on both (`TEST_DATABASE_URL` against `db:start`).                                                                                                                                                                                                                                                                                                                                                                  |
+| Shared contract and authorisation tests                                     | 136/136 (52 of them the authorisation table).                                                                                                                                                                                                                                                                                                                                                                            |
+| `pnpm check` after C3                                                       | 7/7 Turborepo tasks successful.                                                                                                                                                                                                                                                                                                                                                                                          |
+| Test counts at the end of Stage C (session 3)                               | shared 136, db 53, web 49, realtime 39 (+2 Redis tests in CI); identical on PGlite and PostgreSQL 17.9. `pnpm check`: 13/13 tasks.                                                                                                                                                                                                                                                                                       |
+| CodeQL clean                                                                | Alerts #1 to #4 fixed by `47d9449`; #5 dismissed with reason (D-035); 0 open.                                                                                                                                                                                                                                                                                                                                            |
+| Windows quoting fix                                                         | Round trip through `Start-Process`: old helper 2/6 arguments intact, new 6/6; `db:start`/`db:stop` cycle works.                                                                                                                                                                                                                                                                                                          |
+| Journeys J1, J11, SEC-05 headers, live connection, AUTH-06 revocation       | Playwright 5/5 locally and in CI (run 36956890831).                                                                                                                                                                                                                                                                                                                                                                      |
+| CI green after D1 and D2 server side                                        | Run 37048118755 on `bd13d82`: all 6 jobs succeeded (checks, PostgreSQL + Redis, E2E, Docker, gitleaks, audit); CodeQL green, 0 open alerts.                                                                                                                                                                                                                                                                              |
+| CI green after D3                                                           | Run 37058505770 on `4f19ce0` (D3 plus the CLAUDE.md handover rules): all 6 jobs succeeded; E2E 11 passed in 1.5 min; on the CI runner the 10,000-message test gave p95 33.4 ms, worst 54.3 ms, 1 of 548 frames over 50 ms. CodeQL green; 0 open code-scanning and Dependabot alerts. (Run 37058395720 on `3d12f46` was cancelled by CI when the newer push arrived.)                                                     |
+| Stage D5 and Stage D complete locally (session 5)                           | `pnpm check` 13/13 (shared 168, db 119, realtime 61 +2 Redis, web 231); same on PostgreSQL 17.9; E2E 16/16 in 2.1 min including J9 (pictures; link previews) and the J11 photo; the 10,000-message test in that run gave p95 40.7 ms, worst 91.4 ms, 4 of 548 frames over 50 ms (31.5 ms, 56.8 ms and 1 in an earlier run of the session). With the IPv4 private-address check switched off, 28 link-preview tests fail. |
+| Stage D4 complete locally (session 4)                                       | `pnpm check` 13/13 (shared 160, db 107, realtime 59 +2 Redis, web 114); same on PostgreSQL 17.9; E2E 13/13 in 1.6 min including J6 and search.                                                                                                                                                                                                                                                                           |
+| Stage D3 complete locally (session 4)                                       | `pnpm check` 13/13 (shared 160, db 97, realtime 56 +2 Redis, web 107); same on PostgreSQL 17.9; E2E 11/11 in 1.4 min including J4 and the 10,000-message test (p95 frame 30.6 ms, at most 24 rows in the page).                                                                                                                                                                                                          |
+| Stage D2 complete locally (session 4)                                       | `pnpm check` 13/13 (shared 160, db 97, realtime 56 +2 Redis, web 93); same on PostgreSQL 17.9; E2E 9/9 in 41.3 s including J2 (typing, unread on two tabs, presence, invisible mode) and J3 (new).                                                                                                                                                                                                                       |
+| CI green after D2                                                           | Run 37054784622 on `8f790f4`: all 6 jobs succeeded (E2E 9 passed in 35.7 s); CodeQL green; 0 open code-scanning and 0 open Dependabot alerts.                                                                                                                                                                                                                                                                            |
+| Raw-HTML lint ban fires (SEC-06)                                            | Probe file with `dangerouslySetInnerHTML`: ESLint "Raw HTML is not allowed", exit 1 (probe deleted).                                                                                                                                                                                                                                                                                                                     |
+| Dependabot alerts                                                           | 75 alerts, all in the archived `v1/package-lock.json`, dismissed as "not used" with a comment (owner decision, 2026-10-02); 0 open.                                                                                                                                                                                                                                                                                      |
+| Stage D2 server side locally                                                | `pnpm check` 13/13: shared 160, db 97, web 64, realtime 56 (+2 Redis); same on PostgreSQL 17.9; E2E 8/8 (27.7 s).                                                                                                                                                                                                                                                                                                        |
+| Stage D1 locally                                                            | `pnpm check` 13/13: shared 148, db 85, web 64, realtime 45 (+2 Redis); E2E 8/8 (J1, J2, J5, J11 x2, headers, live connection, sign-out elsewhere).                                                                                                                                                                                                                                                                       |
+| CI green on `main`                                                          | Run 36956890831 on `4d31e43` and run 37013142109 on `47d9449`: all 6 jobs succeeded; Redis tests ran; E2E 5/5; 34 commits scanned, no leaks.                                                                                                                                                                                                                                                                             |
+| Docker images                                                               | CI smoke test: both run as `node`; healthz 200; handshake without Origin 403, with web origin 200; metrics without token 401; readyz database+keys true; realtime exit code 0 after SIGTERM.                                                                                                                                                                                                                             |
+| Foreign-origin probe from v1 now fails                                      | `connection.test.ts` and the Docker smoke test (403).                                                                                                                                                                                                                                                                                                                                                                    |
 
 ## In progress
 
-- Nothing. D4 is complete; nothing is half-edited.
+- Nothing. Stage D is complete; nothing is half-edited.
 
 ## Known problems and things waiting for the owner
 
@@ -198,11 +223,28 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
    the owner's own account work on `main`; sessions on any other account work on `continuation`
    (draft pull request jawadm3/SocketSpace#1), as CLAUDE.md "Branches" describes. Sessions fetch and re-read CLAUDE.md before every
    push.
-1. **Accepted advisory:** one moderate `pnpm audit` finding (old esbuild inside drizzle-kit's dev
+1. **For the owner's review (continuation branch):** decision D-043 (how pictures are stored
+   and served, no thumbnails, no S3 driver yet, link previews by message). The draft pull request
+   jawadm3/SocketSpace#1 carries all of D5.
+2. **For the owner's review (continuation branch): one accepted security advisory, D-044.** A new
+   high advisory for `braces` (no fixed version exists) reaches the repository only through the
+   Next.js lint plugin, a development tool; `pnpm audit --prod` does not list it. It is ignored by ID in
+   `pnpm-workspace.yaml` so CI's audit job keeps working. Remove the entry when a fix is
+   published.
+3. **For Stage H (owner):** create the Vercel Blob store with **private** access; Vercel then
+   sets `BLOB_READ_WRITE_TOKEN`. Set `STORAGE_DRIVER=vercel-blob` (the app refuses to start in
+   production without it). Smoke-test one upload and one https link preview there: neither Vercel
+   Blob itself nor https fetching can be tested on this laptop.
+4. **Seen, not yet looked into:** during E2E runs the web server prints Node warnings ("11 drain
+   listeners added to [Gzip]") and "The destination stream closed early". They appear in journeys
+   that D5 did not touch (J1, J2, J6), and every test passes. To look at in Stage G.
+5. **Pictures in the web Docker image** are not exercised by the Docker smoke test (it checks
+   health only). Production uses Vercel; check an upload if the Docker image is ever used.
+6. **Accepted advisory:** one moderate `pnpm audit` finding (old esbuild inside drizzle-kit's dev
    loader, never used in production; D-034).
-2. **Social sign-in apps:** the owner decided (2026-10-02) to create every provider's developer
+7. **Social sign-in apps:** the owner decided (2026-10-02) to create every provider's developer
    app at once in Stage H, with the live URLs; no local test apps before then.
-3. **Optional, owner:** the old pnpm state file is still at
+8. **Optional, owner:** the old pnpm state file is still at
    `C:\Users\jawad\AppData\Local\pnpm-state\` (51 bytes) after the move; it can be deleted.
 
 Done with the owner on 2026-10-02: pnpm's state directory moved to
@@ -216,27 +258,32 @@ reversible on GitHub. Any new alert in v1's lockfile would need the same treatme
 
 ## Exact next step
 
-Stage D, **D5: media and link previews** (plan.md; requirements MSG-08, MSG-09, PROF-08, SEC-07,
-SEC-12; journey J9 in `qa/acceptance_criteria.md`):
+Stage E, **E1: safety core** (plan.md; requirements SAFE-01, SAFE-02, and the sanctions model
+used by ADMIN-03 and RAND-05; journeys J7 and J8 in `qa/acceptance_criteria.md` come with E2 and
+E3):
 
-1. **Upload pipeline**: check the real file type from its first bytes (not the name), size and
-   pixel limits, re-encode images (sharp) and remove EXIF and other metadata; refuse polyglots
-   and fakes. Unit tests with hostile files.
-2. **Storage drivers**: Vercel Blob for production (free tier; the owner creates the token in
-   Stage H) and a local disk driver for development and tests; signed upload flow; the
-   `attachment` table already exists.
-3. **Message images** (`attachmentIds` on `message:send` already exists in the contract) and
-   **avatar photos** (PROF-08, reportable later in Stage E).
-4. **Link previews**: fetched by the server, text only, with SSRF protection (private and
-   metadata addresses refused, redirects re-checked, size and time limits), cached 7 days
-   (`link_preview` table exists); never in random mode.
-5. Tests and E2E J9; update the matrix, STEP-D, PROGRESS; commit, push, check CI. After D5, the
-   Stage D exit criteria in `qa/acceptance_criteria.md` close Stage D.
+1. **Word-list filter** in `packages/shared` (SAFE-02): a normaliser (letter case, accents,
+   look-alike characters, repeated letters, separators), three severities, and tests for both
+   misses and false positives ("Scunthorpe" must pass). `message.filter_severity` already exists.
+2. **Report everywhere** (SAFE-01): messages, people (including profile photos, PROF-08), rooms.
+   The `report` table exists; the server takes its own snapshot of the reported content
+   (ADMIN-01). Rate-limited.
+3. **Sanctions model**: warn, mute, suspend, ban, random-mode timeout (`user_sanction` exists and
+   `checkCanPost` already reads it); functions to apply and lift them, with the audit log, and
+   live enforcement through the realtime server (`moderation:notice`, `session:ended`).
+4. Then E2 (random mode), E3 (moderation dashboard), E4 (AI moderation), E5 (legal pages, account
+   deletion, export, and the daily retention job, which must also call
+   `collectAttachmentGarbage` from D5 and delete expired `link_preview` rows).
+
+Branch: a session on the owner's account works on `main` (after the owner merges the pull
+request); any other session continues on `continuation` (CLAUDE.md, "Branches").
 
 Local state: run `pnpm db:start` before tests against PostgreSQL or E2E (it stops when the laptop
 restarts), and `pnpm db:migrate:local` after pulling. `apps/web/.env.local` and
-`apps/realtime/.env.local` exist (generated by `pnpm setup:local`). `pnpm build` before
-`pnpm --filter @socketspace/web e2e`.
+`apps/realtime/.env.local` exist (generated by `pnpm setup:local`); D5 needs no new entries
+there (pictures go to `.cache/uploads` by default). `pnpm build` before
+`pnpm --filter @socketspace/web e2e`. E2E uses ports 3100, 4100 and 4199 (the pretend web site
+for link previews). `E2E_SHOTS=1` also writes screenshots to `apps/web/test-results/shots`.
 
 ## Effort guide (from Anthropic's Claude Code docs, checked 2026-10-01)
 
@@ -252,13 +299,13 @@ Sources: [Model configuration](https://code.claude.com/docs/en/model-config) and
 | Max             | Deepest reasoning, current session only; for hard problems worked through without you, such as finding security vulnerabilities; can overthink                                                                              | Only when Extra gets stuck on a hard bug, or the Stage G security hunt if Ultracode is off                                                          |
 | Ultracode       | Not a level: a setting that makes Claude plan a dynamic workflow (many sub-agents, cross-checked) for each substantive task. Uses noticeably more tokens and reaches usage limits sooner; launching with it also sets Extra | Stage G (codebase-wide audits: security, accessibility, test gaps). For a single big fan-out task, start just that prompt with `ultracode:` instead |
 
-| Session        | Stage                               | Effort                                                             |
-| -------------- | ----------------------------------- | ------------------------------------------------------------------ |
-| 1 (done)       | A + B: analysis and design          | Ultracode was selected; no workflows were launched in this session |
-| 2              | C: foundations                      | Extra                                                              |
-| 3, 4 (done), 5 | D: community mode (D3 to D5 left)   | High (Extra if reconnect/resync bugs get subtle)                   |
-| 4              | E: random mode and safety           | Extra                                                              |
-| 5              | F: themes, home page, accessibility | High                                                               |
-| 6              | G: testing, load tests, reviews     | Ultracode (or Max for the security review)                         |
-| 7              | H: deployment                       | Medium (High if live debugging)                                    |
-| 8              | I: docs, walkthrough, release       | Medium; `ultracode:` prompt for the file-by-file code walkthrough  |
+| Session       | Stage                               | Effort                                                             |
+| ------------- | ----------------------------------- | ------------------------------------------------------------------ |
+| 1 (done)      | A + B: analysis and design          | Ultracode was selected; no workflows were launched in this session |
+| 2, 3 (done)   | C: foundations                      | Extra                                                              |
+| 3 to 5 (done) | D: community mode                   | High (Extra if reconnect/resync bugs get subtle)                   |
+| next          | E: random mode and safety           | Extra                                                              |
+| then          | F: themes, home page, accessibility | High                                                               |
+| then          | G: testing, load tests, reviews     | Ultracode (or Max for the security review)                         |
+| then          | H: deployment                       | Medium (High if live debugging)                                    |
+| last          | I: docs, walkthrough, release       | Medium; `ultracode:` prompt for the file-by-file code walkthrough  |

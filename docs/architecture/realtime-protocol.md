@@ -59,10 +59,15 @@ message, 10 attachments, 20 interest tags).
 
 **People in payloads.** Every user object sent to a browser (message authors, members, presence,
 profiles) has the shape `{ id, nickname, avatar, realName? }`. `avatar` is either a preset/custom
-avatar config or a photo URL. `realName` is included **only** when the receiving viewer may see it
+avatar config or a photo, given as a path on our own server (`/api/media/<id>`, D-043). `realName` is included **only** when the receiving viewer may see it
 (the person's visibility setting: nobody, contacts or everyone) and the person chose to show it in
 chats. Because one broadcast goes to many viewers, broadcasts carry nicknames only, and the client
 fetches real names it is allowed to see once per person over HTTP (cached). See `security.md` 3.12.
+
+**Pictures in messages.** A message carries `attachments: [{ id, width, height }]` (empty when
+deleted). Pictures are uploaded to the web app first (`POST /api/uploads`), which answers with an
+ID; `message:send` names those IDs in `attachmentIds`, and its `body` may be empty when at least
+one picture is attached. Browsers load each picture from `/api/media/<id>` (D-043).
 
 ## Events: community mode
 

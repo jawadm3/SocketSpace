@@ -87,11 +87,15 @@ hour. _Example:_ kilowatt-hours on an electricity bill. The free plan includes 1
 
 **Cursor pagination**: Fetching a long list in pages by saying "the items before this one" instead of "page 7". New items arriving at the top cannot shift what the next page contains. _Example:_ a bookmark: "carry on from here" works even if pages were added at the front.
 
+**Decompression bomb**: A tiny file that claims to hold an enormous picture, so that opening it uses up a server's memory. SocketSpace reads the size a picture states before decoding any of it and refuses anything over 25 million pixels. _Example:_ a small parcel labelled "inflates to the size of a house": you read the label and do not open it indoors.
+
 **DiceBear**: A free, open-source (MIT) library that draws avatars from a few settings. _Example:_ a character creator in a video game. SocketSpace runs it inside the app, so no outside service is involved.
 
 **Direct message (DM)**: A private conversation between two people. SocketSpace keeps exactly one per pair. _Example:_ a letter between two pen friends rather than a notice on a board.
 
 **DNS records**: Settings attached to a domain that tell the internet where its website and email live and who may send email for it. _Example:_ the directory board in an office lobby.
+
+**DNS rebinding**: A trick where a web address answers with a harmless public address when it is checked and with a private one a moment later, when it is actually used. SocketSpace's link-preview fetcher looks the name up once and connects to exactly the address it checked. _Example:_ showing a guard one ID card at the gate and swapping it before reaching the door; here the guard walks you to the door himself.
 
 **Docker / Dockerfile**: Docker packages a program with everything it needs into a "container"
 that runs the same anywhere; a Dockerfile is the recipe. _Example:_ a shipping container that fits
@@ -168,6 +172,8 @@ the main content appears; TBT (Total Blocking Time) is how long the page is too 
 Lighthouse is Google's free tool that measures them. _Example:_ how long until the curtain rises,
 and how long the usher ignores you.
 
+**Link preview**: A small card under a message that shows the title, description and site name of a linked page. In SocketSpace the server fetches the page (never the reader's browser), keeps only text, and reuses the result for 7 days. _Example:_ a librarian reading you the title and blurb of a book, so you need not walk to the shelf to decide whether to open it.
+
 **Link safety attributes (noopener, noreferrer, nofollow, ugc)**: Labels on links that people post. `noopener` stops the new page from controlling ours, `noreferrer` hides which page the click came from, `nofollow` and `ugc` ("user-generated content") tell search engines the site does not vouch for the link. _Example:_ handing someone a leaflet without giving them your house key or your address.
 
 **Linter (ESLint)**: A tool that reads code and points out likely mistakes without running it.
@@ -215,6 +221,8 @@ raw text queries. _Example:_ a phrasebook that checks your grammar before you sp
 **Outbox**: A list in the browser of messages not yet confirmed by the server, kept so they can be
 re-sent after a dropped connection. _Example:_ the outbox tray on an office desk.
 
+**Object storage (Vercel Blob)**: A service that keeps files (here: pictures) under a name and hands them back on request, separate from the database. SocketSpace's store is private: only our server can read it, and it passes a picture on only after checking who is asking. _Example:_ a cloakroom where only the attendant can reach the coats, and hands one over after checking your ticket.
+
 **Package / dependency**: Ready-made code written by others that a project uses. _Example:_ buying
 ready-made bricks instead of firing your own clay.
 
@@ -231,6 +239,8 @@ _Example:_ a pocket-sized practice version of the real thing. Used for tests.
 **pnpm store**: pnpm's single warehouse of downloaded packages, linked into each project.
 _Example:_ a library lending the same book to many readers. Ours is `.pnpm-store` inside the
 project.
+
+**Polyglot file**: A file built to be valid as two things at once, for example a picture that is also a script or an archive, hoping some program will treat it as the dangerous one. Re-encoding destroys it, because only the pixels are kept. _Example:_ a postcard with a second message in invisible ink: copying the picture by hand onto a new card leaves the ink behind.
 
 **PostgreSQL**: A widely used, free, open-source database. SocketSpace keeps accounts, rooms and messages in it: locally in `.cache/postgres`, in tests in PGlite or a throwaway database, and in production on Neon. _Example:_ a very organised filing cabinet that many clerks can use at once without mixing up each other's papers.
 
@@ -252,6 +262,8 @@ coffee loyalty card that allows a few free refills per hour.
 **Read marker / unread count**: The read marker remembers the last message you read in each room; the unread count is how many messages from others came after it. Reading on one tab moves the marker, so every tab clears its badge. _Example:_ a bookmark in a shared book: wherever you pick it up, you know where you stopped.
 
 **Read receipt**: A sign that the other person received ("Delivered") or read ("Seen") your message. In SocketSpace both people must allow them, or neither sees them. _Example:_ the "signed for" note on a recorded delivery.
+
+**Re-encoding (images)**: Decoding a picture to its pixels and writing those pixels into a brand-new file, instead of storing the file that was uploaded. Everything that is not a pixel (location, camera details, hidden data) is left behind. _Example:_ photocopying a document instead of filing the original: the copy has the words but not the sticky notes or the fingerprints.
 
 **Redis**: A very fast in-memory data store, often used to pass messages between servers. SocketSpace can use it to link several realtime servers (the Redis adapter); the free deployment runs one server and does not need it. _Example:_ a shared noticeboard between several office buildings.
 
@@ -298,6 +310,8 @@ office and read me what's on the desk". Link previews are guarded against it.
 
 **Standalone build (Next.js)**: A build of the web app that includes only the files it needs to run, so it can be copied into a small container. _Example:_ a flat-pack wardrobe with exactly the screws it needs, nothing extra.
 
+**Storage driver**: A small, swappable piece of code that knows how to save, read and delete files in one particular place (Vercel Blob, a local folder, or memory for tests). The rest of the app talks to all of them the same way. _Example:_ a travel plug adapter: the appliance stays the same, only the adapter changes with the country.
+
 **Strict mode (TypeScript)**: TypeScript's strictest checking settings. _Example:_ a spell-checker
 set to "flag everything".
 
@@ -336,6 +350,8 @@ with thousands of messages fast.
 
 **WCAG**: The Web Content Accessibility Guidelines; level AA is the common target (readable
 contrast, keyboard use, screen-reader labels and more).
+
+**WebP**: A modern picture format that makes smaller files than JPEG or PNG at similar quality. Every picture SocketSpace stores is a WebP it encoded itself. _Example:_ repacking a suitcase more tightly so the same clothes fit a smaller bag.
 
 **WebSocket**: A web connection that stays open so both sides can send messages at any time.
 _Example:_ a walkie-talkie channel that stays on.
