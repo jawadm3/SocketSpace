@@ -83,12 +83,12 @@ somehow, and ordering would be harder to guarantee.
 
 ## Deployment topology and configuration
 
-| Piece           | Where                                              | Address (example)                           |
-| --------------- | -------------------------------------------------- | ------------------------------------------- |
-| Web app         | Vercel project, root directory `apps/web`          | `https://socketspace.vercel.app`            |
-| Realtime server | Render web service from `apps/realtime/Dockerfile` | `https://socketspace-rt.onrender.com` (WSS) |
-| Database        | Neon project, Postgres 17                          | pooled and direct connection strings        |
-| Images          | Vercel Blob store                                  | `*.public.blob.vercel-storage.com`          |
+| Piece           | Where                                              | Address (example)                            |
+| --------------- | -------------------------------------------------- | -------------------------------------------- |
+| Web app         | Vercel project, root directory `apps/web`          | `https://socketspace.vercel.app`             |
+| Realtime server | Render web service from `apps/realtime/Dockerfile` | `https://socketspace-rt.onrender.com` (WSS)  |
+| Database        | Neon project, Postgres 17                          | pooled and direct connection strings         |
+| Images          | Vercel Blob store (private access)                 | not public: served through `/api/media/<id>` |
 
 All addresses, origins and secrets come from environment variables, validated at start-up with
 Zod; a missing or malformed variable stops the program with a message naming the variable (never

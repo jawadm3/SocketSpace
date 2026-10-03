@@ -19,6 +19,7 @@ import { newId } from '../schema/_common';
 import { conversation, conversationMember } from '../schema/conversations';
 import { message } from '../schema/messages';
 import { block, notification } from '../schema/social';
+import { visibleBody } from '../masking';
 import type { MessageRow } from './messages';
 
 export type NotificationRow = typeof notification.$inferSelect;
@@ -140,6 +141,7 @@ export async function listNotifications(
       roomName: conversation.name,
       messageId: notification.messageId,
       messageBody: message.body,
+      messageFilterSeverity: message.filterSeverity,
       messageDeletedAt: message.deletedAt,
     })
     .from(notification)
@@ -148,9 +150,12 @@ export async function listNotifications(
     .where(eq(notification.userId, userId))
     .orderBy(desc(notification.createdAt), desc(notification.id))
     .limit(Math.min(limit, 100));
-  return rows.map(({ messageDeletedAt, messageBody, ...row }) => ({
+  return rows.map(({ messageDeletedAt, messageBody, messageFilterSeverity, ...row }) => ({
     ...row,
-    messageBody: messageDeletedAt || messageBody === null ? null : messageBody,
+    messageBody:
+      messageDeletedAt || messageBody === null
+        ? null
+        : visibleBody({ body: messageBody, filterSeverity: messageFilterSeverity ?? 0 }),
   }));
 }
 

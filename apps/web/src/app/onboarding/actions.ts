@@ -69,6 +69,9 @@ export async function completeOnboardingAction(
       suggestions,
     };
   }
+  if (!result.ok && result.reason === 'avatar_invalid') {
+    return { values, errors: { avatar: 'That photo could not be used. Please upload it again.' } };
+  }
   if (!result.ok) {
     return { values, errors: { form: 'Your account could not be found. Please sign in again.' } };
   }

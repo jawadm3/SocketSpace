@@ -1,5 +1,6 @@
 /**
- * Before the end-to-end run: a brand-new, fully migrated database and an empty mail folder.
+ * Before the end-to-end run: a brand-new, fully migrated database, an empty mail folder and an
+ * empty uploads folder.
  */
 import { rm } from 'node:fs/promises';
 
@@ -24,4 +25,5 @@ export default async function globalSetup(): Promise<void> {
   }
   await migratePostgres(E2E.databaseUrl);
   await rm(E2E.mailDir, { recursive: true, force: true });
+  await rm(E2E.uploadsDir, { recursive: true, force: true });
 }

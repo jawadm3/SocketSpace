@@ -18,7 +18,10 @@ export function ProfileForm({
   avatar,
   presets,
   builder,
+  canUpload,
 }: {
+  /** A photo needs a confirmed email address. */
+  canUpload: boolean;
   nickname: string;
   names: NameValues;
   bio: string;
@@ -103,6 +106,7 @@ export function ProfileForm({
           builder={builder}
           initial={avatar}
           error={state.errors?.avatar}
+          canUpload={canUpload}
         />
       </section>
 

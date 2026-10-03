@@ -15,9 +15,12 @@ export function OnboardingForm({
   presets,
   builder,
   names,
+  canUpload,
 }: {
   presets: PresetChoice[];
   builder: BuilderStyle[];
+  /** A photo needs a confirmed email address. */
+  canUpload: boolean;
   /** Pre-filled from a social sign-in when there is one; visibility starts at "nobody". */
   names: NameValues;
 }) {
@@ -77,13 +80,14 @@ export function OnboardingForm({
           2. Your picture
         </h2>
         <p className="text-sm text-muted">
-          Pick one from the gallery or make your own. Photo upload arrives soon.
+          Pick one from the gallery, make your own, or upload a photo.
         </p>
         <AvatarPicker
           presets={presets}
           builder={builder}
           initial={null}
           error={state.errors?.avatar}
+          canUpload={canUpload}
         />
       </section>
 

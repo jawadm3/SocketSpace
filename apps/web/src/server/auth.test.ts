@@ -4,7 +4,8 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { eq, schema } from '@socketspace/db';
+import { applySanction, eq, liftSanction, schema } from '@socketspace/db';
+import { createTestUser } from '@socketspace/db/testing';
 
 import { cookieHeader, createAuthHarness, nextIp, type AuthHarness } from '../test/auth-harness';
 
@@ -259,6 +260,94 @@ describe('account status', () => {
     const result = await h.call('/sign-in/email', { body: { email, password: PASSWORD } });
     expect(result.status).toBe(403);
     expect(JSON.stringify(result.json)).toContain('ACCOUNT_INACTIVE');
+  });
+
+  it('a suspension signs the person out, refuses sign-in with the reason, and ends by itself', async () => {
+    const { email, result: signedUp } = await signUp();
+    const cookie = cookieHeader(signedUp.cookies);
+    const target = await userRow(email);
+    const admin = await createTestUser(h.db, { role: 'admin' });
+    if (!target) throw new Error('setup');
+    expect((await h.call('/get-session', { method: 'GET', cookie })).json).not.toBeNull();
+
+    const applied = await applySanction(h.db, {
+      actor: { type: 'admin', id: admin.id },
+      targetUserId: target.id,
+      kind: 'suspend',
+      reason: 'Harassing another member',
+      durationSeconds: 3600,
+    });
+    expect(applied).toMatchObject({ ok: true, sessionsRevoked: true });
+    // The cookie they still hold is worth nothing: the session behind it is gone.
+    expect((await h.call('/get-session', { method: 'GET', cookie })).json).toBeNull();
+
+    const refused = await h.call('/sign-in/email', {
+      body: { email, password: PASSWORD },
+      ip: nextIp(),
+    });
+    expect(refused.status).toBe(403);
+    const text = JSON.stringify(refused.json);
+    expect(text).toContain('ACCOUNT_INACTIVE');
+    expect(text).toMatch(/This account is suspended until \d{4}-\d\d-\d\d \d\d:\d\d UTC/);
+    expect(text).toContain('Reason: Harassing another member');
+    expect(refused.cookies.size).toBe(0);
+
+    // The suspension runs out (its end is moved into the past): signing in works again.
+    await h.db
+      .update(schema.userSanction)
+      .set({ expiresAt: new Date(Date.now() - 60_000) })
+      .where(eq(schema.userSanction.userId, target.id));
+    const back = await h.call('/sign-in/email', {
+      body: { email, password: PASSWORD },
+      ip: nextIp(),
+    });
+    expect(back.status).toBe(200);
+    expect((await userRow(email))?.status).toBe('active');
+  });
+
+  it('a ban refuses sign-in until a moderator lifts it', async () => {
+    const { email } = await signUp();
+    const target = await userRow(email);
+    const admin = await createTestUser(h.db, { role: 'admin' });
+    if (!target) throw new Error('setup');
+    await applySanction(h.db, {
+      actor: { type: 'admin', id: admin.id },
+      targetUserId: target.id,
+      kind: 'ban',
+      reason: 'Threats',
+    });
+    const signIn = () =>
+      h.call('/sign-in/email', { body: { email, password: PASSWORD }, ip: nextIp() });
+    const refused = await signIn();
+    expect(refused.status).toBe(403);
+    expect(JSON.stringify(refused.json)).toContain('This account is banned. Reason: Threats');
+
+    await liftSanction(h.db, {
+      actorId: admin.id,
+      targetUserId: target.id,
+      kind: 'ban',
+      reason: 'Appeal accepted',
+    });
+    expect((await signIn()).status).toBe(200);
+  });
+
+  it('never shows the reason to someone who does not know the password', async () => {
+    const { email } = await signUp();
+    const target = await userRow(email);
+    const admin = await createTestUser(h.db, { role: 'admin' });
+    if (!target) throw new Error('setup');
+    await applySanction(h.db, {
+      actor: { type: 'admin', id: admin.id },
+      targetUserId: target.id,
+      kind: 'ban',
+      reason: 'Private reason',
+    });
+    const guess = await h.call('/sign-in/email', {
+      body: { email, password: 'not the right password' },
+      ip: nextIp(),
+    });
+    expect(guess.status).toBe(401);
+    expect(JSON.stringify(guess.json)).not.toContain('Private reason');
   });
 });
 

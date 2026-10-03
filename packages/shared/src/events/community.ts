@@ -15,7 +15,8 @@ import {
 } from '../domain';
 import { REACTION_EMOJI } from '../emoji';
 import { LIMITS } from '../limits';
-import { isoDateTime, messageBody, seqNumber, uuid } from '../primitives';
+import { attachmentWireSchema } from '../media';
+import { isoDateTime, messageBody, messageBodyOrEmpty, seqNumber, uuid } from '../primitives';
 import { publicUserSchema } from '../profile';
 
 // Shared payload pieces -------------------------------------------------------------------------
@@ -45,6 +46,8 @@ export const messageWireSchema = z.strictObject({
   moderationState: z.enum(MODERATION_STATES),
   createdAt: isoDateTime,
   reactions: z.array(reactionSummarySchema),
+  /** Pictures sent with the message (MSG-09). Empty when deleted or removed. */
+  attachments: z.array(attachmentWireSchema).max(LIMITS.message.attachmentsMax),
 });
 
 export type MessageWire = z.infer<typeof messageWireSchema>;
@@ -83,13 +86,24 @@ export const PRESENCE_STATUSES = ['online', 'away', 'dnd', 'offline'] as const;
 
 // Client → server payloads ----------------------------------------------------------------------
 
-export const messageSendSchema = z.strictObject({
-  conversationId: uuid,
-  clientId: uuid,
-  body: messageBody,
-  replyToId: uuid.optional(),
-  attachmentIds: z.array(uuid).max(LIMITS.message.attachmentsMax).optional(),
-});
+export const messageSendSchema = z
+  .strictObject({
+    conversationId: uuid,
+    clientId: uuid,
+    /** May be empty only when the message carries pictures. */
+    body: messageBodyOrEmpty,
+    replyToId: uuid.optional(),
+    /** Pictures uploaded beforehand through `POST /api/uploads` (MSG-09). */
+    attachmentIds: z
+      .array(uuid)
+      .max(LIMITS.message.attachmentsMax)
+      .refine((ids) => new Set(ids).size === ids.length, 'Each picture may appear only once')
+      .optional(),
+  })
+  .refine((value) => value.body.length > 0 || (value.attachmentIds?.length ?? 0) > 0, {
+    path: ['body'],
+    message: 'Message is empty',
+  });
 
 export const messageEditSchema = z.strictObject({
   messageId: uuid,
@@ -219,8 +233,19 @@ export const roomNoticeSchema = z.strictObject({
 });
 /** Someone's nickname or avatar changed. Nickname only: it goes to many viewers at once. */
 export const userUpdatedSchema = z.strictObject({ user: publicUserSchema });
+export const MODERATION_NOTICE_KINDS = [
+  'warned',
+  'muted',
+  'unmuted',
+  'suspended',
+  'banned',
+  'random_timeout',
+  'random_timeout_lifted',
+] as const;
+/** Told only to the person concerned: a site moderator acted on their account (ADMIN-03). */
 export const moderationNoticeSchema = z.strictObject({
-  kind: z.enum(['warned', 'muted', 'suspended', 'banned']),
+  kind: z.enum(MODERATION_NOTICE_KINDS),
+  /** The moderator's statement of reasons; empty when a sanction was lifted. */
   reason: z.string(),
   until: isoDateTime.nullable(),
 });

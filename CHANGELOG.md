@@ -17,6 +17,13 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
 
 ### Added
 
+- **Stage E (random mode and safety), in progress**
+  - E1 safety core: a word-list filter that undoes disguised spellings and matches whole words
+    (mild words allowed in rooms, harsher ones masked and flagged, the worst not sent);
+    "Report" on messages, people (including profile pictures) and rooms, with evidence taken
+    by the server; sanctions (warning, mute, suspension, ban, random-mode timeout) with a
+    required reason, an audit-log entry and live enforcement; an "Account standing" page.
+
 - **Stage D (community mode), in progress**
   - D1 rooms: create public or private rooms, explore and search, join and leave, invite links
     (shown once, stored as a fingerprint, expiry and use limits), roles and ownership transfer,
@@ -37,6 +44,10 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
     virtualised message list (10,000 messages measured); reply quotes load their original;
     an outbox that keeps unsent messages across reloads and sends them in order; an offline
     banner, and reconnecting as soon as the network returns.
+  - D5 media: pictures in messages (button or paste; JPEG, PNG, WebP, GIF up to 4 MB), a photo
+    as profile picture, and text-only link previews. Every picture is checked by its real type,
+    re-encoded to WebP and stripped of metadata such as GPS location before it is stored; storage
+    is Vercel Blob (private) in production and a local folder in development.
   - D4: direct messages (one per pair, "who may message me", Delivered and Seen ticks when both
     allow read receipts), blocking, in-app notifications for mentions, replies and DMs with a
     bell and an opt-in for browser notifications, and full-text search that jumps to the
@@ -94,6 +105,16 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
 
 ### Security
 
+- One advisory in a development-only tool (`braces`, no fix published yet) is accepted by ID so
+  the dependency audit keeps failing on anything else (D-044).
+- Uploaded files are never stored as sent: fakes (a script renamed to `.png`), oversized and
+  damaged files are refused, and accepted pictures are rebuilt from their pixels, which removes
+  location data and anything hidden in the file. Pictures are served only through a route that
+  checks who is asking (D-043).
+- Link previews are fetched by the server under strict rules (public addresses only, every
+  redirect re-checked, the checked address is the one connected to, size and time limits), so a
+  link can never make the server read from the private network or a cloud metadata address. One
+  message causes at most one fetch per link, however many people read it (D-043).
 - Unsent messages kept in the browser are cleared on sign-out and when a session ends (D-041).
 
 - Cross-site sign-in requests are refused (login CSRF), Facebook and Microsoft sign-ins never take

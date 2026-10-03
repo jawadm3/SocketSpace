@@ -21,8 +21,17 @@ import { user } from '../schema/auth';
 import { conversation, conversationMember, roomBan } from '../schema/conversations';
 import { mention, message, messageRevision, reaction } from '../schema/messages';
 import { moderationAction } from '../schema/safety';
-import { checkCanPost, saveMentions, type MessageRow, type SendRefusal } from './messages';
+import { removeMessageAttachments } from './attachments';
+import {
+  blockedByFilter,
+  checkCanPost,
+  saveMentions,
+  type FilterFinding,
+  type MessageRow,
+  type SendRefusal,
+} from './messages';
 import { notifyForMessage, type NotificationRow } from './notifications';
+import { recordWordListFlag } from './reports';
 
 export type MessageActionRefusal =
   | SendRefusal
@@ -119,6 +128,8 @@ export interface EditMessageInput {
   editorId: string;
   /** Already validated and normalised by the shared contract. */
   body: string;
+  /** What the word-list filter found in `body` (SAFE-02). Omitted: nothing. */
+  filter?: FilterFinding;
   now?: Date;
 }
 
@@ -133,6 +144,10 @@ export async function editMessage(
   MessageActionResult<{ changed: boolean; newMentions: string[]; notifications: NotificationRow[] }>
 > {
   const clock = dbNow(input.now);
+  if (await blockedByFilter(db, input.editorId, input.body, input.filter)) {
+    return fail({ reason: 'content_blocked' });
+  }
+  const flagged = input.filter?.severity === 2;
   return db.transaction(async (tx) => {
     const locked = await lockMessage(tx, input.messageId);
     if (!locked) return fail({ reason: 'message_not_found' });
@@ -169,10 +184,26 @@ export async function editMessage(
     const versionSeq = await nextEventSeq(tx, locked);
     const [updated] = await tx
       .update(message)
-      .set({ body: input.body, editedAt: input.now ?? clock, versionSeq })
+      .set({
+        body: input.body,
+        editedAt: input.now ?? clock,
+        versionSeq,
+        filterSeverity: input.filter?.severity ?? 0,
+        // A flag for the earlier text stays with the moderators; only the message's state moves.
+        moderationState: flagged ? 'flagged' : 'visible',
+      })
       .where(eq(message.id, row.id))
       .returning();
     if (!updated) throw new Error('UPDATE ... RETURNING returned no row');
+    if (flagged) {
+      await recordWordListFlag(tx, {
+        userId: input.editorId,
+        severity: 'medium',
+        categories: input.filter?.categories ?? [],
+        text: input.body,
+        messageId: row.id,
+      });
+    }
 
     const before = new Set(
       (
@@ -205,7 +236,7 @@ export interface DeleteMessageInput {
 /**
  * Deletes a message (MSG-03): by its author, or by a room moderator or owner who outranks the
  * author, or by a site admin. The row stays as a tombstone ("Message deleted") so order and
- * replies stay intact; its text, reactions and mentions go. A moderator's deletion is recorded in
+ * replies stay intact; its text, reactions, mentions and pictures go. A moderator's deletion is recorded in
  * the audit log.
  */
 export async function deleteMessage(
@@ -303,6 +334,7 @@ export async function deleteMessage(
     if (!updated) throw new Error('UPDATE ... RETURNING returned no row');
     await tx.delete(reaction).where(eq(reaction.messageId, row.id));
     await tx.delete(mention).where(eq(mention.messageId, row.id));
+    await removeMessageAttachments(tx, row.id);
     if (!own) {
       await tx.insert(moderationAction).values({
         id: newId(),

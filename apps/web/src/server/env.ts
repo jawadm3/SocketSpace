@@ -78,10 +78,49 @@ export const webEnvSchema = z.object({
   REALTIME_INTERNAL_URL: envHttpUrl.optional(),
   INTERNAL_EVENTS_SECRET: envSecret(32),
 
+  // Pictures (uploads)
+  /** Where re-encoded pictures are stored (D-013). */
+  STORAGE_DRIVER: z.enum(['vercel-blob', 'local', 'memory']).default('local'),
+  /** Folder for the `local` driver (default <repo>/.cache/uploads). */
+  STORAGE_LOCAL_DIR: optional,
+  /** Vercel Blob read-write token (required when STORAGE_DRIVER=vercel-blob). */
+  BLOB_READ_WRITE_TOKEN: optional,
+
+  // Link previews
+  /** Switch for server-side link previews (MSG-08). */
+  LINK_PREVIEWS_ENABLED: envBoolean.default(true),
+  /**
+   * Local testing only: host names the preview fetcher reaches at a local address, written as
+   * `name=127.0.0.1:port` and separated by commas. Refused unless this site itself runs on
+   * localhost, because it switches off the private-address check for those names.
+   */
+  LINK_PREVIEW_DEV_HOSTS: optional,
+
   LOG_LEVEL: envLogLevel.default('info'),
 });
 
 export type WebEnv = z.infer<typeof webEnvSchema>;
+
+export interface DevHost {
+  host: string;
+  port: number;
+}
+
+/**
+ * Reads `LINK_PREVIEW_DEV_HOSTS` (`name=127.0.0.1:port,...`). Only loopback addresses are
+ * accepted, so the setting can never point the fetcher at another machine. `null` when malformed.
+ */
+export function parseDevHosts(raw: string | undefined): Map<string, DevHost> | null {
+  const hosts = new Map<string, DevHost>();
+  if (!raw) return hosts;
+  for (const entry of raw.split(',')) {
+    const match = /^([a-z0-9.-]+)=(127\.0\.0\.1):([0-9]{2,5})$/.exec(entry.trim());
+    const port = Number(match?.[3]);
+    if (!match?.[1] || !match[2] || !(port > 0 && port < 65536)) return null;
+    hosts.set(match[1], { host: match[2], port });
+  }
+  return hosts;
+}
 
 /** Extra rules that involve more than one variable. */
 export function checkWebEnv(env: WebEnv): WebEnv {
@@ -91,6 +130,21 @@ export function checkWebEnv(env: WebEnv): WebEnv {
   }
   if (env.VERCEL_ENV === 'production' && env.EMAIL_DRIVER !== 'resend') {
     problems.push('EMAIL_DRIVER: must be "resend" in production');
+  }
+  if (env.STORAGE_DRIVER === 'vercel-blob' && !env.BLOB_READ_WRITE_TOKEN) {
+    problems.push('BLOB_READ_WRITE_TOKEN: required when STORAGE_DRIVER=vercel-blob');
+  }
+  if (env.VERCEL_ENV === 'production' && env.STORAGE_DRIVER !== 'vercel-blob') {
+    // A serverless function's own disk is thrown away after each request.
+    problems.push('STORAGE_DRIVER: must be "vercel-blob" in production');
+  }
+  if (env.LINK_PREVIEW_DEV_HOSTS) {
+    const host = new URL(env.BETTER_AUTH_URL).hostname;
+    if (host !== 'localhost' && host !== '127.0.0.1') {
+      problems.push('LINK_PREVIEW_DEV_HOSTS: only allowed when the site runs on localhost');
+    } else if (parseDevHosts(env.LINK_PREVIEW_DEV_HOSTS) === null) {
+      problems.push('LINK_PREVIEW_DEV_HOSTS: write each entry as name=127.0.0.1:port');
+    }
   }
   if (env.NODE_ENV === 'production' && !env.BETTER_AUTH_URL.startsWith('https://')) {
     // Plain http is only acceptable on this computer (local production builds and E2E tests).

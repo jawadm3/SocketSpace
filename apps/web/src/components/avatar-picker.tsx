@@ -1,14 +1,19 @@
 'use client';
 
 /**
- * Choosing a profile picture (D-023, PROF-06, PROF-07): a gallery of presets, or "Make your own"
- * with a live preview, starting from whichever preset was picked. The choice is submitted as two
- * hidden fields, `avatar` (the settings, as JSON) and `avatarKind`; the server checks both.
- * Previews come from our own /api/avatar, so no third party is involved.
+ * Choosing a profile picture (D-023, PROF-06 to PROF-08): a gallery of presets, "Make your own"
+ * with a live preview, starting from whichever preset was picked, or "Upload a photo". The choice
+ * is submitted as two hidden fields, `avatar` (the settings, as JSON) and `avatarKind`; the
+ * server checks both. Previews come from our own server, so no third party is involved.
+ *
+ * A photo is uploaded as soon as it is chosen: the server checks it, crops it to a square,
+ * re-encodes it and removes its metadata (location, camera), and answers with an ID. The form
+ * then submits only that ID.
  */
-import { Shuffle } from 'lucide-react';
-import { useId, useState } from 'react';
+import { Shuffle, Upload } from 'lucide-react';
+import { useId, useRef, useState } from 'react';
 
+import { IMAGE_ACCEPT, mediaPath } from '@socketspace/shared/media';
 import type { AvatarConfig } from '@socketspace/shared/profile';
 
 import { avatarSrc } from '@/lib/avatar-url';
@@ -20,6 +25,7 @@ import {
   type BuilderStyle,
   type PartChoice,
 } from '@/lib/avatar-builder';
+import { uploadImage } from '@/lib/uploads';
 
 export interface PresetChoice {
   config: AvatarConfig;
@@ -27,10 +33,10 @@ export interface PresetChoice {
   src: string;
 }
 
-export interface PickedAvatar {
-  kind: 'preset' | 'custom';
-  config: AvatarConfig;
-}
+export type PickedAvatar =
+  | { kind: 'preset' | 'custom'; config: AvatarConfig }
+  /** An uploaded photo, by the ID the upload answered with. */
+  | { kind: 'photo'; attachmentId: string };
 
 function randomSeed(): string {
   const bytes = new Uint8Array(6);
@@ -229,43 +235,149 @@ function Builder({
   );
 }
 
+function PhotoUpload({
+  picked,
+  canUpload,
+  onUploaded,
+}: {
+  picked: string | null;
+  canUpload: boolean;
+  onUploaded: (attachmentId: string) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState('');
+  const inputId = useId();
+
+  if (!canUpload) {
+    return (
+      <p className="text-sm text-ink-2">
+        Confirm your email address to upload a photo: we sent you a link. Until then, pick a picture
+        from the gallery or make your own; you can switch to a photo later in settings.
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      {picked ? (
+        // eslint-disable-next-line @next/next/no-img-element -- our own media route
+        <img
+          src={mediaPath(picked)}
+          alt="Your uploaded photo"
+          width={128}
+          height={128}
+          className="h-32 w-32 shrink-0 rounded-2xl bg-surface-2 object-cover"
+        />
+      ) : null}
+      <div className="flex min-w-0 flex-col gap-2">
+        <p className="text-sm text-ink-2">
+          JPEG, PNG, WebP or GIF, up to 4 MB. We crop it to a square and remove hidden details such
+          as where and when it was taken.
+        </p>
+        <input
+          ref={input}
+          id={inputId}
+          type="file"
+          accept={IMAGE_ACCEPT}
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden="true"
+          data-testid="avatar-photo-input"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (!file) return;
+            setBusy(true);
+            setProblem('');
+            void uploadImage(file, 'avatar').then((result) => {
+              setBusy(false);
+              if (result.ok) onUploaded(result.attachment.id);
+              else setProblem(result.message);
+            });
+          }}
+        />
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => input.current?.click()}
+          className="inline-flex min-h-10 w-fit items-center gap-2 rounded-xl border border-line bg-card px-3 text-sm font-semibold disabled:opacity-50"
+        >
+          <Upload aria-hidden="true" className="h-4 w-4" />
+          {busy ? 'Uploading…' : picked ? 'Choose another photo' : 'Choose a photo'}
+        </button>
+        <p role="status" className="sr-only">
+          {busy ? 'Uploading your photo…' : picked ? 'Photo uploaded.' : ''}
+        </p>
+        {problem ? (
+          <p role="alert" className="text-sm font-medium text-danger">
+            {problem}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+type Tab = 'gallery' | 'builder' | 'photo';
+
 export function AvatarPicker({
   presets: initialPresets,
   builder,
   initial,
   error,
+  canUpload,
 }: {
   presets: PresetChoice[];
   builder: BuilderStyle[];
   initial: PickedAvatar | null;
   error?: string | undefined;
+  /** Photos need a confirmed email address (the server checks too). */
+  canUpload: boolean;
 }) {
   const [presets, setPresets] = useState(initialPresets);
   const [picked, setPicked] = useState<PickedAvatar | null>(initial);
-  const [tab, setTab] = useState<'gallery' | 'builder'>(
-    initial?.kind === 'custom' ? 'builder' : 'gallery',
+  const [tab, setTab] = useState<Tab>(
+    initial?.kind === 'custom' ? 'builder' : initial?.kind === 'photo' ? 'photo' : 'gallery',
   );
   const baseId = useId();
-  const builderConfig: AvatarConfig = picked?.config ??
+  const builderConfig: AvatarConfig = (picked && picked.kind !== 'photo'
+    ? picked.config
+    : undefined) ??
     initialPresets[0]?.config ?? {
       style: 'lorelei',
       seed: 'socketspace',
     };
+  const pickedSrc = picked
+    ? picked.kind === 'photo'
+      ? mediaPath(picked.attachmentId)
+      : src(picked.config)
+    : null;
 
   return (
     <fieldset aria-describedby={error ? `${baseId}-error` : undefined}>
       <legend className="text-sm font-semibold text-ink">Profile picture</legend>
-      <input type="hidden" name="avatar" value={picked ? JSON.stringify(picked.config) : ''} />
+      <input
+        type="hidden"
+        name="avatar"
+        value={
+          picked
+            ? JSON.stringify(
+                picked.kind === 'photo' ? { attachmentId: picked.attachmentId } : picked.config,
+              )
+            : ''
+        }
+      />
       <input type="hidden" name="avatarKind" value={picked?.kind ?? ''} />
-      {picked ? (
+      {pickedSrc ? (
         <p className="mt-2 flex items-center gap-2 text-sm text-ink-2">
-          {/* eslint-disable-next-line @next/next/no-img-element -- generated SVG */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- our own avatar or media route */}
           <img
-            src={src(picked.config)}
+            src={pickedSrc}
             alt=""
             width={40}
             height={40}
-            className="rounded-xl bg-surface-2"
+            data-testid="picked-avatar"
+            className="h-10 w-10 rounded-xl bg-surface-2 object-cover"
           />
           Selected picture
         </p>
@@ -275,6 +387,7 @@ export function AvatarPicker({
           [
             ['gallery', 'Gallery'],
             ['builder', 'Make your own'],
+            ['photo', 'Upload a photo'],
           ] as const
         ).map(([value, label]) => (
           <button
@@ -300,7 +413,15 @@ export function AvatarPicker({
         aria-labelledby={`${baseId}-${tab}-tab`}
         className="mt-3"
       >
-        {tab === 'gallery' ? (
+        {tab === 'photo' ? (
+          <PhotoUpload
+            picked={picked?.kind === 'photo' ? picked.attachmentId : null}
+            canUpload={canUpload}
+            onUploaded={(attachmentId) => {
+              setPicked({ kind: 'photo', attachmentId });
+            }}
+          />
+        ) : tab === 'gallery' ? (
           <Gallery
             presets={presets}
             selected={picked?.kind === 'preset' ? picked.config : null}

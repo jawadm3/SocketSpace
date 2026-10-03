@@ -56,6 +56,9 @@ export async function updateProfileAction(
         suggestions,
       };
     }
+    if (result.reason === 'avatar_invalid') {
+      return { errors: { avatar: 'That photo could not be used. Please upload it again.' } };
+    }
     return { errors: { form: 'Your profile could not be saved. Please sign in again.' } };
   }
   if (result.publicChanged) {

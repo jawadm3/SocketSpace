@@ -1,7 +1,7 @@
 # Real-time protocol and flows
 
-_Stage B, 2026-10-01; updated in Stage C (2026-10-02, decision D-032) and Stage D (room notices,
-profile updates, D-036). Every event below is a Zod
+_Stage B, 2026-10-01; updated in Stage C (2026-10-02, decision D-032), Stage D (room notices,
+profile updates, D-036) and Stage E1 (word filter, sanctions, D-045 to D-047). Every event below is a Zod
 schema in `packages/shared/src/events/`, and Socket.IO's TypeScript event maps are derived from
 those schemas, so the browser and the server cannot disagree about a payload's shape._
 
@@ -47,7 +47,7 @@ type ErrorCode =
   | 'FORBIDDEN' // not a member, blocked, banned, muted, wrong role
   | 'NOT_FOUND'
   | 'RATE_LIMITED' // includes retryAfterMs
-  | 'CONTENT_BLOCKED' // word filter (high severity) or link in random mode
+  | 'CONTENT_BLOCKED' // word filter (high severity) or link in random mode: retrying cannot help
   | 'CONFLICT' // e.g. editing a deleted message
   | 'UNAVAILABLE' // database or dependency down: safe to retry
   | 'INTERNAL';
@@ -59,10 +59,15 @@ message, 10 attachments, 20 interest tags).
 
 **People in payloads.** Every user object sent to a browser (message authors, members, presence,
 profiles) has the shape `{ id, nickname, avatar, realName? }`. `avatar` is either a preset/custom
-avatar config or a photo URL. `realName` is included **only** when the receiving viewer may see it
+avatar config or a photo, given as a path on our own server (`/api/media/<id>`, D-043). `realName` is included **only** when the receiving viewer may see it
 (the person's visibility setting: nobody, contacts or everyone) and the person chose to show it in
 chats. Because one broadcast goes to many viewers, broadcasts carry nicknames only, and the client
 fetches real names it is allowed to see once per person over HTTP (cached). See `security.md` 3.12.
+
+**Pictures in messages.** A message carries `attachments: [{ id, width, height }]` (empty when
+deleted). Pictures are uploaded to the web app first (`POST /api/uploads`), which answers with an
+ID; `message:send` names those IDs in `attachmentIds`, and its `body` may be empty when at least
+one picture is attached. Browsers load each picture from `/api/media/<id>` (D-043).
 
 ## Events: community mode
 
@@ -82,24 +87,34 @@ fetches real names it is allowed to see once per person over HTTP (cached). See 
 
 ### Server → client
 
-| Event                                                                | Payload                                                                                                                              | Sent to                                                                    |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| `server:hello`                                                       | `{ protocolVersion, serverTime, userId }`                                                                                            | the connecting socket                                                      |
-| `message:new`                                                        | `{ message, eventSeq }`                                                                                                              | conversation room                                                          |
-| `message:updated`                                                    | `{ message, eventSeq }` (edit, moderation state change)                                                                              | conversation room                                                          |
-| `message:deleted`                                                    | `{ conversationId, messageId, eventSeq }`                                                                                            | conversation room                                                          |
-| `reaction:updated`                                                   | `{ conversationId, messageId, reactions, eventSeq }`                                                                                 | conversation room                                                          |
-| `typing`                                                             | `{ conversationId, userId, typing }` (auto-expires after 6 s)                                                                        | conversation room, except sender                                           |
-| `read:updated`                                                       | `{ conversationId, userId, seq }`                                                                                                    | DM partner (if both allow read receipts); the user's own other tabs        |
-| `delivery:updated`                                                   | `{ conversationId, userId, seq }`                                                                                                    | DM partner                                                                 |
-| `presence`                                                           | `{ userId, status, lastSeenAt }`                                                                                                     | users who share a conversation or are contacts (never for invisible users) |
-| `conversation:joined` / `conversation:left` / `conversation:updated` | `{ conversation }` / `{ conversationId }`                                                                                            | the user's private room                                                    |
-| `member:joined` / `member:left` / `member:updated`                   | `{ conversationId, member }`                                                                                                         | conversation room                                                          |
-| `notification:new`                                                   | `{ notification }`                                                                                                                   | the user's private room                                                    |
-| `moderation:notice`                                                  | `{ kind: 'warned' \| 'muted' \| 'suspended' \| 'banned', reason, until? }`                                                           | the user's private room                                                    |
-| `room:notice`                                                        | `{ conversationId, kind: 'muted' \| 'unmuted' \| 'removed' \| 'banned', reason, until }`                                             | the user's private room (only the person concerned)                        |
-| `user:updated`                                                       | `{ user }` (nickname and avatar only, never a real name)                                                                             | conversations the person is in, and their own tabs                         |
-| `session:ended`                                                      | `{ reason, reconnectAfterMs? }` then disconnect; reason is `revoked`, `banned`, `suspended`, `deleted`, `server_shutdown` or `abuse` | sockets of that session, person or server                                  |
+| Event                                                                | Payload                                                                                                                               | Sent to                                                                    |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `server:hello`                                                       | `{ protocolVersion, serverTime, userId }`                                                                                             | the connecting socket                                                      |
+| `message:new`                                                        | `{ message, eventSeq }`                                                                                                               | conversation room                                                          |
+| `message:updated`                                                    | `{ message, eventSeq }` (edit, moderation state change)                                                                               | conversation room                                                          |
+| `message:deleted`                                                    | `{ conversationId, messageId, eventSeq }`                                                                                             | conversation room                                                          |
+| `reaction:updated`                                                   | `{ conversationId, messageId, reactions, eventSeq }`                                                                                  | conversation room                                                          |
+| `typing`                                                             | `{ conversationId, userId, typing }` (auto-expires after 6 s)                                                                         | conversation room, except sender                                           |
+| `read:updated`                                                       | `{ conversationId, userId, seq }`                                                                                                     | DM partner (if both allow read receipts); the user's own other tabs        |
+| `delivery:updated`                                                   | `{ conversationId, userId, seq }`                                                                                                     | DM partner                                                                 |
+| `presence`                                                           | `{ userId, status, lastSeenAt }`                                                                                                      | users who share a conversation or are contacts (never for invisible users) |
+| `conversation:joined` / `conversation:left` / `conversation:updated` | `{ conversation }` / `{ conversationId }`                                                                                             | the user's private room                                                    |
+| `member:joined` / `member:left` / `member:updated`                   | `{ conversationId, member }`                                                                                                          | conversation room                                                          |
+| `notification:new`                                                   | `{ notification }`                                                                                                                    | the user's private room                                                    |
+| `moderation:notice`                                                  | `{ kind: 'warned' \| 'muted' \| 'unmuted' \| 'suspended' \| 'banned' \| 'random_timeout' \| 'random_timeout_lifted', reason, until }` | the user's private room                                                    |
+| `room:notice`                                                        | `{ conversationId, kind: 'muted' \| 'unmuted' \| 'removed' \| 'banned', reason, until }`                                              | the user's private room (only the person concerned)                        |
+| `user:updated`                                                       | `{ user }` (nickname and avatar only, never a real name)                                                                              | conversations the person is in, and their own tabs                         |
+| `session:ended`                                                      | `{ reason, reconnectAfterMs? }` then disconnect; reason is `revoked`, `banned`, `suspended`, `deleted`, `server_shutdown` or `abuse`  | sockets of that session, person or server                                  |
+
+### The word filter on messages (Stage E1, D-045)
+
+- `message:send` and `message:edit` run the word-list filter before the database is asked.
+- **High severity:** the answer is `CONTENT_BLOCKED`; nothing is stored, no number is used, nobody
+  else receives anything, and a flag with the text goes to the moderators (`content_flag`).
+- **Medium severity:** the message is stored as written with `moderationState: 'flagged'`, and
+  every copy sent to a browser (acknowledgement, `message:new`, `message:updated`, resync, history
+  pages) carries the masked text. The author sees the mask too.
+- **Low severity:** nothing happens in community mode.
 
 ### Presence and typing (Stage D2, D-038)
 
@@ -288,7 +303,7 @@ sequenceDiagram
   WEB->>DB: INSERT moderation_action (append-only), user_sanction, update report
   WEB->>RT: internal event user.sanctioned (HMAC-signed)
   RT-->>T: moderation:notice {kind, reason, until}
-  RT->>RT: suspended or banned: disconnect all their sockets; muted: refuse sends until expiry
+  RT->>RT: suspended or banned: disconnect all their sockets (the database refuses a muted person's sends)
   RT-->>U: notification:new (report resolved, without details of the action)
 ```
 
@@ -298,35 +313,36 @@ sequenceDiagram
 `x-ss-signature = HMAC-SHA256(INTERNAL_EVENTS_SECRET, timestamp + "." + body)`. Requests older than
 60 seconds, or with a reused event ID, are rejected.
 
-| Event                                                                          | Effect                                                                                    |
-| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `member.added` / `member.removed` / `member.role_changed`                      | Join or remove that user's sockets to or from the conversation room; broadcast `member:*` |
-| `member.removed` with `cause` (`left`, `removed`, `banned`), `reason`, `until` | Also sends `room:notice` to the person when a moderator removed or banned them            |
-| `member.muted` (`until`, or `null` when lifted), `reason`                      | `room:notice` (`muted` / `unmuted`) to the person; sends are refused by the database      |
-| `user.updated`                                                                 | Broadcast `user:updated` (nickname and avatar) to every conversation the person is in     |
-| `conversation.updated` / `conversation.deleted`                                | Broadcast; remove sockets from the room                                                   |
-| `user.sanctioned` / `user.unsanctioned`                                        | Update the in-memory sanction cache; notify; disconnect if suspended or banned            |
-| `session.revoked` / `user.sessions_revoked` / `user.deleted`                   | Disconnect that session's sockets / all of the person's sockets                           |
-| `message.moderated`                                                            | Broadcast `message:updated` (removed or restored) with a new `eventSeq`                   |
-| `block.created`                                                                | Leave any random session with that person; refuse DMs                                     |
+| Event                                                                                   | Effect                                                                                                                                                |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `member.added` / `member.removed` / `member.role_changed`                               | Join or remove that user's sockets to or from the conversation room; broadcast `member:*`                                                             |
+| `member.removed` with `cause` (`left`, `removed`, `banned`), `reason`, `until`          | Also sends `room:notice` to the person when a moderator removed or banned them                                                                        |
+| `member.muted` (`until`, or `null` when lifted), `reason`                               | `room:notice` (`muted` / `unmuted`) to the person; sends are refused by the database                                                                  |
+| `user.updated`                                                                          | Broadcast `user:updated` (nickname and avatar) to every conversation the person is in                                                                 |
+| `conversation.updated` / `conversation.deleted`                                         | Broadcast; remove sockets from the room                                                                                                               |
+| `user.sanctioned` (`kind`: warn, mute, suspend, ban, random_timeout; `reason`, `until`) | `moderation:notice` to the person; on suspend or ban, `session:ended` and disconnect. Nothing is cached: the database refuses a muted person's writes |
+| `user.unsanctioned` (`kind`: mute, suspend, ban, random_timeout)                        | `moderation:notice` (`unmuted` or `random_timeout_lifted`) to the person; nothing for suspend or ban, because they have no open connection            |
+| `session.revoked` / `user.sessions_revoked` / `user.deleted`                            | Disconnect that session's sockets / all of the person's sockets                                                                                       |
+| `message.moderated`                                                                     | Broadcast `message:updated` (removed or restored) with a new `eventSeq`                                                                               |
+| `block.created`                                                                         | Leave any random session with that person; refuse DMs                                                                                                 |
 
 Delivery: 3 attempts with back-off inside the web request; if all fail, the event goes to
 `realtime_outbox` (see the data model).
 
 ## Rate limits and abuse limits (initial values, tuned in Stage G)
 
-| What                              | Limit                                                                                           |
-| --------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Connections                       | 10 per user, 20 per IP address; 30 new connections per IP per minute                            |
-| `message:send`                    | token bucket: burst 10, refill 1 per second (about 60 per minute)                               |
-| `message:edit` / `message:delete` | 30 per minute                                                                                   |
-| `reaction:toggle`                 | 60 per minute                                                                                   |
-| `typing:set`                      | 1 per 2 seconds (extra events dropped silently)                                                 |
-| `sync:request`                    | 6 per minute                                                                                    |
-| `random:join` / `random:next`     | 6 per minute / 20 per 10 minutes                                                                |
-| `random:message`                  | burst 3, refill 1 per second                                                                    |
-| Reports                           | 10 per hour                                                                                     |
-| Repeated `RATE_LIMITED`           | 20 violations in 1 minute disconnects the socket; repeated disconnects add a 15-minute cooldown |
+| What                              | Limit                                                                                                     |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Connections                       | 10 per user, 20 per IP address; 30 new connections per IP per minute                                      |
+| `message:send`                    | token bucket: burst 10, refill 1 per second (about 60 per minute)                                         |
+| `message:edit` / `message:delete` | 30 per minute                                                                                             |
+| `reaction:toggle`                 | 60 per minute                                                                                             |
+| `typing:set`                      | 1 per 2 seconds (extra events dropped silently)                                                           |
+| `sync:request`                    | 6 per minute                                                                                              |
+| `random:join` / `random:next`     | 6 per minute / 20 per 10 minutes                                                                          |
+| `random:message`                  | burst 3, refill 1 per second                                                                              |
+| Reports                           | 10 per hour per person, counted in the database (every attempt counts, also for things that do not exist) |
+| Repeated `RATE_LIMITED`           | 20 violations in 1 minute disconnects the socket; repeated disconnects add a 15-minute cooldown           |
 
 ## Observability of the realtime server
 
