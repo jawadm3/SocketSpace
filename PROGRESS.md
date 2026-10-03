@@ -194,8 +194,9 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
 
 0. **D4 reached `main` before the continuation rule was seen (2026-10-03). Owner decision:
    keep it on `main`** (decided 2026-10-03). The rule commit `723db87` and D4 (`f2c0587`,
-   `383e921`) are on `main`; nothing was rewritten. All later work goes to `continuation`
-   (draft pull request jawadm3/SocketSpace#1). Sessions fetch and re-read CLAUDE.md before every
+   `383e921`) are on `main`; nothing was rewritten. **Branches (owner, 2026-10-03):** sessions on
+   the owner's own account work on `main`; sessions on any other account work on `continuation`
+   (draft pull request jawadm3/SocketSpace#1), as CLAUDE.md "Branches" describes. Sessions fetch and re-read CLAUDE.md before every
    push.
 1. **Accepted advisory:** one moderate `pnpm audit` finding (old esbuild inside drizzle-kit's dev
    loader, never used in production; D-034).

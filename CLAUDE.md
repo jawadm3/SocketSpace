@@ -8,29 +8,22 @@
 
 After context compaction or in a new session, re-read all three before doing anything else.
 
-## Current working mode: the `continuation` branch (since 2026-10-03)
+## Branches: the owner's account works on `main`, other accounts on `continuation` (since 2026-10-03)
 
-The owner's Claude plan ends on 2026-10-07. Work continues after that from another Claude account,
-and the owner reviews everything when they renew. Until the owner merges the branch and deletes
-this section, these rules override every mention of `main` elsewhere in this file:
+The owner's Claude plan ends on 2026-10-07. Work may continue from another Claude account, and the owner reviews that work when they renew.
 
-1. **Every session, on any account, works on the branch `continuation`. Never commit to or push
-   `main`.**
-2. **Start of every session**, run these, in order:
+1. **Sessions on the owner's own Claude account work on `main`** and push to `origin main`, as the rest of this file describes.
+2. **Sessions on any other Claude account work on the branch `continuation` and never commit to or push `main`.** A session cannot see which account it runs on, so the start prompt says it. **If the start prompt does not say "owner's account", use `continuation`** (the safe side).
+3. **On `continuation`, at the start of every session**, run these, in order:
    - `git fetch origin`
    - `git switch continuation` (the first time on a new machine: `git switch -c continuation origin/continuation`)
-   - `git merge origin/main`, so the branch has anything that reached `main` meanwhile
-   - If uncommitted changes from an earlier session are present, read `PROGRESS.md` to see what
-     they are, then commit them to `continuation` as a labelled work-in-progress commit.
-3. Commit and push (`git push origin continuation`) after every milestone. All other rules in this
-   file apply unchanged.
-4. **Decisions:** record every decision in `docs/development/decisions.md` as usual and mark it
-   "(continuation, needs owner review)". The owner reviews those first.
-5. Anything the brief reserves for the owner (accounts, secrets, money, scope changes) still waits
-   for the owner: list it under "Known problems and things waiting for the owner" in `PROGRESS.md`
-   and carry on with other work.
-6. If `gh` is installed and signed in, keep a draft pull request open from `continuation` to `main`
-   (title "Continuation work for owner review"). If not, skip it; the owner opens it later.
+   - `git merge origin/main`, so the branch has everything that reached `main`
+   - If uncommitted changes from an earlier session are present, read `PROGRESS.md` to see what they are, then commit them to `continuation` as a labelled work-in-progress commit.
+4. On `continuation`, commit and push (`git push origin continuation`) after every milestone. Every other rule in this file applies unchanged, with `continuation` in place of `main`.
+5. **Decisions made on `continuation`:** record them in `docs/development/decisions.md` as usual and mark them "(continuation, needs owner review)", so the owner can find and review them first.
+6. Anything the brief reserves for the owner (accounts, secrets, money, scope changes) still waits for the owner: list it in `PROGRESS.md` and carry on with other work.
+7. If `gh` is installed and signed in, keep a draft pull request open from `continuation` to `main` (title "Continuation work for owner review").
+8. **Back on the owner's account:** the owner reviews that pull request and merges it into `main`. Until then, owner-account sessions never commit to `continuation`. Once it is merged and no other account is working, the owner may delete this section.
 
 ## What this project is
 
@@ -176,9 +169,7 @@ More than one person (each with their own Claude account) may work on this repos
 
 - Each collaborator clones the repository and runs `pnpm install`, `pnpm setup:local` and
   `pnpm db:start` once. Secrets are generated per machine and never shared or committed.
-- While the `continuation` working mode above is active, everyone works on `continuation`. After
-  it ends, each other person works on a branch `collab/<name>` with a pull request to `main` (CI
-  runs on every pull request), and the owner reviews and merges.
+- Another person on their own Claude account works on `continuation` as described in "Branches" above.
 - Before starting, pull the latest `main` and read `PROGRESS.md`. Claim a step by writing your name
   next to it under "In progress" in `PROGRESS.md` and pushing, so two people never work on the same
   step.
