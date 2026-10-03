@@ -192,6 +192,17 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
 
 ## Known problems and things waiting for the owner
 
+0. **D4 reached `main` by mistake (2026-10-03), owner decision needed.** The continuation rule
+   (`723db87`, "never push `main`") was committed to `continuation` while session 4 was finishing
+   D4. That commit was also on local `main`, not yet pushed there. Session 4 pushed `main` without
+   fetching and re-reading CLAUDE.md first, so `723db87` and D4 (`f2c0587`, `383e921`) reached
+   `origin/main`. Nothing was rewritten or force-pushed. `continuation` was then fast-forwarded to
+   the same commit and all later work goes there. `main` and `continuation` are identical at
+   `383e921`, so no pull request can be opened until new work exists. Options for the owner:
+   (a) keep D4 on `main` (it passed the full local checks and E2E; CI ran on it), or
+   (b) revert it on `main` yourself (`git revert 383e921 f2c0587`) and merge `continuation`
+   after reviewing. Sessions no longer push to `main`, and fetch and re-read CLAUDE.md before
+   every push.
 1. **Accepted advisory:** one moderate `pnpm audit` finding (old esbuild inside drizzle-kit's dev
    loader, never used in production; D-034).
 2. **Social sign-in apps:** the owner decided (2026-10-02) to create every provider's developer
