@@ -122,6 +122,7 @@ Turborepo runs at most 4 tasks at once (`"concurrency": "4"` in `turbo.json`, D-
   the line with `grep` or `od -c`.
 - **Queries live in `packages/db`.** Apps import query operators (`eq`, `sql`, ...) from `@socketspace/db`, never `drizzle-orm` directly. Time checks in SQL use the database clock (D-027).
 - **Logging:** never log payloads, message text, tokens or raw database errors (they repeat query parameters); log error names and codes (D-033).
+- **The word list is server-side only.** Import `@socketspace/shared/moderation` only from the realtime server, `packages/db` and server code of the web app, never from a client component; it is deliberately not re-exported from `@socketspace/shared` (D-045). Message text goes to browsers through `toMessageWire` / `visibleBody`, which mask it.
 
 ## Architecture rules
 

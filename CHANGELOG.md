@@ -17,6 +17,13 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
 
 ### Added
 
+- **Stage E (random mode and safety), in progress**
+  - E1 safety core: a word-list filter that undoes disguised spellings and matches whole words
+    (mild words allowed in rooms, harsher ones masked and flagged, the worst not sent);
+    "Report" on messages, people (including profile pictures) and rooms, with evidence taken
+    by the server; sanctions (warning, mute, suspension, ban, random-mode timeout) with a
+    required reason, an audit-log entry and live enforcement; an "Account standing" page.
+
 - **Stage D (community mode), in progress**
   - D1 rooms: create public or private rooms, explore and search, join and leave, invite links
     (shown once, stored as a fingerprint, expiry and use limits), roles and ownership transfer,

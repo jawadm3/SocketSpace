@@ -143,7 +143,7 @@ record IP address and browser name so people can see and end their active sessio
 | `edited_at`                | timestamptz                             |                                                                                                         |
 | `deleted_at`, `deleted_by` | timestamptz, enum `author`, `moderator` | Deleting clears `body` and keeps a tombstone row so ordering and replies stay consistent                |
 | `moderation_state`         | enum `visible`, `flagged`, `removed`    |                                                                                                         |
-| `filter_severity`          | smallint                                | Highest word-list severity found (0 to 3)                                                               |
+| `filter_severity`          | smallint                                | Highest word-list severity found (0 to 3). At 2 the text is masked whenever it is sent to a browser     |
 | `created_at`               | timestamptz                             |                                                                                                         |
 
 **How a message gets its number** (one transaction):
@@ -201,18 +201,27 @@ A profile photo is an attached row with no message; the profile's `avatar_config
   `harassment`, `hate`, `sexual`, `self_harm`, `violence`, `illegal`, `underage`, `other`),
   `details` (up to 1,000 characters), `evidence` (JSON snapshot taken **by the server**, not
   supplied by the reporter), `status` (`open`, `in_review`, `actioned`, `dismissed`),
-  `assigned_to`, `resolution_note`, `created_at`, `resolved_at`.
+  `assigned_to`, `resolution_note`, `created_at`, `resolved_at`. The evidence has a version
+  number and one of three shapes (message with revisions and context, profile as the reporter
+  saw it with the reported aspect, room), plus `attachmentIds`: stored pictures that the clean-up
+  job keeps while the report is open (D-046).
 - **`content_flag`**: automatic flags from the word list or AI: `source`, `severity` (`low`,
   `medium`, `high`), `categories`, `message_id` or `random_session_id`, `excerpt` (the flagged
-  message only), `user_id`, `reviewed_by`, `reviewed_at`, `outcome`.
+  message only, at most 500 characters), `user_id`, `reviewed_by`, `reviewed_at`, `outcome`. A
+  blocked (high-severity) attempt has no `message_id`, because nothing was stored. At most 20
+  unreviewed word-list flags an hour are kept per person (D-045).
 - **`moderation_action`**: the audit log. `actor_id`, `action` (`warn`, `mute`, `unmute`,
   `suspend`, `unsuspend`, `ban`, `unban`, `remove_message`, `restore_message`, `resolve_report`,
-  `dismiss_report`, `role_change`, `room_ban`), `target_user_id`, `message_id`, `report_id`,
+  `dismiss_report`, `role_change`, `room_ban`, plus `room_unban`, `room_remove`, `room_delete`
+  from migration 0002 and `random_timeout`, `random_timeout_lifted` from migration 0003),
+  `target_user_id`, `message_id`, `report_id`,
   `conversation_id`, `reason` (required), `expires_at`, `metadata`, `created_at`.
   **Append-only:** a database trigger rejects `UPDATE` and `DELETE` on this table.
 - **`user_sanction`**: active penalties for fast checks: `kind` (`warn`, `mute`, `suspend`, `ban`,
   `random_timeout`), `scope` (`global`, `random`), `reason`, `action_id`, `starts_at`,
-  `expires_at` (null = permanent), `lifted_at`.
+  `expires_at` (null = permanent), `lifted_at`. A warning restricts nothing; its `expires_at` is
+  30 days on, which is how long the person is shown it. `user.status` mirrors a suspension or ban
+  in force; these rows are the source of truth (D-047).
 - **`network_ban`**: `ip_hash` (HMAC of the IP address with a secret key, so raw IPs are never
   stored), `reason`, `expires_at` (at most 90 days). Used for guests and repeat offenders.
 

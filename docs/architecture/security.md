@@ -193,18 +193,35 @@ Server-side fetching is risky: a malicious link could make our server request
 Every message, user profile, room and random session has "Report" and "Block". Reports capture a
 server-side snapshot as evidence. Reporters are told when their report is resolved.
 
+As built in Stage E1 (D-046): a message, a person (behaviour, profile picture, or name and bio)
+and a room can be reported from the message, the member list, the DM header and the room header.
+The snapshot is taken inside the transaction that stores the report: the message as stored (not
+the masked text), its earlier versions, its pictures and the five messages before and after; the
+profile as that reporter could see it; or the room's name, topic and owners. A reported picture is
+kept until the report is closed. You can report only what you can see, 10 times an hour, and the
+same thing once while it is open. Random-session reports come with E2; telling the reporter about
+the outcome comes with the dashboard (E3).
+
 ### 4.2 Word-list filter (baseline, always on)
 
-- A curated list in `packages/shared/moderation/` with categories and **severity**:
+- A curated list in `packages/shared/src/moderation/` (server-side only: it is never part of a
+  browser bundle) with categories and **severity**:
   - _low_ (mild profanity): allowed in community rooms; masked in random mode;
-  - _medium_ (harassment, sexual terms): masked and flagged for review;
+  - _medium_ (harassment, sexual terms, and slurs that are also ordinary words or names
+    somewhere): masked and flagged for review. The text is stored as written and masked on the
+    way out, so the reviewer sees what was said;
   - _high_ (slurs, threats, sexual content involving minors, doxxing patterns): **blocked**, flagged,
     and in random mode the session ends with a 1-hour random-mode timeout.
 - Matching on normalised text: lower-case, Unicode NFKC, homoglyph and "leet-speak" folding
   (`@ → a`, `0 → o`), collapsed repeats (`soooo → so`), and **word boundaries** to avoid the
   "Scunthorpe problem" (blocking innocent words that contain a bad word).
-- Room owners can add their own words to a room-level list (medium severity at most).
 - The list and the normaliser are unit-tested with tricky cases, including false positives.
+- Matching is on whole tokens; spaced-out letters ("s h i t") are read as one word; a few entries
+  match anywhere in a token, with their innocent exceptions listed.
+- At most 20 unreviewed flags an hour are kept per person.
+- **Not built (D-045):** room-level word lists set by room owners, and "doxxing patterns" in
+  community mode (contact details in random mode are blocked in E2). Names, bios and room names
+  are not yet checked against the list.
 
 ### 4.3 Random mode protections
 
@@ -227,6 +244,14 @@ Queues for open reports and automatic flags; user search; actions **warn, mute (
 (timed), ban, remove message, restore message, dismiss**; every action requires a reason, notifies
 the affected user with the reason (a "statement of reasons", in the spirit of the EU Digital
 Services Act) and is written to the append-only audit log, which admins can browse and filter.
+
+The sanctions themselves are built (Stage E1, D-047): warning, mute, suspension, ban and
+random-mode timeout, applied only by site administrators (never to themselves or another
+administrator), each in one transaction with its audit entry. They are enforced in three
+independent places: the database refuses a sanctioned person's writes; the realtime server tells
+the person the reason and closes every connection on suspension or ban; and signing in is refused
+with the reason while a suspension or ban is in force. The person finds every decision in force,
+with its reason and end, under Settings > Account standing. The dashboard that applies them is E3.
 
 ### 4.5 Optional AI moderation
 

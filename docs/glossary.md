@@ -68,6 +68,8 @@ numbered save point in a video game.
 
 **Container image**: A sealed package holding a program and everything it needs to run, which any container host can start the same way. _Example:_ a ready meal in a sealed tray: heat it anywhere and it tastes the same. SocketSpace builds one image for each app.
 
+**Content flag**: A note the system leaves for the moderators when a message matches the word list, with the message’s text. _Example:_ a shop’s till putting a suspicious banknote aside for the manager. A masked message and a blocked attempt both leave one; at most 20 an hour are kept per person.
+
 **Correlation ID (request ID)**: A random label given to one request or one connection and written on every log line about it, so all the lines can be found together without logging what anyone said. SocketSpace returns it in the `X-Request-Id` header. _Example:_ the ticket number a help desk gives you: staff can find your case without you repeating the whole story.
 
 **CORS (Cross-Origin Resource Sharing)**: Browser rules about which websites may talk to a server.
@@ -111,9 +113,13 @@ on any ship, train or lorry.
 
 **Event cursor (gap detection)**: The number of the last change a browser has applied in a conversation. Every change gets the next number, so if change 12 arrives when the cursor is at 10, the browser knows it missed 11 and asks the server for it. _Example:_ numbered pages of a letter: if page 3 follows page 1, you know page 2 is missing.
 
+**Evidence snapshot**: A copy of what was reported, taken by the server at the moment of the report: the message as it was written, the messages around it, or the profile as the reporter saw it. A later edit or deletion does not change it. _Example:_ a dated photo of the damage, taken by the insurer rather than described by the claimant.
+
 **EXIF**: Hidden information stored inside photos, such as the camera model and sometimes the GPS
 location where it was taken. _Example:_ a postmark on a letter revealing where it was posted. We
 remove it from every uploaded image.
+
+**False positive**: A check that raises the alarm for something innocent. _Example:_ a smoke detector that goes off when you make toast. The word-list filter is tested against a list of innocent sentences that must pass.
 
 **File-system race (time-of-check to time-of-use)**: A bug where a program checks a file ("does it exist?") and then acts on it, and something changes the file in between. The fix is to ask the operating system to do both in one step, for example "create this file, but fail if it already exists" (the exclusive flag `wx`). _Example:_ checking a parking space is free, walking back to your car, and finding someone took it; reserving it in one step avoids that.
 
@@ -172,6 +178,8 @@ the main content appears; TBT (Total Blocking Time) is how long the page is too 
 Lighthouse is Google's free tool that measures them. _Example:_ how long until the curtain rises,
 and how long the usher ignores you.
 
+**Leet-speak**: Writing letters as look-alike digits and signs to slip past a filter: "sh1t", "a$$". The filter reads such signs as letters, but only inside a token that also contains a real letter, so a plain number is never read as a word. _Example:_ writing "5" for "S" on a number plate.
+
 **Link preview**: A small card under a message that shows the title, description and site name of a linked page. In SocketSpace the server fetches the page (never the reader's browser), keeps only text, and reuses the result for 7 days. _Example:_ a librarian reading you the title and blurb of a book, so you need not walk to the shelf to decide whether to open it.
 
 **Link safety attributes (noopener, noreferrer, nofollow, ugc)**: Labels on links that people post. `noopener` stops the new page from controlling ours, `noreferrer` hides which page the click came from, `nofollow` and `ugc` ("user-generated content") tell search engines the site does not vouch for the link. _Example:_ handing someone a leaflet without giving them your house key or your address.
@@ -187,10 +195,14 @@ everyone gets identical copies. _Example:_ a recipe that says "Brand X flour, 50
 
 **Login CSRF**: A trick where another website signs a visitor into an account the attacker controls, so the visitor's later activity lands in the attacker's account. SocketSpace refuses state-changing sign-in requests from other sites. _Example:_ someone slipping their own key card into your pocket so your purchases go on their account.
 
+**Look-alike letters (homoglyphs)**: Letters from another alphabet that look the same as Latin ones, such as the Cyrillic "a". They can disguise a word from a filter that compares characters. SocketSpace’s normaliser turns them back into Latin letters before checking.
+
 **Magic bytes**: The first few bytes of a file, which reveal its real type regardless of its name.
 _Example:_ checking what is actually inside a box rather than trusting the label.
 
 **Markdown-lite**: A small set of typing shortcuts for formatting messages: `**bold**`, `*italic*`, `~~strike~~`, `` `code` ``, quotes starting with `>`, links and @mentions. SocketSpace turns it into a tree and draws the tree, never raw HTML. _Example:_ writing _emphasis_ with stars on a postcard, and the reader understanding it as emphasis.
+
+**Masking**: Showing mask characters ("••••") in place of a word the filter matched. The stored message keeps the word, so the moderator who reviews it sees what was written. _Example:_ a bleep over a word on the radio.
 
 **Migration (database)**: A small, versioned script that changes the database structure (for
 example, adds a table). _Example:_ numbered renovation plans applied to a house in order.
@@ -203,6 +215,8 @@ trays instead of three separate toolboxes.
 **Mutation check**: Deliberately breaking the code a test protects, to prove the test notices. A test that still passes against broken code was not testing anything. _Example:_ pressing the test button on a smoke alarm.
 
 **Nonce**: A random value used once. The page's security policy only lets scripts run that carry this request's nonce, so an injected script, which cannot guess it, does not run. _Example:_ a password that changes every time the door opens.
+
+**Normaliser**: The first step of the word-list filter: it undoes disguises (capitals, accents, look-alike letters, leet-speak, repeated or spaced-out letters) so the list itself can hold plain words. _Example:_ reading a number plate aloud so "5H1T" and "shit" sound the same.
 
 **OAuth / social sign-in**: Signing in with an account you already have elsewhere (Google, Facebook, GitHub...). The other site confirms who you are; we never see your password there. _Example:_ showing a passport issued by another country instead of filling in a new identity form.
 
@@ -274,15 +288,21 @@ you send your work to.
 
 **Replay attack**: Recording a valid message and sending it again later to repeat its effect. Internal events carry a time stamp and a one-time ID, so a replay is refused. _Example:_ photocopying a used concert ticket; the scanner knows it was already used.
 
+**Report**: A message from a member to the moderators saying "please look at this", about a message, a person or a room, with a reason from a fixed list. The server adds its own evidence snapshot. _Example:_ pressing the help button in a lift: staff are told where you are without you describing it.
+
 **Repository (repo)**: The folder holding a project's files plus their full history. _Example:_ a
 filing cabinet that also keeps every earlier draft.
 
 **Row lock / transaction**: A transaction is a group of database changes that happen all together or not at all. A row lock makes others wait while one transaction changes a row. _Example:_ a single pen for the visitor book: one person writes at a time, so line numbers never clash. Messages get their numbers this way.
 
+**Sanction**: A decision by a site moderator about an account: a warning, a mute (cannot post), a suspension (cannot use the site for a time), a ban (until lifted) or a random-mode timeout. Each needs a reason, is written to the audit log and is shown to the person.
+
 **Scale to zero**: A service that switches itself off when unused and back on when needed.
 _Example:_ motion-sensor lights in a corridor. Neon's database does this after 5 idle minutes.
 
 **Scroll anchoring**: Keeping the part of a list you are reading in the same place on screen when content is added above it. _Example:_ someone slips extra pages in at the front of your book, and you are still on the same sentence.
+
+**Scunthorpe problem**: A filter blocking an innocent word because a rude word happens to be inside it; named after the English town whose residents once could not sign up to a service. SocketSpace avoids it by matching whole words, not parts of words.
 
 **Secret scanning (gitleaks)**: A tool that searches code and its history for things that look like passwords, keys or tokens. _Example:_ an airport scanner for your luggage before it is loaded.
 
@@ -310,6 +330,8 @@ office and read me what's on the desk". Link previews are guarded against it.
 
 **Standalone build (Next.js)**: A build of the web app that includes only the files it needs to run, so it can be copied into a small container. _Example:_ a flat-pack wardrobe with exactly the screws it needs, nothing extra.
 
+**Statement of reasons**: The explanation a person receives when a moderator restricts their account: what was decided, why, and until when. The EU Digital Services Act asks large services for one; SocketSpace shows one for every sanction.
+
 **Storage driver**: A small, swappable piece of code that knows how to save, read and delete files in one particular place (Vercel Blob, a local folder, or memory for tests). The rest of the app talks to all of them the same way. _Example:_ a travel plug adapter: the appliance stays the same, only the adapter changes with the country.
 
 **Strict mode (TypeScript)**: TypeScript's strictest checking settings. _Example:_ a spell-checker
@@ -325,6 +347,8 @@ installing any newly published package version.
 **Theme / design tokens**: A theme is a complete look (colours, fonts, corner rounding, shadows); design tokens are the named values that make it up. Switching theme swaps the token values. _Example:_ repainting a room by changing only the paint labels, not the furniture.
 
 **Throttle**: Letting something happen at most once in a given time, and dropping or delaying the rest. _Example:_ a lift that waits a few seconds to collect everyone instead of leaving for each person who presses the button.
+
+**Token (text)**: One run of letters or digits in a text, which is what the word-list filter compares with its list: "the class passed" is three tokens. Not to be confused with a signed token (see JWT).
 
 **Tombstone**: A placeholder kept where something was deleted, so the surrounding order still makes
 sense. _Example:_ "This message was deleted" in a chat.
@@ -357,6 +381,8 @@ contrast, keyboard use, screen-reader labels and more).
 _Example:_ a walkie-talkie channel that stays on.
 
 **Windows command-line quoting**: On Windows a program receives its arguments as one line of text and splits it back into pieces itself, using rules about spaces, double quotes and backslashes. Getting the quoting wrong can merge, split or change arguments (for example a folder path ending in `\`). _Example:_ reading out a list over the phone: you must say where each item starts and ends, or "New York, Paris" becomes three cities.
+
+**Word-list filter**: A check of every new message against a list of words in three severities: mild words are allowed in rooms, harsher ones are masked and flagged for a moderator, the worst are not sent at all. It is a baseline: it cannot read context, so reports and moderators cover what it misses.
 
 **Workspace (pnpm)**: The projects that make up a monorepo, listed in `pnpm-workspace.yaml`.
 _Example:_ the list of trays in the toolbox. v1 is deliberately not on it.
