@@ -15,6 +15,7 @@ import { uuid } from '@socketspace/shared/primitives';
 
 import { Alert, buttonClasses, Card } from '@/components/ui';
 import { getDb } from '@/server/db';
+import { getAccountMute } from '@/server/moderation';
 import { timeLeft } from '@/server/rooms';
 import { requireAppUser } from '@/server/session';
 
@@ -73,10 +74,11 @@ export default async function RoomPage({
   }
 
   const db = getDb();
-  const [latest, members] = await Promise.all([
+  const [latest, members, accountMute] = await Promise.all([
     // One extra row tells whether older messages exist (loaded on scroll, HIST-02).
     listRecentMessages(db, room.id, { limit: PAGE_SIZE + 1 }),
     listRoomMembers(db, room.id, { limit: 200 }),
+    getAccountMute(db, user.id),
   ]);
   const hasOlder = latest.length > PAGE_SIZE;
   const messages = hasOlder ? latest.slice(1) : latest;
@@ -104,6 +106,7 @@ export default async function RoomPage({
             }
           : null
       }
+      accountMute={accountMute}
       emailVerified={user.emailVerified}
       initialMessages={initialMessages}
       hasOlder={hasOlder}

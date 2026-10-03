@@ -99,15 +99,18 @@ function PendingItem({
         {failed ? (
           <div role="alert" className="mt-1 flex flex-wrap items-center gap-2 text-sm">
             <span className="text-danger">{pending.error?.message}</span>
-            <button
-              type="button"
-              className="font-semibold text-accent underline"
-              onClick={() => {
-                retry(pending.clientId);
-              }}
-            >
-              Try again
-            </button>
+            {/* The word filter gives the same answer every time: sending again cannot help. */}
+            {pending.error?.code === 'CONTENT_BLOCKED' ? null : (
+              <button
+                type="button"
+                className="font-semibold text-accent underline"
+                onClick={() => {
+                  retry(pending.clientId);
+                }}
+              >
+                Try again
+              </button>
+            )}
             <button
               type="button"
               className="font-semibold text-ink-2 underline"
@@ -140,6 +143,7 @@ export function MessageList({
   editingId,
   setEditingId,
   onReply,
+  onReport,
   receiptFor,
   blocked,
   initialJump,
@@ -153,6 +157,7 @@ export function MessageList({
   editingId: string | null;
   setEditingId: (id: string | null) => void;
   onReply: (id: string) => void;
+  onReport: (id: string) => void;
   /** DMs: how far the other person received and read your message. */
   receiptFor?: (message: MessageWire) => Receipt | undefined;
   /** People this person blocked: their messages are folded away. */
@@ -384,6 +389,7 @@ export function MessageList({
                     document.getElementById('composer')?.focus();
                   }}
                   onReply={onReply}
+                  onReport={onReport}
                   onJump={jumpTo}
                   receipt={receiptFor?.(message)}
                   blockedAuthor={blocked.has(message.authorId)}

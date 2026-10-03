@@ -3,15 +3,16 @@
 /**
  * A room or a direct message: header, live messages, who is typing, the composer and (rooms
  * only) the member list with presence (ROOM-02, MSG-01 to MSG-07, RT-03 to RT-05, DM-01, DM-02).
- * A DM shows the other person in the header with "Block", ticks on your messages ("Sent",
- * "Delivered", "Seen" when both allow read receipts), and no composer after a block.
+ * A DM shows the other person in the header with "Block" and "Report", ticks on your messages
+ * ("Sent", "Delivered", "Seen" when both allow read receipts), and no composer after a block.
+ * Messages, people and the room itself can be reported from here (SAFE-01).
  *
  * History arrives with the page; everything after that arrives live through the shared
  * connection (ChatProvider). Sending is optimistic: a message shows at once as "Sending",
  * becomes a normal message when the server confirms it, or shows the reason it was refused with
  * "Try again" and "Delete". While the room is on screen, it counts as read.
  */
-import { Ban, Hash, Lock, MessageSquare, Settings, Users } from 'lucide-react';
+import { Ban, Flag, Hash, Lock, MessageSquare, Settings, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useActionState, useCallback, useEffect, useRef, useState } from 'react';
@@ -20,6 +21,7 @@ import type { MessageWire } from '@socketspace/shared/events';
 import { LIMITS } from '@socketspace/shared/limits';
 import type { PublicUser } from '@socketspace/shared/profile';
 
+import { ReportDialog, type ReportTarget } from '@/components/report-dialog';
 import { Alert, Button, buttonClasses } from '@/components/ui';
 import { UserAvatar } from '@/components/user-avatar';
 import { useChat } from '@/lib/chat/provider';
@@ -127,8 +129,17 @@ const ROLE_TITLE: Record<Role, string> = {
   member: 'Members',
 };
 
-function MemberList({ room, members }: { room: RoomInfo; members: MemberEntry[] }) {
+function MemberList({
+  room,
+  members,
+  onReport,
+}: {
+  room: RoomInfo;
+  members: MemberEntry[];
+  onReport: (target: ReportTarget) => void;
+}) {
   const { state, me } = useChat();
+  const blocked = new Set(state.blocked);
   const minute = useMinute();
   const statusOf = (userId: string): PresenceStatus => {
     // Your own dot follows your connection (the server does not echo you to yourself).
@@ -168,10 +179,34 @@ function MemberList({ room, members }: { room: RoomInfo; members: MemberEntry[] 
                     </span>
                     <span className="min-w-0 flex-1 truncate text-sm">{displayName(person)}</span>
                     {member.userId === me.id ? null : (
-                      <MessageButton
-                        userId={member.userId}
-                        name={person?.nickname ?? 'this person'}
-                      />
+                      <span className="flex items-center">
+                        <MessageButton
+                          userId={member.userId}
+                          name={person?.nickname ?? 'this person'}
+                        />
+                        <BlockButton
+                          compact
+                          userId={member.userId}
+                          name={person?.nickname ?? 'this person'}
+                          blocked={blocked.has(member.userId)}
+                        />
+                        <button
+                          type="button"
+                          aria-label={`Report ${person?.nickname ?? 'this person'}`}
+                          title={`Report ${person?.nickname ?? 'this person'}`}
+                          onClick={() => {
+                            onReport({
+                              type: 'user',
+                              userId: member.userId,
+                              name: person?.nickname ?? 'this person',
+                              conversationId: room.id,
+                            });
+                          }}
+                          className="rounded-md p-1 text-muted hover:bg-surface-2 hover:text-ink"
+                        >
+                          <Flag aria-hidden="true" className="h-4 w-4" />
+                        </button>
+                      </span>
                     )}
                   </li>
                 );
@@ -211,20 +246,50 @@ function MessageButton({ userId, name }: { userId: string; name: string }) {
   );
 }
 
-/** Block or unblock the other person of a DM (SAFE-01). */
+/** Block or unblock someone (SAFE-01); `compact` is the icon-only form of the member list. */
 function BlockButton({
   userId,
   name,
   blocked,
+  compact = false,
 }: {
   userId: string;
   name: string;
   blocked: boolean;
+  compact?: boolean;
 }) {
   const [state, action, pending] = useActionState<SocialActionState, FormData>(
     blocked ? unblockUserAction : blockUserAction,
     {},
   );
+  if (compact) {
+    const label = blocked ? `Unblock ${name}` : `Block ${name}`;
+    return (
+      <form action={action} className="relative">
+        <input type="hidden" name="userId" value={userId} />
+        <button
+          type="submit"
+          disabled={pending}
+          aria-label={label}
+          title={label}
+          aria-pressed={blocked}
+          className={`rounded-md p-1 hover:bg-surface-2 hover:text-ink ${
+            blocked ? 'text-danger' : 'text-muted'
+          }`}
+        >
+          <Ban aria-hidden="true" className="h-4 w-4" />
+        </button>
+        {state.error ? (
+          <p
+            role="alert"
+            className="absolute right-0 z-10 w-48 rounded-lg bg-card p-2 text-xs text-danger shadow"
+          >
+            {state.error}
+          </p>
+        ) : null}
+      </form>
+    );
+  }
   return (
     <form action={action} className="flex flex-col items-end gap-1">
       <input type="hidden" name="userId" value={userId} />
@@ -270,6 +335,7 @@ function LeaveButton({ room }: { room: RoomInfo }) {
 export function RoomView({
   room,
   membership,
+  accountMute = null,
   emailVerified,
   initialMessages,
   initialMembers,
@@ -280,6 +346,8 @@ export function RoomView({
 }: {
   room: RoomInfo;
   membership: { role: Role; mutedUntil: string | null } | null;
+  /** A site moderator muted the whole account (ADMIN-03): until when, and why. */
+  accountMute?: { until: string; reason: string } | null;
   emailVerified: boolean;
   initialMessages: MessageWire[];
   initialMembers: MemberEntry[];
@@ -310,6 +378,7 @@ export function RoomView({
     setMembers(initialMembers);
   }
   const [replyToId, setReplyToId] = useState<string | null>(null);
+  const [reporting, setReporting] = useState<ReportTarget | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const sidebarRoom = state.rooms.find((r) => r.id === room.id);
   const name = sidebarRoom?.name ?? room.name;
@@ -408,8 +477,10 @@ export function RoomView({
     [room.id, onMemberEvent],
   );
 
-  // When a mute ends, show the composer again without a manual reload.
-  const mutedUntil = membership?.mutedUntil ?? null;
+  // When a mute ends, show the composer again without a manual reload. If both a room mute and
+  // an account mute are in force, the page is refreshed when the first one ends.
+  const mutedUntil =
+    [membership?.mutedUntil, accountMute?.until].filter((until) => until != null).sort()[0] ?? null;
   useEffect(() => {
     if (!mutedUntil) return;
     const timer = setTimeout(
@@ -424,7 +495,8 @@ export function RoomView({
   }, [mutedUntil, router]);
 
   const canModerate = membership?.role === 'owner' || membership?.role === 'moderator';
-  const canTakePart = membership !== null && emailVerified && !membership.mutedUntil;
+  const canTakePart =
+    membership !== null && emailVerified && !membership.mutedUntil && !accountMute;
   const roles = new Map(members.map((m) => [m.userId, m.role]));
   const myRank = membership ? RANK[membership.role] : 0;
   const permissionsFor = (message: MessageWire): MessagePermissions => {
@@ -482,6 +554,13 @@ export function RoomView({
         You can still read.
       </CannotPost>
     );
+  } else if (accountMute) {
+    footer = (
+      <CannotPost>
+        A moderator muted your account until <LocalTime iso={accountMute.until} withDate />. You can
+        still read. Reason: {accountMute.reason}
+      </CannotPost>
+    );
   } else {
     footer = (
       <Composer
@@ -510,11 +589,29 @@ export function RoomView({
                 <p className="text-sm text-ink-2">Direct message</p>
               </div>
             </div>
-            <BlockButton
-              userId={dm.otherUserId}
-              name={otherName}
-              blocked={blockedPeople.has(dm.otherUserId)}
-            />
+            <div className="flex shrink-0 items-start gap-1">
+              <button
+                type="button"
+                className={buttonClasses('ghost', 'min-h-9 px-3 text-ink-2')}
+                aria-label={`Report ${otherName}`}
+                onClick={() => {
+                  setReporting({
+                    type: 'user',
+                    userId: dm.otherUserId,
+                    name: otherName,
+                    conversationId: room.id,
+                  });
+                }}
+              >
+                <Flag aria-hidden="true" className="h-4 w-4" />
+                Report
+              </button>
+              <BlockButton
+                userId={dm.otherUserId}
+                name={otherName}
+                blocked={blockedPeople.has(dm.otherUserId)}
+              />
+            </div>
           </header>
         ) : (
           <header className="flex items-start justify-between gap-3 border-b border-line bg-card px-4 py-3">
@@ -543,6 +640,20 @@ export function RoomView({
                   <span className="sr-only sm:not-sr-only">Room settings</span>
                 </Link>
               ) : null}
+              {canModerate ? null : (
+                <button
+                  type="button"
+                  className={buttonClasses('ghost', 'min-h-9 px-3 text-ink-2')}
+                  aria-label={`Report the room ${name}`}
+                  title="Report this room"
+                  onClick={() => {
+                    setReporting({ type: 'room', conversationId: room.id, name: `#${name}` });
+                  }}
+                >
+                  <Flag aria-hidden="true" className="h-4 w-4" />
+                  <span className="sr-only sm:not-sr-only">Report</span>
+                </button>
+              )}
               {membership ? <LeaveButton room={room} /> : null}
             </div>
           </header>
@@ -562,6 +673,15 @@ export function RoomView({
           editingId={editingId}
           setEditingId={setEditingId}
           onReply={setReplyToId}
+          onReport={(messageId) => {
+            const reported = messages.find((m) => m.id === messageId);
+            if (!reported) return;
+            setReporting({
+              type: 'message',
+              messageId,
+              authorName: state.users[reported.authorId]?.nickname ?? 'someone',
+            });
+          }}
           receiptFor={receiptFor}
           blocked={blockedPeople}
           {...(focusMessageId ? { initialJump: focusMessageId } : {})}
@@ -578,9 +698,19 @@ export function RoomView({
             <Users aria-hidden="true" className="h-4 w-4 text-muted" />
             Members
           </h2>
-          <MemberList room={room} members={members} />
+          <MemberList room={room} members={members} onReport={setReporting} />
         </aside>
       )}
+      {reporting ? (
+        <ReportDialog
+          // A fresh dialog (and a fresh form) for each thing reported.
+          key={JSON.stringify(reporting)}
+          target={reporting}
+          onClose={() => {
+            setReporting(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

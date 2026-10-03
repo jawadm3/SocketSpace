@@ -327,64 +327,78 @@ export type SignInStanding =
  *
  * A suspension or ban ends every session, so signing in again is the one way back. If the
  * sanction has run out by then, the account's status is put back to `active` here.
+ *
+ * No transaction and no row lock: this runs inside the sign-in library's own work on the same
+ * account, and must never wait for it. The one write is guarded in SQL instead (it does nothing
+ * if a new sanction arrived in the meantime).
  */
 export async function resolveSignInStanding(
-  db: Database,
+  db: Queryable,
   userId: string,
   fixedNow?: Date,
 ): Promise<SignInStanding> {
   const now = dbNow(fixedNow);
-  return db.transaction(async (tx) => {
-    const [account] = await tx
-      .select({ status: user.status })
-      .from(user)
-      .where(eq(user.id, userId))
-      .for('update');
-    // An account that is being created has no row yet.
-    if (!account) return { allowed: true } as const;
-    if (account.status === 'deleted') {
-      return { allowed: false, status: 'deleted', until: null, reason: null } as const;
-    }
+  const [account] = await db.select({ status: user.status }).from(user).where(eq(user.id, userId));
+  // An account that is being created has no row yet.
+  if (!account) return { allowed: true };
+  if (account.status === 'deleted') {
+    return { allowed: false, status: 'deleted', until: null, reason: null };
+  }
 
-    const rows = await tx
-      .select({
-        kind: userSanction.kind,
-        reason: userSanction.reason,
-        expiresAt: userSanction.expiresAt,
-        active: sql<boolean>`${userSanction.startsAt} <= ${now}
-          and (${userSanction.expiresAt} is null or ${userSanction.expiresAt} > ${now})`,
-      })
-      .from(userSanction)
+  const inForce = sql`${userSanction.startsAt} <= ${now}
+    and (${userSanction.expiresAt} is null or ${userSanction.expiresAt} > ${now})`;
+  const rows = await db
+    .select({
+      kind: userSanction.kind,
+      reason: userSanction.reason,
+      expiresAt: userSanction.expiresAt,
+      active: sql<boolean>`${inForce}`,
+    })
+    .from(userSanction)
+    .where(
+      and(
+        eq(userSanction.userId, userId),
+        inArray(userSanction.kind, ['suspend', 'ban']),
+        isNull(userSanction.liftedAt),
+      ),
+    )
+    .orderBy(desc(userSanction.createdAt));
+  const active = rows.filter((r) => r.active);
+  if (active.length > 0) {
+    // The one that keeps the person out longest decides what they are told.
+    const longest = active.reduce((a, b) => {
+      if (a.expiresAt === null) return a;
+      if (b.expiresAt === null) return b;
+      return b.expiresAt > a.expiresAt ? b : a;
+    });
+    return {
+      allowed: false,
+      status: active.some((r) => r.kind === 'ban') ? 'banned' : 'suspended',
+      until: longest.expiresAt,
+      reason: longest.reason,
+    };
+  }
+  if (account.status === 'active') return { allowed: true };
+  // Suspended or banned by a sanction that has since run out: the account is usable again.
+  if (rows.length > 0) {
+    await db
+      .update(user)
+      .set({ status: 'active' })
       .where(
         and(
-          eq(userSanction.userId, userId),
-          inArray(userSanction.kind, ['suspend', 'ban']),
-          isNull(userSanction.liftedAt),
+          eq(user.id, userId),
+          inArray(user.status, ['suspended', 'banned']),
+          sql`not exists (
+            select 1 from ${userSanction}
+            where ${userSanction.userId} = ${userId}
+              and ${userSanction.kind} in ('suspend', 'ban')
+              and ${userSanction.liftedAt} is null
+              and ${inForce}
+          )`,
         ),
-      )
-      .orderBy(desc(userSanction.createdAt));
-    const active = rows.filter((r) => r.active);
-    if (active.length > 0) {
-      // The one that keeps the person out longest decides what they are told.
-      const longest = active.reduce((a, b) => {
-        if (a.expiresAt === null) return a;
-        if (b.expiresAt === null) return b;
-        return b.expiresAt > a.expiresAt ? b : a;
-      });
-      return {
-        allowed: false,
-        status: active.some((r) => r.kind === 'ban') ? 'banned' : 'suspended',
-        until: longest.expiresAt,
-        reason: longest.reason,
-      } as const;
-    }
-    if (account.status === 'active') return { allowed: true } as const;
-    // Suspended or banned by a sanction that has since run out: the account is usable again.
-    if (rows.length > 0) {
-      await tx.update(user).set({ status: 'active' }).where(eq(user.id, userId));
-      return { allowed: true } as const;
-    }
-    // The status was set without a sanction (by hand): only a moderator can change it back.
-    return { allowed: false, status: account.status, until: null, reason: null } as const;
-  });
+      );
+    return { allowed: true };
+  }
+  // The status was set without a sanction (by hand): only a moderator can change it back.
+  return { allowed: false, status: account.status, until: null, reason: null };
 }

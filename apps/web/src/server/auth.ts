@@ -27,10 +27,10 @@ import { anonymous, haveIBeenPwned, jwt, lastLoginMethod } from 'better-auth/plu
 
 import {
   clearFailedSignIns,
-  getConnectionProfile,
   getLockoutRemainingMs,
   newId,
   recordFailedSignIn,
+  resolveSignInStanding,
   schema,
   type Database,
 } from '@socketspace/db';
@@ -43,6 +43,26 @@ import { resetPasswordMessage, verifyEmailMessage } from './email/templates';
 import type { WebEnv } from './env';
 import type { Logger } from './log';
 import type { RealtimeNotifier } from './realtime-events';
+
+/**
+ * What a person reads when they may not sign in. A suspended or banned person is told the
+ * moderator's reason and, when there is one, the end (in UTC: the server does not know their
+ * time zone). Only the person themselves gets this far: the password was already checked.
+ */
+export function inactiveAccountMessage(standing: {
+  status: 'suspended' | 'banned' | 'deleted';
+  until: Date | null;
+  reason: string | null;
+}): string {
+  if (standing.status === 'deleted' || standing.reason === null) {
+    return 'This account is suspended or closed.';
+  }
+  const until = standing.until
+    ? ` until ${standing.until.toISOString().slice(0, 16).replace('T', ' ')} UTC`
+    : '';
+  const what = standing.status === 'banned' ? 'banned' : 'suspended';
+  return `This account is ${what}${until}. Reason: ${standing.reason}`;
+}
 
 /** Guests get a placeholder address on a domain that can never receive mail (RFC 2606). */
 export const GUEST_EMAIL_DOMAIN = 'guest.socketspace.invalid';
@@ -321,11 +341,13 @@ export function createAuth(deps: AuthDeps) {
       session: {
         create: {
           before: async (session) => {
-            const owner = await getConnectionProfile(db, session.userId);
-            if (owner && owner.status !== 'active') {
+            // A suspension or ban ends every session, so this is the one way back in. If the
+            // sanction has run out, the account is put back to normal here (ADMIN-03).
+            const standing = await resolveSignInStanding(db, session.userId);
+            if (!standing.allowed) {
               throw APIError.from('FORBIDDEN', {
                 code: 'ACCOUNT_INACTIVE',
-                message: 'This account is suspended or closed.',
+                message: inactiveAccountMessage(standing),
               });
             }
           },

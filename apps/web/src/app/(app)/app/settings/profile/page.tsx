@@ -52,6 +52,10 @@ export default async function ProfileSettingsPage() {
           <Link href="/settings/sessions" className="font-semibold text-accent underline">
             devices and sessions
           </Link>
+          ,{' '}
+          <Link href="/app/settings/standing" className="font-semibold text-accent underline">
+            account standing
+          </Link>
           .
         </p>
       </header>

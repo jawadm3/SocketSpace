@@ -11,6 +11,7 @@ import {
 import { uuid } from '@socketspace/shared/primitives';
 
 import { getDb } from '@/server/db';
+import { getAccountMute } from '@/server/moderation';
 import { requireAppUser } from '@/server/session';
 
 import { RoomView } from '../../r/[slug]/room-view';
@@ -72,6 +73,7 @@ export default async function DmPage({
         lastEventSeq: view.lastEventSeq,
       }}
       membership={{ role: 'member', mutedUntil: null }}
+      accountMute={await getAccountMute(db, user.id)}
       emailVerified={user.emailVerified}
       initialMessages={initialMessages}
       initialMembers={[user.id, view.otherUserId].map((userId) => ({

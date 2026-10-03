@@ -3,10 +3,11 @@
 /**
  * One message and what you can do with it (MSG-02 to MSG-07): the text rendered from
  * markdown-lite, a quote of the message it replies to (which jumps to the original), reactions,
- * and the action bar (reply, react, edit, delete). The action bar appears on hover and whenever
- * keyboard focus is inside the message, so every action is reachable with Tab.
+ * and the action bar (reply, react, edit, delete, and report for other people's messages,
+ * SAFE-01). The action bar appears on hover and whenever keyboard focus is inside the message,
+ * so every action is reachable with Tab.
  */
-import { Check, CheckCheck, CornerUpLeft, Pencil, SmilePlus, Trash2 } from 'lucide-react';
+import { Check, CheckCheck, CornerUpLeft, Flag, Pencil, SmilePlus, Trash2 } from 'lucide-react';
 import {
   useEffect,
   useLayoutEffect,
@@ -414,6 +415,7 @@ export function MessageItem({
   onEdit,
   onEditDone,
   onReply,
+  onReport,
   onJump,
   measureRef,
   index,
@@ -431,6 +433,8 @@ export function MessageItem({
   onEdit: (messageId: string) => void;
   onEditDone: () => void;
   onReply: (messageId: string) => void;
+  /** Open the report dialog for this message (other people's messages only). */
+  onReport: (messageId: string) => void;
   /** Scroll to (and if needed load) another message. */
   onJump: (messageId: string) => void;
   /** The list measures each row's height (virtualised list). */
@@ -590,6 +594,16 @@ export function MessageItem({
               <Trash2 aria-hidden="true" className="h-4 w-4" />
             </ActionButton>
           ) : null}
+          {mine ? null : (
+            <ActionButton
+              label="Report"
+              onClick={() => {
+                onReport(message.id);
+              }}
+            >
+              <Flag aria-hidden="true" className="h-4 w-4" />
+            </ActionButton>
+          )}
         </div>
       )}
       {picking ? (

@@ -51,7 +51,11 @@ import type { PublicUser } from '@socketspace/shared/profile';
 
 import { connectRealtime, TokenRequestError, type RealtimeSocket } from '@/lib/realtime-client';
 
-import { describeNotification, showBrowserNotification } from './notifications';
+import {
+  describeModerationNotice,
+  describeNotification,
+  showBrowserNotification,
+} from './notifications';
 import {
   chatReducer,
   conversationsWithGaps,
@@ -596,8 +600,23 @@ export function ChatProvider({
         router.refresh();
       });
       connected.on('moderation:notice', ({ kind, reason, until }) => {
-        const when = until ? ` until ${new Date(until).toLocaleString()}` : '';
-        notifyError(`Your account was ${kind}${when}: ${reason}`);
+        const lifted = kind === 'unmuted' || kind === 'random_timeout_lifted';
+        dispatch({
+          type: 'notice',
+          notice: {
+            id: noticeId(),
+            tone: lifted ? 'info' : 'error',
+            text: describeModerationNotice(
+              kind,
+              reason,
+              until ? new Date(until).toLocaleString() : null,
+            ),
+          },
+        });
+        // A sanction also left a notification with the reason (the bell counts it).
+        if (!lifted) dispatch({ type: 'notification' });
+        // Pages re-read what this person may do now (for example the mute banner).
+        router.refresh();
       });
     };
     start();

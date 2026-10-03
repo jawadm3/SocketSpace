@@ -34,6 +34,8 @@ export const E2E = {
   uploadsDir: resolve(repoRoot, '.cache', 'e2e-uploads'),
   previewPort,
   previewHost: 'preview.test',
+  /** Signs the internal events a test sends to the realtime server, as the web app does. */
+  internalSecret,
 };
 
 export default defineConfig({
