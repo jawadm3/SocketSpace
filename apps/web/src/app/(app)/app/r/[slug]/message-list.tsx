@@ -24,7 +24,13 @@ import { UserAvatar } from '@/components/user-avatar';
 import { useChat } from '@/lib/chat/provider';
 import type { PendingMessage } from '@/lib/chat/state';
 
-import { isRemoved, MessageItem, snippet, type MessagePermissions } from './message-item';
+import {
+  isRemoved,
+  MessageItem,
+  snippet,
+  type MessagePermissions,
+  type Receipt,
+} from './message-item';
 
 type Row =
   | { kind: 'message'; message: MessageWire; continued: boolean }
@@ -128,7 +134,11 @@ export function MessageList({
   editingId,
   setEditingId,
   onReply,
+  receiptFor,
+  blocked,
+  initialJump,
 }: {
+  /** `name` as shown: "#design" or "@ava". */
   room: { id: string; name: string };
   messages: MessageWire[];
   pending: PendingMessage[];
@@ -137,6 +147,12 @@ export function MessageList({
   editingId: string | null;
   setEditingId: (id: string | null) => void;
   onReply: (id: string) => void;
+  /** DMs: how far the other person received and read your message. */
+  receiptFor?: (message: MessageWire) => Receipt | undefined;
+  /** People this person blocked: their messages are folded away. */
+  blocked: ReadonlySet<string>;
+  /** A message to jump to when the list opens (search results, notifications). */
+  initialJump?: string;
 }) {
   const { state, me, notify } = useChat();
   const scroller = useRef<HTMLDivElement>(null);
@@ -276,10 +292,18 @@ export function MessageList({
     }
   }, [jumpRequest, targetIndex, hasOlder, loading, error, load, virtualizer, notify]);
 
+  // Opened from a search result or a notification: go to that message once.
+  const jumpedTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialJump || jumpedTo.current === initialJump) return;
+    jumpedTo.current = initialJump;
+    jumpTo(initialJump);
+  }, [initialJump, jumpTo]);
+
   if (messages.length === 0 && pending.length === 0 && !hasOlder) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center p-8 text-center text-ink-2">
-        <p>No messages yet. Be the first to say hello in #{room.name}.</p>
+        <p>No messages yet. Be the first to say hello in {room.name}.</p>
       </div>
     );
   }
@@ -302,7 +326,7 @@ export function MessageList({
             style={{ height: TOP_HEIGHT }}
           >
             {!hasOlder ? (
-              `This is the start of #${room.name}.`
+              `This is the start of ${room.name}.`
             ) : loading ? (
               'Loading earlier messages…'
             ) : (
@@ -355,6 +379,8 @@ export function MessageList({
                   }}
                   onReply={onReply}
                   onJump={jumpTo}
+                  receipt={receiptFor?.(message)}
+                  blockedAuthor={blocked.has(message.authorId)}
                 />
               );
             })}

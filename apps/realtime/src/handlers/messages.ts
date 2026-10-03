@@ -3,7 +3,13 @@
  *
  * `message:edit`, `message:delete`, `reaction:toggle` (MSG-02, MSG-03, MSG-05) take a new event
  * number in the database and are broadcast to the conversation, so open tabs update at once and
- * resync carries them. `read:update` (RT-05) moves the reader's marker and tells their other tabs.
+ * resync carries them. `read:update` (RT-05) moves the reader's marker and tells their other tabs
+ * and, in a DM where both allow read receipts, the other person ("Seen"). `delivery:ack` (DM-02)
+ * records what a device received in DMs and tells the other person ("Delivered").
+ *
+ * New messages and edits that notify someone (mentions, replies, DMs; NOTIF-01) push
+ * `notification:new` to that person's tabs; the database wrote the notification in the same
+ * transaction as the message.
  *
  * `message:send` (MSG-01, RT-02, RECON-03): every permission is checked by the database inside the
  * same transaction that numbers the message (packages/db sendMessage). A re-send with the same
@@ -14,15 +20,21 @@
  */
 import {
   deleteMessage,
+  dmPartner,
   editMessage,
   filterMemberConversations,
+  getPersonRows,
   listEventsSince,
   listReactions,
+  markDelivered,
   markRead,
+  nicknameOnly,
+  receiptsAllowed,
   sendMessage,
   toggleReaction,
   toMessageWire,
   type MessageActionRefusal,
+  type NotificationRow,
   type SendRefusal,
 } from '@socketspace/db';
 import type { DenyReason } from '@socketspace/shared/authz';
@@ -30,7 +42,42 @@ import { ackError, ackOk, type Ack } from '@socketspace/shared/errors';
 import { LIMITS } from '@socketspace/shared/limits';
 
 import { rooms, type HandlerContext, type IoSocket } from '../types';
-import { registerHandler, type InFlight } from './define';
+import { registerHandler, registerSignal, type InFlight } from './define';
+
+/** Tells each notified person's tabs (nickname only for the actor: one broadcast, many viewers). */
+async function pushNotifications(
+  ctx: HandlerContext,
+  notifications: readonly NotificationRow[],
+): Promise<void> {
+  if (notifications.length === 0) return;
+  const actorIds = [...new Set(notifications.flatMap((n) => (n.actorId ? [n.actorId] : [])))];
+  const people = new Map((await getPersonRows(ctx.db, actorIds)).map((p) => [p.id, p]));
+  for (const n of notifications) {
+    const actor = n.actorId ? people.get(n.actorId) : undefined;
+    ctx.io.to(rooms.user(n.userId)).emit('notification:new', {
+      notification: {
+        id: n.id,
+        type: n.type,
+        conversationId: n.conversationId,
+        messageId: n.messageId,
+        actor: actor ? nicknameOnly(actor) : null,
+        createdAt: n.createdAt.toISOString(),
+        readAt: null,
+      },
+    });
+  }
+}
+
+/** In a DM where both people allow read receipts, the other person; otherwise null. */
+async function receiptPartner(
+  ctx: HandlerContext,
+  conversationId: string,
+  userId: string,
+): Promise<string | null> {
+  const partner = await dmPartner(ctx.db, conversationId, userId);
+  if (!partner) return null;
+  return (await receiptsAllowed(ctx.db, userId, partner)) ? partner : null;
+}
 
 const DENIED: Partial<Record<DenyReason, string>> = {
   role: 'Only the author, a room moderator or an admin can delete this message.',
@@ -118,6 +165,7 @@ export function registerMessageHandlers(
       sender
         .to(rooms.conversation(message.conversationId))
         .emit('message:new', { message, eventSeq: message.eventSeq });
+      await pushNotifications(ctx, result.notifications);
     }
     return ackOk({ message });
   });
@@ -174,6 +222,7 @@ export function registerMessageHandlers(
       editor
         .to(rooms.conversation(message.conversationId))
         .emit('message:updated', { message, eventSeq: message.eventSeq });
+      await pushNotifications(ctx, result.notifications);
     }
     return ackOk({ message });
   });
@@ -225,12 +274,33 @@ export function registerMessageHandlers(
     if (!result.ok) return ackError('FORBIDDEN', 'You are not a member of this conversation.');
     if (result.moved) {
       // The person's other tabs clear their unread badge too.
-      reader.to(rooms.user(reader.data.userId)).emit('read:updated', {
-        conversationId,
-        userId: reader.data.userId,
-        seq: result.lastReadSeq,
-      });
+      const update = { conversationId, userId: reader.data.userId, seq: result.lastReadSeq };
+      reader.to(rooms.user(reader.data.userId)).emit('read:updated', update);
+      const partner = await receiptPartner(ctx, conversationId, reader.data.userId);
+      if (partner) ctx.io.to(rooms.user(partner)).emit('read:updated', update);
     }
     return ackOk({ unread: result.unread });
+  });
+
+  registerSignal(socket, ctx, 'delivery:ack', async ({ items }, device) => {
+    for (const { conversationId, seq } of items) {
+      // Only conversations this socket is in (checked without a query), DMs only (database).
+      if (!device.rooms.has(rooms.conversation(conversationId))) continue;
+      const moved = await markDelivered(ctx.db, {
+        conversationId,
+        userId: device.data.userId,
+        seq,
+      });
+      if (!moved) continue;
+      const partner = await receiptPartner(ctx, conversationId, device.data.userId);
+      if (partner) {
+        ctx.io.to(rooms.user(partner)).emit('delivery:updated', {
+          conversationId,
+          userId: device.data.userId,
+          seq: moved.lastDeliveredSeq,
+        });
+      }
+    }
+    ctx.afterDatabaseWork();
   });
 }

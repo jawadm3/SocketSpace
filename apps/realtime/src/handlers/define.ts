@@ -93,14 +93,15 @@ export class InFlight {
 }
 
 /**
- * For fire-and-forget events (`typing:set`): no acknowledgement, so extra events beyond the rate
- * are dropped silently and invalid payloads ignored (realtime-protocol.md, rate limits).
+ * For fire-and-forget events (`typing:set`, `delivery:ack`): no acknowledgement, so extra events
+ * beyond the rate are dropped silently and invalid payloads ignored (realtime-protocol.md, rate
+ * limits). A failure in an asynchronous handler is logged by name and code only.
  */
-export function registerSignal<E extends 'typing:set'>(
+export function registerSignal<E extends 'typing:set' | 'delivery:ack'>(
   socket: IoSocket,
   ctx: HandlerContext,
   event: E,
-  handler: (payload: ClientPayload<E>, socket: IoSocket) => void,
+  handler: (payload: ClientPayload<E>, socket: IoSocket) => void | Promise<void>,
 ): void {
   const spec: BucketSpec = RATE_LIMITS[event];
   const schema = CLIENT_EVENTS[event].payload;
@@ -112,7 +113,14 @@ export function registerSignal<E extends 'typing:set'>(
     if (ctx.buckets.take(`${socket.data.userId}:${event}`, spec) > 0) return;
     const parsed = schema.safeParse(payload);
     if (!parsed.success) return;
-    handler(parsed.data as ClientPayload<E>, socket);
+    void Promise.resolve(handler(parsed.data as ClientPayload<E>, socket)).catch(
+      (error: unknown) => {
+        ctx.logger.warn(
+          { socketId: socket.id, error: describeError(error), event, userId: socket.data.userId },
+          'signal handler failed',
+        );
+      },
+    );
   });
 }
 

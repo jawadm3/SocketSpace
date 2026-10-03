@@ -12,6 +12,8 @@ import {
   toMessageWire,
 } from '@socketspace/db';
 
+import { uuid } from '@socketspace/shared/primitives';
+
 import { Alert, buttonClasses, Card } from '@/components/ui';
 import { getDb } from '@/server/db';
 import { timeLeft } from '@/server/rooms';
@@ -37,8 +39,16 @@ export async function generateMetadata({
   return { title: view ? view.room.name : 'Room not found' };
 }
 
-export default async function RoomPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function RoomPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ m?: string | string[] }>;
+}) {
   const { slug } = await params;
+  // `?m=<message id>` (from search or a notification): the list jumps to that message.
+  const focus = uuid.safeParse((await searchParams).m);
   const { user, view } = await loadRoom(slug);
   // Missing, deleted, and private-but-not-yours all look the same: nothing leaks (journey J5).
   if (!view) notFound();
@@ -101,6 +111,7 @@ export default async function RoomPage({ params }: { params: Promise<{ slug: str
       emailVerified={user.emailVerified}
       initialMessages={messages.map((m) => toMessageWire(m, reactions.get(m.id) ?? []))}
       hasOlder={hasOlder}
+      {...(focus.success ? { focusMessageId: focus.data } : {})}
       initialMembers={members.map((m) => ({
         userId: m.userId,
         role: m.role,

@@ -22,6 +22,7 @@ import { conversation, conversationMember, roomBan } from '../schema/conversatio
 import { mention, message, messageRevision, reaction } from '../schema/messages';
 import { moderationAction } from '../schema/safety';
 import { checkCanPost, saveMentions, type MessageRow, type SendRefusal } from './messages';
+import { notifyForMessage, type NotificationRow } from './notifications';
 
 export type MessageActionRefusal =
   | SendRefusal
@@ -128,7 +129,9 @@ export interface EditMessageInput {
 export async function editMessage(
   db: Database,
   input: EditMessageInput,
-): Promise<MessageActionResult<{ changed: boolean; newMentions: string[] }>> {
+): Promise<
+  MessageActionResult<{ changed: boolean; newMentions: string[]; notifications: NotificationRow[] }>
+> {
   const clock = dbNow(input.now);
   return db.transaction(async (tx) => {
     const locked = await lockMessage(tx, input.messageId);
@@ -154,7 +157,13 @@ export async function editMessage(
     });
     if (refusal) return fail(refusal);
     if (row.body === input.body)
-      return { ok: true as const, message: row, changed: false, newMentions: [] };
+      return {
+        ok: true as const,
+        message: row,
+        changed: false,
+        newMentions: [],
+        notifications: [],
+      };
 
     await keepRevision(tx, row, clock);
     const versionSeq = await nextEventSeq(tx, locked);
@@ -175,12 +184,13 @@ export async function editMessage(
     );
     await tx.delete(mention).where(eq(mention.messageId, row.id));
     const now = await saveMentions(tx, updated);
-    return {
-      ok: true as const,
-      message: updated,
-      changed: true,
-      newMentions: now.filter((id) => !before.has(id)),
-    };
+    const newMentions = now.filter((id) => !before.has(id));
+    // Only people mentioned for the first time hear about an edit.
+    const notifications = await notifyForMessage(tx, updated, newMentions, {
+      conversationKind: 'room',
+      includeReplyAndDm: false,
+    });
+    return { ok: true as const, message: updated, changed: true, newMentions, notifications };
   });
 }
 

@@ -17,6 +17,7 @@ import { conversation, conversationMember, roomBan } from '../schema/conversatio
 import { mention, message } from '../schema/messages';
 import { block } from '../schema/social';
 import { userSanction } from '../schema/safety';
+import { notifyForMessage, type NotificationRow } from './notifications';
 
 export type MessageRow = typeof message.$inferSelect;
 
@@ -55,6 +56,8 @@ export type SendMessageResult =
       duplicate: boolean;
       /** People @mentioned in this message (new messages only; empty for a re-send). */
       mentions: string[];
+      /** Notifications this message created (NOTIF-01; empty for a re-send). */
+      notifications: NotificationRow[];
     }
   | ({ ok: false } & SendRefusal);
 
@@ -74,7 +77,7 @@ function duplicateOrConflict(existing: MessageRow, conversationId: string): Send
   // The same client ID used for a different conversation is a client bug or a probe: refuse it
   // rather than returning a message from another conversation.
   return existing.conversationId === conversationId
-    ? { ok: true, message: existing, duplicate: true, mentions: [] }
+    ? { ok: true, message: existing, duplicate: true, mentions: [], notifications: [] }
     : { ok: false, reason: 'client_id_conflict' };
 }
 
@@ -154,8 +157,12 @@ export async function sendMessage(
           ),
         );
       const mentions = await saveMentions(tx, saved);
+      const notifications = await notifyForMessage(tx, saved, mentions, {
+        conversationKind: conv.kind,
+        includeReplyAndDm: true,
+      });
 
-      return { ok: true, message: saved, duplicate: false, mentions } as const;
+      return { ok: true, message: saved, duplicate: false, mentions, notifications } as const;
     });
   } catch (error) {
     // Two copies of the same re-send racing each other: the second hits the unique key on

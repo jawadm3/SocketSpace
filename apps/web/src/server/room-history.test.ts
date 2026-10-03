@@ -1,11 +1,11 @@
 /**
- * GET /api/rooms/[slug]/messages (HIST-02): pages by message number, the room page's read rules,
- * and nothing about private rooms for outsiders.
+ * GET /api/conversations/[id]/messages (HIST-02): pages by message number, the room page's read
+ * rules, DMs for their two members only, and nothing about private conversations for outsiders.
  */
 import { v4 as uuidv4 } from 'uuid';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { eq, roomBanUser, roomCreate, schema, sendMessage } from '@socketspace/db';
+import { eq, roomBanUser, roomCreate, schema, sendMessage, startDm } from '@socketspace/db';
 import { createTestUser } from '@socketspace/db/testing';
 import type { MessageWire } from '@socketspace/shared/events';
 
@@ -34,7 +34,12 @@ async function viewer() {
   if (!row) throw new Error('no user');
   await h.db
     .update(schema.user)
-    .set({ nickname: `reader${String(n)}`, avatarKind: 'preset', onboardedAt: new Date() })
+    .set({
+      nickname: `reader${String(n)}`,
+      avatarKind: 'preset',
+      onboardedAt: new Date(),
+      emailVerified: true,
+    })
     .where(eq(schema.user.id, row.id));
   return { id: row.id, cookie: cookieHeader(result.cookies) };
 }
@@ -61,23 +66,23 @@ async function roomWithMessages(visibility: 'public' | 'private', count: number)
   return { owner, room: created.room };
 }
 
-const history = (cookie: string | null, slug: string, query: string) =>
+const history = (cookie: string | null, id: string, query: string) =>
   loadRoomHistory(
-    new Request(`http://localhost:3000/api/rooms/${slug}/messages?${query}`, {
+    new Request(`http://localhost:3000/api/conversations/${id}/messages?${query}`, {
       headers: cookie ? { cookie } : {},
     }),
-    slug,
+    id,
     { auth: h.auth, db: h.db },
   );
 
 const bodies = (messages: MessageWire[]) => messages.map((m) => m.body);
 
-describe('GET /api/rooms/[slug]/messages', () => {
+describe('GET /api/conversations/[id]/messages', () => {
   it('pages backwards by message number and says when the start is reached', async () => {
     const me = await viewer();
     const { owner, room } = await roomWithMessages('public', 7);
 
-    const first = await history(me.cookie, room.slug, 'before=8&limit=3');
+    const first = await history(me.cookie, room.id, 'before=8&limit=3');
     expect(first.status).toBe(200);
     expect(first.headers.get('cache-control')).toBe('private, no-store');
     const page1 = (await first.json()) as HistoryPage;
@@ -94,13 +99,13 @@ describe('GET /api/rooms/[slug]/messages', () => {
     });
     const oldest = page1.messages[0]?.seq ?? 0;
     const page2 = (await (
-      await history(me.cookie, room.slug, `before=${String(oldest)}&limit=3`)
+      await history(me.cookie, room.id, `before=${String(oldest)}&limit=3`)
     ).json()) as HistoryPage;
     expect(bodies(page2.messages)).toEqual(['message 2', 'message 3', 'message 4']);
     expect(page2.hasMore).toBe(true);
 
     const last = (await (
-      await history(me.cookie, room.slug, `before=${String(page2.messages[0]?.seq ?? 0)}`)
+      await history(me.cookie, room.id, `before=${String(page2.messages[0]?.seq ?? 0)}`)
     ).json()) as HistoryPage;
     expect(bodies(last.messages)).toEqual(['message 1']);
     expect(last.hasMore).toBe(false);
@@ -109,8 +114,8 @@ describe('GET /api/rooms/[slug]/messages', () => {
   it('shows nothing of private rooms to outsiders, and nothing to someone banned', async () => {
     const outsider = await viewer();
     const { room } = await roomWithMessages('private', 2);
-    const hidden = await history(outsider.cookie, room.slug, 'before=100');
-    const missing = await history(outsider.cookie, 'no-such-room', 'before=100');
+    const hidden = await history(outsider.cookie, room.id, 'before=100');
+    const missing = await history(outsider.cookie, uuidv4(), 'before=100');
     expect(hidden.status).toBe(404);
     expect(await hidden.json()).toEqual(await missing.json());
 
@@ -118,15 +123,35 @@ describe('GET /api/rooms/[slug]/messages', () => {
     const open = await roomWithMessages('public', 2);
     const ban = await roomBanUser(h.db, open.owner.id, open.room.id, banned.id, null, 'spam');
     if (!ban.ok) throw new Error(ban.reason);
-    expect((await history(banned.cookie, open.room.slug, 'before=100')).status).toBe(404);
+    expect((await history(banned.cookie, open.room.id, 'before=100')).status).toBe(404);
+  });
+
+  it('shows a DM to its two members only', async () => {
+    const me = await viewer();
+    const other = await viewer();
+    const outsider = await viewer();
+    const started = await startDm(h.db, me.id, other.id);
+    if (!started.ok) throw new Error(started.reason);
+    const sent = await sendMessage(h.db, {
+      conversationId: started.conversationId,
+      authorId: me.id,
+      clientId: uuidv4(),
+      body: 'just us',
+    });
+    if (!sent.ok) throw new Error(sent.reason);
+    const page = (await (
+      await history(other.cookie, started.conversationId, 'before=100')
+    ).json()) as HistoryPage;
+    expect(bodies(page.messages)).toEqual(['just us']);
+    expect((await history(outsider.cookie, started.conversationId, 'before=100')).status).toBe(404);
   });
 
   it('refuses people who are signed out, and malformed requests', async () => {
     const me = await viewer();
     const { room } = await roomWithMessages('public', 1);
-    expect((await history(null, room.slug, 'before=10')).status).toBe(401);
+    expect((await history(null, room.id, 'before=10')).status).toBe(401);
     for (const query of ['', 'before=0', 'before=-1', 'before=abc', 'before=5&limit=151']) {
-      expect((await history(me.cookie, room.slug, query)).status).toBe(400);
+      expect((await history(me.cookie, room.id, query)).status).toBe(400);
     }
   });
 });

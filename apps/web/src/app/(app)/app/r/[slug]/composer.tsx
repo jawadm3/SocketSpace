@@ -32,6 +32,7 @@ export function Composer({
   onCancelReply,
   onEditLast,
 }: {
+  /** `name` is shown as it is: "#design" for a room, "@ava" for a DM. */
   room: { id: string; name: string };
   memberIds: readonly string[];
   replyTo: MessageWire | null;
@@ -216,7 +217,7 @@ export function Composer({
           : ''}
       </p>
       <label htmlFor="composer" className="sr-only">
-        Message #{room.name}
+        Message {room.name}
       </label>
       <div className="flex items-end gap-2">
         <textarea
@@ -224,7 +225,7 @@ export function Composer({
           ref={field}
           rows={1}
           value={text}
-          placeholder={`Message #${room.name}`}
+          placeholder={`Message ${room.name}`}
           aria-describedby={tooLong ? 'composer-length' : undefined}
           aria-autocomplete="list"
           aria-controls={open ? listId : undefined}

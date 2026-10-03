@@ -1,16 +1,16 @@
 /**
- * `GET /api/rooms/[slug]/messages?before=<seq>&limit=<n>`: older messages for infinite scroll
- * (HIST-02). Pages are cut by message number (`seq`), never by position, so a page stays the same
- * while new messages arrive.
+ * `GET /api/conversations/[id]/messages?before=<seq>&limit=<n>`: older messages for infinite
+ * scroll (HIST-02), for rooms and DMs. Pages are cut by message number (`seq`), never by position,
+ * so a page stays the same while new messages arrive.
  *
- * The same rules as the room page decide who may read: members, anyone for a public room, nobody
- * who is banned, and "not found" for everything else (nothing leaks about private rooms).
+ * Rooms follow the room page's rules (members, anyone for a public room, nobody who is banned);
+ * DMs only their two members. Everything else is "not found" (nothing leaks).
  */
 import 'server-only';
 
 import {
+  canReadConversation,
   getPublicUsers,
-  getRoomForViewer,
   hitRateLimit,
   listReactions,
   listRecentMessages,
@@ -18,6 +18,7 @@ import {
   type Database,
 } from '@socketspace/db';
 import type { MessageWire } from '@socketspace/shared/events';
+import { uuid } from '@socketspace/shared/primitives';
 import type { PublicUser } from '@socketspace/shared/profile';
 
 import { SESSION_ABSOLUTE_MS, type Auth } from './auth';
@@ -49,7 +50,7 @@ function positiveInt(raw: string | null, max: number): number | null {
 
 export async function loadRoomHistory(
   request: Request,
-  slug: string,
+  conversationId: string,
   deps: { auth: Auth; db: Database },
 ): Promise<Response> {
   const current = await deps.auth.api.getSession({ headers: request.headers });
@@ -88,14 +89,16 @@ export async function loadRoomHistory(
     );
   }
 
-  const view = await getRoomForViewer(deps.db, current.user.id, slug);
-  // Missing, private-and-not-yours and banned all look the same.
-  if (!view || (view.ban && !view.membership)) {
-    return error(404, 'NOT_FOUND', 'Room not found.');
+  // Missing, private-and-not-yours, someone else's DM and banned all look the same.
+  if (
+    !uuid.safeParse(conversationId).success ||
+    !(await canReadConversation(deps.db, current.user.id, conversationId))
+  ) {
+    return error(404, 'NOT_FOUND', 'Conversation not found.');
   }
 
   // One extra row tells whether anything older exists.
-  const rows = await listRecentMessages(deps.db, view.room.id, {
+  const rows = await listRecentMessages(deps.db, conversationId, {
     beforeSeq: before,
     limit: limit + 1,
   });

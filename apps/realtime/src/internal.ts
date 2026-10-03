@@ -3,6 +3,7 @@
  * connections, refusing replays, and draining the outbox of events that could not be sent directly.
  */
 import {
+  findDmBetween,
   getConversationForBroadcast,
   getMembership,
   getPersonRows,
@@ -205,10 +206,22 @@ export async function applyInternalEvent(
       io.in(room).socketsLeave(room);
       return;
     }
+    case 'block.created': {
+      // Their DM can no longer be written to: both people's pages re-read it (SAFE-01).
+      const dmId = await findDmBetween(db, event.blockerId, event.blockedId);
+      if (!dmId) return;
+      const conversation = await getConversationForBroadcast(db, dmId);
+      if (conversation) {
+        io.to([rooms.user(event.blockerId), rooms.user(event.blockedId)]).emit(
+          'conversation:updated',
+          { conversation },
+        );
+      }
+      return;
+    }
     // Handled from Stage E onwards (lifting sanctions, moderation broadcasts, random-mode blocks).
     case 'user.unsanctioned':
     case 'message.moderated':
-    case 'block.created':
       return;
   }
 }

@@ -125,5 +125,27 @@ test('room screens at desktop and mobile width', async ({ browser }) => {
   await sam.page.goto('/app');
   await sam.page.screenshot({ path: 'test-results/shots/desktop-app-home.png', fullPage: true });
 
+  // A DM with receipts, then Sam's notifications and a search.
+  await ava.page.goto(roomPath);
+  await ava.page
+    .getByRole('complementary', { name: 'Members' })
+    .getByRole('button', { name: `Message ${sam.nickname}` })
+    .click();
+  await expect(ava.page).toHaveURL(/\/app\/dm\//);
+  const dmComposer = ava.page.getByLabel(`Message @${sam.nickname}`);
+  await dmComposer.fill('Shall we pair on the type scale tomorrow?');
+  await dmComposer.press('Enter');
+  await expect(ava.page.getByRole('img', { name: 'Delivered' })).toBeVisible({ timeout: 10_000 });
+  await sam.page.goto('/app/notifications');
+  await sam.page.screenshot({
+    path: 'test-results/shots/desktop-notifications.png',
+    fullPage: true,
+  });
+  await sam.page.goto(new URL(ava.page.url()).pathname);
+  await expect(ava.page.getByRole('img', { name: 'Seen' })).toBeVisible({ timeout: 10_000 });
+  await ava.page.screenshot({ path: 'test-results/shots/desktop-dm.png' });
+  await sam.page.goto('/app/search?q=type');
+  await sam.page.screenshot({ path: 'test-results/shots/desktop-search.png', fullPage: true });
+
   for (const context of [ava.context, sam.context, outsider]) await context.close();
 });

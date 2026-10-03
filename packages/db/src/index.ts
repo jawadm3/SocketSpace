@@ -23,6 +23,8 @@ export * from './queries/people';
 export * from './queries/rooms';
 export * from './queries/message-actions';
 export * from './queries/read-state';
+export * from './queries/notifications';
+export * from './queries/dms';
 export { toMessageWire } from './wire';
 export { isUniqueViolation } from './errors';
 // The query-building operators, re-exported so apps use this package's Drizzle instance.

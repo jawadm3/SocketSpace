@@ -1,7 +1,12 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { getProfileSettings } from '@socketspace/db';
+import {
+  getPrivacySettings,
+  getProfileSettings,
+  getPublicUsers,
+  listBlocked,
+} from '@socketspace/db';
 import { avatarConfigSchema } from '@socketspace/shared/profile';
 
 import { Card } from '@/components/ui';
@@ -10,17 +15,25 @@ import { getDb } from '@/server/db';
 import { requireAppUser } from '@/server/session';
 
 import { PresenceForm } from './presence-form';
+import { BlockedList, PrivacyForm } from './privacy-form';
 import { ProfileForm } from './profile-form';
 
 export const metadata: Metadata = { title: 'Profile settings' };
 
 /**
- * Settings > Profile (PROF-01, PROF-02): nickname, real name and who sees it, bio, picture, and
- * whether others see when you are online.
+ * Settings > Profile (PROF-01, PROF-02, DM-01, DM-02, SAFE-01): nickname, real name and who sees
+ * it, bio, picture, whether others see when you are online, who may message you, read receipts,
+ * and the people you blocked.
  */
 export default async function ProfileSettingsPage() {
   const { user } = await requireAppUser('/app/settings/profile');
-  const profile = await getProfileSettings(getDb(), user.id);
+  const db = getDb();
+  const [profile, privacy, blockedIds] = await Promise.all([
+    getProfileSettings(db, user.id),
+    getPrivacySettings(db, user.id),
+    listBlocked(db, user.id),
+  ]);
+  const blocked = await getPublicUsers(db, user.id, blockedIds);
   const config = avatarConfigSchema.safeParse(profile?.avatarConfig);
   const avatar =
     config.success && (profile?.avatarKind === 'preset' || profile?.avatarKind === 'custom')
@@ -55,6 +68,15 @@ export default async function ProfileSettingsPage() {
       </Card>
       <Card>
         <PresenceForm showPresence={profile?.showPresence ?? true} />
+      </Card>
+      <Card>
+        <PrivacyForm
+          dmPolicy={privacy?.dmPolicy ?? 'everyone'}
+          readReceipts={privacy?.readReceipts ?? true}
+        />
+      </Card>
+      <Card>
+        <BlockedList people={blocked} />
       </Card>
     </main>
   );

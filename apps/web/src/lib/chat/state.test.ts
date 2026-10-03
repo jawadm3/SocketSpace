@@ -463,3 +463,49 @@ describe('older pages (HIST-02)', () => {
     expect(conv(state)?.hasOlder).toBe(false);
   });
 });
+
+describe('DMs, notifications and receipts (DM-01, DM-02, NOTIF-01)', () => {
+  const DM = '0192f0c1-7a3b-7c4d-8e5f-000000000003';
+  const withDm = () =>
+    initialChatState([], [], {
+      meId: ME,
+      dms: [{ id: DM, otherUserId: AUTHOR, lastEventSeq: 7 }],
+      unread: { [DM]: 1 },
+      notificationsUnread: 2,
+    });
+
+  it('starts DMs from the server like rooms: a cursor and an unread count', () => {
+    const state = withDm();
+    expect(state.conversations[DM]?.lastEventSeq).toBe(7);
+    expect(state.unread[DM]).toBe(1);
+    expect(state.notificationsUnread).toBe(2);
+  });
+
+  it('counts live notifications and clears them all at once', () => {
+    let state = chatReducer(withDm(), { type: 'notification' });
+    expect(state.notificationsUnread).toBe(3);
+    state = chatReducer(state, { type: 'notifications-read' });
+    expect(state.notificationsUnread).toBe(0);
+  });
+
+  it('moves receipts forward only, reading implies delivery, and none without permission', () => {
+    let state = chatReducer(withDm(), {
+      type: 'receipt',
+      conversationId: DM,
+      kind: 'read',
+      seq: 5,
+    });
+    expect(state.receipts[DM]).toBeUndefined(); // the server never said receipts are allowed
+    state = chatReducer(state, {
+      type: 'receipts-set',
+      conversationId: DM,
+      receipts: { delivered: 3, read: 2 },
+    });
+    state = chatReducer(state, { type: 'receipt', conversationId: DM, kind: 'read', seq: 5 });
+    expect(state.receipts[DM]).toEqual({ delivered: 5, read: 5 });
+    state = chatReducer(state, { type: 'receipt', conversationId: DM, kind: 'delivered', seq: 4 });
+    expect(state.receipts[DM]).toEqual({ delivered: 5, read: 5 });
+    state = chatReducer(state, { type: 'receipts-set', conversationId: DM, receipts: null });
+    expect(state.receipts[DM]).toBeUndefined();
+  });
+});

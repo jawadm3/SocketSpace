@@ -97,7 +97,8 @@ function plusMs(ms: number, fixed?: Date): SQL {
 
 // Loading state inside a transaction ----------------------------------------------------------------
 
-async function loadActor(tx: Queryable, userId: string): Promise<Actor | null> {
+/** The person as the authorisation rules see them (account state), or `null`. */
+export async function loadActor(tx: Queryable, userId: string): Promise<Actor | null> {
   const [row] = await tx
     .select({
       id: user.id,

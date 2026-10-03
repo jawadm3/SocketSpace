@@ -1,15 +1,17 @@
 'use client';
 
 /**
- * A room: header, live messages, who is typing, the composer and the member list with presence
- * (ROOM-02, MSG-01 to MSG-07, RT-03 to RT-05).
+ * A room or a direct message: header, live messages, who is typing, the composer and (rooms
+ * only) the member list with presence (ROOM-02, MSG-01 to MSG-07, RT-03 to RT-05, DM-01, DM-02).
+ * A DM shows the other person in the header with "Block", ticks on your messages ("Sent",
+ * "Delivered", "Seen" when both allow read receipts), and no composer after a block.
  *
  * History arrives with the page; everything after that arrives live through the shared
  * connection (ChatProvider). Sending is optimistic: a message shows at once as "Sending",
  * becomes a normal message when the server confirms it, or shows the reason it was refused with
  * "Try again" and "Delete". While the room is on screen, it counts as read.
  */
-import { Hash, Lock, Settings, Users } from 'lucide-react';
+import { Ban, Hash, Lock, MessageSquare, Settings, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useActionState, useCallback, useEffect, useRef, useState } from 'react';
@@ -21,9 +23,20 @@ import type { PublicUser } from '@socketspace/shared/profile';
 import { Alert, Button, buttonClasses } from '@/components/ui';
 import { UserAvatar } from '@/components/user-avatar';
 import { useChat } from '@/lib/chat/provider';
-import { describeTyping, typingUserIds, type PresenceStatus } from '@/lib/chat/state';
+import {
+  describeTyping,
+  typingUserIds,
+  type PresenceStatus,
+  type Receipts,
+} from '@/lib/chat/state';
 
 import { joinRoomAction, leaveRoomAction, type RoomActionState } from '../../room-actions';
+import {
+  blockUserAction,
+  startDmAction,
+  unblockUserAction,
+  type SocialActionState,
+} from '../../social-actions';
 import { Composer } from './composer';
 import {
   displayName,
@@ -31,6 +44,7 @@ import {
   LocalTime,
   useMinute,
   type MessagePermissions,
+  type Receipt,
 } from './message-item';
 import { MessageList } from './message-list';
 
@@ -152,7 +166,13 @@ function MemberList({ room, members }: { room: RoomInfo; members: MemberEntry[] 
                         <PresenceDot status={status} lastSeen={lastSeen} />
                       </span>
                     </span>
-                    <span className="truncate text-sm">{displayName(person)}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm">{displayName(person)}</span>
+                    {member.userId === me.id ? null : (
+                      <MessageButton
+                        userId={member.userId}
+                        name={person?.nickname ?? 'this person'}
+                      />
+                    )}
                   </li>
                 );
               })}
@@ -161,6 +181,68 @@ function MemberList({ room, members }: { room: RoomInfo; members: MemberEntry[] 
         );
       })}
     </div>
+  );
+}
+
+/** Opens (or starts) a DM with someone (DM-01). */
+function MessageButton({ userId, name }: { userId: string; name: string }) {
+  const [state, action, pending] = useActionState<SocialActionState, FormData>(startDmAction, {});
+  return (
+    <form action={action} className="relative">
+      <input type="hidden" name="userId" value={userId} />
+      <button
+        type="submit"
+        disabled={pending}
+        aria-label={`Message ${name}`}
+        title={`Message ${name}`}
+        className="rounded-md p-1 text-muted hover:bg-surface-2 hover:text-ink"
+      >
+        <MessageSquare aria-hidden="true" className="h-4 w-4" />
+      </button>
+      {state.error ? (
+        <p
+          role="alert"
+          className="absolute right-0 z-10 w-48 rounded-lg bg-card p-2 text-xs text-danger shadow"
+        >
+          {state.error}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
+/** Block or unblock the other person of a DM (SAFE-01). */
+function BlockButton({
+  userId,
+  name,
+  blocked,
+}: {
+  userId: string;
+  name: string;
+  blocked: boolean;
+}) {
+  const [state, action, pending] = useActionState<SocialActionState, FormData>(
+    blocked ? unblockUserAction : blockUserAction,
+    {},
+  );
+  return (
+    <form action={action} className="flex flex-col items-end gap-1">
+      <input type="hidden" name="userId" value={userId} />
+      <button
+        type="submit"
+        disabled={pending}
+        className={buttonClasses('ghost', 'min-h-9 px-3 text-ink-2')}
+        aria-label={blocked ? `Unblock ${name}` : `Block ${name}`}
+      >
+        <Ban aria-hidden="true" className="h-4 w-4" />
+        {blocked ? 'Unblock' : 'Block'}
+      </button>
+      {state.error ? (
+        <p role="alert" className="max-w-xs text-right text-xs text-danger">
+          {state.error}
+        </p>
+      ) : null}
+    </form>
   );
 }
 
@@ -193,6 +275,8 @@ export function RoomView({
   initialMembers,
   people,
   hasOlder: initialHasOlder,
+  dm,
+  focusMessageId,
 }: {
   room: RoomInfo;
   membership: { role: Role; mutedUntil: string | null } | null;
@@ -202,6 +286,10 @@ export function RoomView({
   people: PublicUser[];
   /** Older messages exist than the page brought. */
   hasOlder: boolean;
+  /** Set for a direct message (DM-01, DM-02). */
+  dm?: { otherUserId: string; blocked: boolean; receipts: Receipts | null };
+  /** Jump to this message when the page opens (search, notifications). */
+  focusMessageId?: string;
 }) {
   const {
     state,
@@ -211,6 +299,7 @@ export function RoomView({
     rememberUsers,
     onMemberEvent,
     setOpenConversation,
+    setReceipts,
   } = useChat();
   const router = useRouter();
   // Live member events adjust the list; a fresh server render replaces it.
@@ -228,6 +317,25 @@ export function RoomView({
   const messages = conversation?.loaded ? conversation.messages : initialMessages;
   const pending = conversation?.pending ?? [];
   const hasOlder = conversation?.loaded ? conversation.hasOlder : initialHasOlder;
+  const other = dm ? state.users[dm.otherUserId] : undefined;
+  const otherName = other?.nickname ?? 'someone';
+  // How this conversation is named in labels: "#design" or "@ava".
+  const label = dm ? `@${otherName}` : `#${name}`;
+
+  // A DM brings the other person's receipts (if both allow them); live updates move them on.
+  const dmReceipts = dm ? JSON.stringify(dm.receipts) : null;
+  useEffect(() => {
+    if (dmReceipts === null) return;
+    setReceipts(room.id, JSON.parse(dmReceipts) as Receipts | null);
+  }, [dmReceipts, room.id, setReceipts]);
+  const receipts = state.receipts[room.id];
+  const receiptFor = (message: MessageWire): Receipt | undefined => {
+    if (!dm || message.authorId !== me.id) return undefined;
+    if (!receipts) return 'sent';
+    if (receipts.read >= message.seq) return 'seen';
+    return receipts.delivered >= message.seq ? 'delivered' : 'sent';
+  };
+  const blockedPeople = new Set(state.blocked);
 
   // The page's history and people go into the shared state (again after a refresh).
   useEffect(() => {
@@ -253,7 +361,7 @@ export function RoomView({
     loadingRef.current = true;
     setLoadingOlder(true);
     setOlderError(null);
-    const url = `/api/rooms/${encodeURIComponent(room.slug)}/messages?before=${String(oldestSeq)}`;
+    const url = `/api/conversations/${room.id}/messages?before=${String(oldestSeq)}`;
     fetch(url, { credentials: 'same-origin', cache: 'no-store' })
       .then(async (response) => {
         if (!response.ok) throw new Error(String(response.status));
@@ -272,7 +380,7 @@ export function RoomView({
         loadingRef.current = false;
         setLoadingOlder(false);
       });
-  }, [oldestSeq, room.id, room.slug, rememberUsers, loadOlderMessages]);
+  }, [oldestSeq, room.id, rememberUsers, loadOlderMessages]);
 
   // While a member has this room on screen, it counts as read (badges clear on every tab).
   const isMember = membership !== null;
@@ -344,7 +452,14 @@ export function RoomView({
   };
 
   let footer: React.ReactNode;
-  if (!membership) {
+  if (dm?.blocked) {
+    footer = (
+      <CannotPost>
+        You cannot send messages in this conversation.{' '}
+        {blockedPeople.has(dm.otherUserId) ? 'Unblock them to write again.' : ''}
+      </CannotPost>
+    );
+  } else if (!membership) {
     footer = (
       <CannotPost>
         <form action={joinRoomAction} className="flex flex-wrap items-center justify-between gap-3">
@@ -370,7 +485,7 @@ export function RoomView({
   } else {
     footer = (
       <Composer
-        room={{ id: room.id, name }}
+        room={{ id: room.id, name: label }}
         memberIds={members.map((m) => m.userId)}
         replyTo={replyTo}
         onCancelReply={() => {
@@ -384,35 +499,54 @@ export function RoomView({
   return (
     <div className="flex h-full min-h-0">
       <section aria-labelledby="room-title" className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-start justify-between gap-3 border-b border-line bg-card px-4 py-3">
-          <div className="min-w-0">
-            <h1 id="room-title" className="flex items-center gap-1.5 text-lg font-extrabold">
-              {room.visibility === 'private' ? (
-                <Lock aria-label="Private room" className="h-4 w-4 text-muted" />
-              ) : (
-                <Hash aria-hidden="true" className="h-4 w-4 text-muted" />
-              )}
-              <span className="truncate">{name}</span>
-            </h1>
-            <p className="truncate text-sm text-ink-2">
-              {room.topic || 'No topic'} · {members.length}{' '}
-              {members.length === 1 ? 'member' : 'members'}
-            </p>
-          </div>
-          <div className="flex shrink-0 items-start gap-1">
-            {canModerate ? (
-              <Link
-                href={`/app/r/${room.slug}/settings`}
-                className={buttonClasses('ghost', 'min-h-9 px-3')}
-              >
-                <Settings aria-hidden="true" className="h-4 w-4" />
-                {/* Icon only on small screens, so the room name keeps its space. */}
-                <span className="sr-only sm:not-sr-only">Room settings</span>
-              </Link>
-            ) : null}
-            {membership ? <LeaveButton room={room} /> : null}
-          </div>
-        </header>
+        {dm ? (
+          <header className="flex items-center justify-between gap-3 border-b border-line bg-card px-4 py-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <UserAvatar user={other} />
+              <div className="min-w-0">
+                <h1 id="room-title" className="truncate text-lg font-extrabold">
+                  {displayName(other)}
+                </h1>
+                <p className="text-sm text-ink-2">Direct message</p>
+              </div>
+            </div>
+            <BlockButton
+              userId={dm.otherUserId}
+              name={otherName}
+              blocked={blockedPeople.has(dm.otherUserId)}
+            />
+          </header>
+        ) : (
+          <header className="flex items-start justify-between gap-3 border-b border-line bg-card px-4 py-3">
+            <div className="min-w-0">
+              <h1 id="room-title" className="flex items-center gap-1.5 text-lg font-extrabold">
+                {room.visibility === 'private' ? (
+                  <Lock aria-label="Private room" className="h-4 w-4 text-muted" />
+                ) : (
+                  <Hash aria-hidden="true" className="h-4 w-4 text-muted" />
+                )}
+                <span className="truncate">{name}</span>
+              </h1>
+              <p className="truncate text-sm text-ink-2">
+                {room.topic || 'No topic'} · {members.length}{' '}
+                {members.length === 1 ? 'member' : 'members'}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-start gap-1">
+              {canModerate ? (
+                <Link
+                  href={`/app/r/${room.slug}/settings`}
+                  className={buttonClasses('ghost', 'min-h-9 px-3')}
+                >
+                  <Settings aria-hidden="true" className="h-4 w-4" />
+                  {/* Icon only on small screens, so the room name keeps its space. */}
+                  <span className="sr-only sm:not-sr-only">Room settings</span>
+                </Link>
+              ) : null}
+              {membership ? <LeaveButton room={room} /> : null}
+            </div>
+          </header>
+        )}
         {!emailVerified && membership ? (
           <div className="px-4 pt-3">
             <Alert tone="info">Confirm your email address to start posting.</Alert>
@@ -420,7 +554,7 @@ export function RoomView({
         ) : null}
         <MessageList
           key={room.id}
-          room={{ id: room.id, name }}
+          room={{ id: room.id, name: label }}
           messages={messages}
           pending={pending}
           older={{ hasOlder, loading: loadingOlder, error: olderError, load: loadOlder }}
@@ -428,20 +562,25 @@ export function RoomView({
           editingId={editingId}
           setEditingId={setEditingId}
           onReply={setReplyToId}
+          receiptFor={receiptFor}
+          blocked={blockedPeople}
+          {...(focusMessageId ? { initialJump: focusMessageId } : {})}
         />
         <TypingLine conversationId={room.id} />
         {footer}
       </section>
-      <aside
-        aria-label="Members"
-        className="hidden w-64 shrink-0 overflow-y-auto border-l border-line bg-card p-3 lg:block"
-      >
-        <h2 className="mb-3 flex items-center gap-1.5 px-1 font-bold">
-          <Users aria-hidden="true" className="h-4 w-4 text-muted" />
-          Members
-        </h2>
-        <MemberList room={room} members={members} />
-      </aside>
+      {dm ? null : (
+        <aside
+          aria-label="Members"
+          className="hidden w-64 shrink-0 overflow-y-auto border-l border-line bg-card p-3 lg:block"
+        >
+          <h2 className="mb-3 flex items-center gap-1.5 px-1 font-bold">
+            <Users aria-hidden="true" className="h-4 w-4 text-muted" />
+            Members
+          </h2>
+          <MemberList room={room} members={members} />
+        </aside>
+      )}
     </div>
   );
 }

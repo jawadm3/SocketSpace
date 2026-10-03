@@ -20,6 +20,10 @@
  *   follows the newest event (`read:update`), which clears the badge on the person's other tabs.
  * - Each tab tells the server whether it is in use (`presence:set`: online or away).
  * - People are fetched once each from `/api/users`, which returns real names only where allowed.
+ * - DMs (D4): devices confirm what they received (`delivery:ack`, batched); the other person's
+ *   "Delivered" and "Seen" arrive as `delivery:updated` and `read:updated`. New notifications
+ *   raise the bell count and, if the person opted in and the tab is hidden, show a browser
+ *   notification without message text.
  */
 import { useRouter } from 'next/navigation';
 import {
@@ -46,11 +50,14 @@ import type { PublicUser } from '@socketspace/shared/profile';
 
 import { connectRealtime, TokenRequestError, type RealtimeSocket } from '@/lib/realtime-client';
 
+import { describeNotification, showBrowserNotification } from './notifications';
 import {
   chatReducer,
   conversationsWithGaps,
   initialChatState,
   type ChatState,
+  type Receipts,
+  type SidebarDm,
   type SidebarRoom,
 } from './state';
 import { Outbox, type OutboxItem, type SendResult } from './outbox';
@@ -88,6 +95,10 @@ interface ChatContextValue {
   dismissNotice: (id: string) => void;
   /** Shows a notice at the top of the app (for example "That message is too far back"). */
   notify: (text: string, tone?: 'info' | 'error') => void;
+  /** A DM page brings the other person's receipts (or null when they are not shown). */
+  setReceipts: (conversationId: string, receipts: Receipts | null) => void;
+  /** The notifications page was opened: the bell count goes back to zero. */
+  clearNotificationCount: () => void;
   onMemberEvent: (conversationId: string, handler: (event: MemberEvent) => void) => () => void;
 }
 
@@ -106,6 +117,8 @@ const SEND_TIMEOUT_MS = 15_000;
 const READ_DELAY_MS = 400;
 /** The server accepts one `presence:set` per person every 5 seconds. */
 const PRESENCE_MIN_GAP_MS = 5100;
+/** DM delivery confirmations are collected and sent together (the server accepts 1 a second). */
+const DELIVERY_BATCH_MS = 1500;
 
 function toSidebarRoom(conversation: ConversationWire): SidebarRoom | null {
   if (conversation.kind !== 'room' || !conversation.slug || !conversation.name) return null;
@@ -129,18 +142,33 @@ const tabStatus = (): 'online' | 'away' =>
 
 export function ChatProvider({
   me,
+  people = [],
   rooms,
+  dms,
   unread,
+  blocked,
+  notificationsUnread,
   children,
 }: {
   me: PublicUser;
+  /** People the server already knows the page needs (DM partners), so names show at once. */
+  people?: PublicUser[];
   rooms: SidebarRoom[];
+  dms: SidebarDm[];
   unread: Record<string, number>;
+  blocked: string[];
+  notificationsUnread: number;
   children: ReactNode;
 }) {
   const router = useRouter();
   const [state, dispatch] = useReducer(chatReducer, undefined, () =>
-    initialChatState(rooms, [me], { meId: me.id, unread }),
+    initialChatState(rooms, [me, ...people], {
+      meId: me.id,
+      unread,
+      dms,
+      blocked,
+      notificationsUnread,
+    }),
   );
   // Socket handlers run outside React's render, so they read the latest state from here.
   const stateRef = useRef(state);
@@ -151,13 +179,22 @@ export function ChatProvider({
   const memberListeners = useRef(new Map<string, Set<(event: MemberEvent) => void>>());
 
   // A server render (after an action, or a refresh) brings the authoritative rooms and counts.
-  const roomsKey = JSON.stringify([rooms, unread]);
+  const roomsKey = JSON.stringify([rooms, dms, unread, blocked, notificationsUnread]);
   const lastRoomsKey = useRef(roomsKey);
   useEffect(() => {
     if (roomsKey === lastRoomsKey.current) return;
     lastRoomsKey.current = roomsKey;
-    const [nextRooms, nextUnread] = JSON.parse(roomsKey) as [SidebarRoom[], Record<string, number>];
-    dispatch({ type: 'rooms-set', rooms: nextRooms, unread: nextUnread });
+    const [nextRooms, nextDms, nextUnread, nextBlocked, nextNotifications] = JSON.parse(
+      roomsKey,
+    ) as [SidebarRoom[], SidebarDm[], Record<string, number>, string[], number];
+    dispatch({
+      type: 'rooms-set',
+      rooms: nextRooms,
+      dms: nextDms,
+      unread: nextUnread,
+      blocked: nextBlocked,
+      notificationsUnread: nextNotifications,
+    });
   }, [roomsKey]);
 
   const notifyError = useCallback((text: string) => {
@@ -165,7 +202,7 @@ export function ChatProvider({
   }, []);
 
   // People: fetch each unknown person once, in batches.
-  const requested = useRef(new Set<string>([me.id]));
+  const requested = useRef(new Set<string>([me.id, ...people.map((p) => p.id)]));
   const queue = useRef(new Set<string>());
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -206,6 +243,35 @@ export function ChatProvider({
     dispatch({ type: 'users', users });
   }, []);
 
+  // DM delivery confirmations (DM-02): the highest message number received per DM, sent in batches.
+  const deliveryQueue = useRef(new Map<string, number>());
+  const deliveryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const confirmDelivery = useCallback(
+    (messages: readonly MessageWire[]) => {
+      const dmIds = new Set(stateRef.current.dms.map((d) => d.id));
+      for (const m of messages) {
+        if (m.authorId === me.id || !dmIds.has(m.conversationId)) continue;
+        const queued = deliveryQueue.current.get(m.conversationId) ?? 0;
+        if (m.seq > queued) deliveryQueue.current.set(m.conversationId, m.seq);
+      }
+      if (deliveryQueue.current.size === 0 || deliveryTimer.current) return;
+      deliveryTimer.current = setTimeout(() => {
+        deliveryTimer.current = null;
+        const socket = socketRef.current;
+        if (!socket?.connected) return; // the next message or reconnect sends it
+        const items = [...deliveryQueue.current].map(([conversationId, seq]) => ({
+          conversationId,
+          seq,
+        }));
+        deliveryQueue.current.clear();
+        for (let i = 0; i < items.length; i += 50) {
+          socket.emit('delivery:ack', { items: items.slice(i, i + 50) });
+        }
+      }, DELIVERY_BATCH_MS);
+    },
+    [me.id],
+  );
+
   // Resync: everything after the last applied event number, for the given conversations.
   const resync = useCallback(
     (cursors: { conversationId: string; afterEventSeq: number }[]) => {
@@ -227,6 +293,7 @@ export function ChatProvider({
                 const messages = result.events.map((e) => e.message);
                 dispatch({ type: 'synced', conversationId: result.conversationId, messages });
                 ensureUsers(messages.map((m) => m.authorId));
+                confirmDelivery(messages);
               }
             },
             () => {
@@ -235,7 +302,7 @@ export function ChatProvider({
           );
       }
     },
-    [ensureUsers, router],
+    [confirmDelivery, ensureUsers, router],
   );
 
   // Presence: this tab is "online" while visible and "away" while hidden, sent no more often
@@ -418,6 +485,7 @@ export function ChatProvider({
       connected.on('message:new', ({ message }) => {
         dispatch({ type: 'message', message, live: true });
         ensureUsers([message.authorId]);
+        confirmDelivery([message]);
       });
       connected.on('message:updated', ({ message }) => {
         dispatch({ type: 'message', message });
@@ -437,6 +505,23 @@ export function ChatProvider({
       });
       connected.on('read:updated', ({ conversationId, userId, seq }) => {
         if (userId === me.id) dispatch({ type: 'read', conversationId, seq });
+        // The other person in a DM read it ("Seen").
+        else dispatch({ type: 'receipt', conversationId, kind: 'read', seq });
+      });
+      connected.on('delivery:updated', ({ conversationId, seq }) => {
+        dispatch({ type: 'receipt', conversationId, kind: 'delivered', seq });
+      });
+      connected.on('notification:new', ({ notification }) => {
+        dispatch({ type: 'notification' });
+        const room = stateRef.current.rooms.find((r) => r.id === notification.conversationId);
+        showBrowserNotification(
+          notification.id,
+          describeNotification(
+            notification.type,
+            notification.actor?.nickname ?? null,
+            room ? `#${room.name}` : null,
+          ),
+        );
       });
       connected.on('typing', ({ conversationId, userId, typing }) => {
         dispatch({ type: 'typing', conversationId, userId, typing, now: Date.now() });
@@ -449,10 +534,14 @@ export function ChatProvider({
       connected.on('conversation:joined', ({ conversation }) => {
         const room = toSidebarRoom(conversation);
         if (room) dispatch({ type: 'room-joined', room });
+        // A new DM: the server's list brings the other person and the counts.
+        else router.refresh();
       });
       connected.on('conversation:updated', ({ conversation }) => {
         const room = toSidebarRoom(conversation);
         if (room) dispatch({ type: 'room-updated', room });
+        // A DM changed (for example a block): its page re-reads what is allowed.
+        else router.refresh();
       });
       connected.on('conversation:left', ({ conversationId }) => {
         dispatch({ type: 'room-left', conversationId });
@@ -531,7 +620,7 @@ export function ChatProvider({
       socketRef.current = null;
       socket?.close();
     };
-  }, [ensureUsers, me.id, notifyError, reportPresence, resync, router]);
+  }, [confirmDelivery, ensureUsers, me.id, notifyError, reportPresence, resync, router]);
 
   // Gaps: give an overtaking event a moment to arrive, then ask the server.
   const gaps = conversationsWithGaps(state);
@@ -750,6 +839,12 @@ export function ChatProvider({
   const notify = useCallback((text: string, tone: 'info' | 'error' = 'info') => {
     dispatch({ type: 'notice', notice: { id: noticeId(), tone, text } });
   }, []);
+  const setReceipts = useCallback((conversationId: string, receipts: Receipts | null) => {
+    dispatch({ type: 'receipts-set', conversationId, receipts });
+  }, []);
+  const clearNotificationCount = useCallback(() => {
+    dispatch({ type: 'notifications-read' });
+  }, []);
   const onMemberEvent = useCallback(
     (conversationId: string, handler: (event: MemberEvent) => void) => {
       const handlers = memberListeners.current.get(conversationId) ?? new Set();
@@ -782,6 +877,8 @@ export function ChatProvider({
       ensureUsers,
       dismissNotice,
       notify,
+      setReceipts,
+      clearNotificationCount,
       onMemberEvent,
     }),
     [
@@ -802,6 +899,8 @@ export function ChatProvider({
       ensureUsers,
       dismissNotice,
       notify,
+      setReceipts,
+      clearNotificationCount,
       onMemberEvent,
     ],
   );

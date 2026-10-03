@@ -6,7 +6,7 @@
  * and the action bar (reply, react, edit, delete). The action bar appears on hover and whenever
  * keyboard focus is inside the message, so every action is reachable with Tab.
  */
-import { Check, CornerUpLeft, Pencil, SmilePlus, Trash2 } from 'lucide-react';
+import { Check, CheckCheck, CornerUpLeft, Pencil, SmilePlus, Trash2 } from 'lucide-react';
 import {
   useEffect,
   useLayoutEffect,
@@ -367,6 +367,22 @@ function ConfirmDelete({
   );
 }
 
+/** What happened to your message in a DM (DM-02); rooms only show "sent". */
+export type Receipt = 'sent' | 'delivered' | 'seen';
+
+function ReceiptMark({ receipt }: { receipt: Receipt }) {
+  if (receipt === 'sent') {
+    return <Check aria-label="Sent" role="img" className="h-3.5 w-3.5 shrink-0 text-muted" />;
+  }
+  return (
+    <CheckCheck
+      aria-label={receipt === 'seen' ? 'Seen' : 'Delivered'}
+      role="img"
+      className={`h-3.5 w-3.5 shrink-0 ${receipt === 'seen' ? 'text-accent' : 'text-muted'}`}
+    />
+  );
+}
+
 export interface MessagePermissions {
   /** Member who may post here (verified, not muted). */
   canTakePart: boolean;
@@ -388,6 +404,8 @@ export function MessageItem({
   onJump,
   measureRef,
   index,
+  receipt,
+  blockedAuthor = false,
 }: {
   message: MessageWire;
   author: PublicUser | undefined;
@@ -405,11 +423,15 @@ export function MessageItem({
   /** The list measures each row's height (virtualised list). */
   measureRef: (element: HTMLLIElement | null) => void;
   index: number;
+  receipt?: Receipt | undefined;
+  /** The author is someone this person blocked: the message is folded until asked for. */
+  blockedAuthor?: boolean;
 }) {
   const { me, toggleReaction } = useChat();
   const minute = useMinute();
   const [picking, setPicking] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [revealed, setRevealed] = useState(false);
   const pickerButton = useRef<HTMLButtonElement>(null);
   const removed = isRemoved(message);
   const mine = message.authorId === me.id;
@@ -453,6 +475,19 @@ export function MessageItem({
         ) : null}
         {removed ? (
           <p className="text-sm text-muted italic">Message deleted</p>
+        ) : blockedAuthor && !revealed ? (
+          <p className="text-sm text-muted italic">
+            Message from someone you blocked.{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setRevealed(true);
+              }}
+              className="font-semibold not-italic underline"
+            >
+              Show
+            </button>
+          </p>
         ) : editing ? (
           <EditForm message={message} onDone={onEditDone} />
         ) : (
@@ -467,9 +502,7 @@ export function MessageItem({
                 (edited)
               </span>
             ) : null}
-            {mine ? (
-              <Check aria-label="Sent" role="img" className="h-3.5 w-3.5 shrink-0 text-muted" />
-            ) : null}
+            {mine ? <ReceiptMark receipt={receipt ?? 'sent'} /> : null}
           </div>
         )}
         {removed ? null : <Reactions message={message} />}

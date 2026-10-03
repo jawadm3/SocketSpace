@@ -65,6 +65,18 @@ export interface SidebarRoom {
   lastEventSeq: number;
 }
 
+export interface SidebarDm {
+  id: string;
+  otherUserId: string;
+  lastEventSeq: number;
+}
+
+/** In a DM: how far the other person's devices received and read (DM-02). */
+export interface Receipts {
+  delivered: number;
+  read: number;
+}
+
 export interface Notice {
   id: string;
   tone: 'info' | 'error';
@@ -80,6 +92,12 @@ export interface ChatState {
   meId: string;
   status: ConnectionStatus;
   rooms: SidebarRoom[];
+  dms: SidebarDm[];
+  /** People this person blocked (their room messages are folded away). */
+  blocked: string[];
+  notificationsUnread: number;
+  /** DMs only, and only when both people allow read receipts. */
+  receipts: Record<string, Receipts>;
   conversations: Record<string, ConversationState>;
   users: Record<string, PublicUser>;
   notices: Notice[];
@@ -129,7 +147,14 @@ export type ChatAction =
   | { type: 'pending-failed'; clientId: string; error: NonNullable<PendingMessage['error']> }
   | { type: 'pending-retried'; clientId: string }
   | { type: 'pending-dismissed'; clientId: string }
-  | { type: 'rooms-set'; rooms: SidebarRoom[]; unread: Record<string, number> }
+  | {
+      type: 'rooms-set';
+      rooms: SidebarRoom[];
+      dms?: SidebarDm[];
+      unread: Record<string, number>;
+      blocked?: string[];
+      notificationsUnread?: number;
+    }
   | { type: 'room-joined'; room: SidebarRoom }
   | { type: 'room-left'; conversationId: string }
   | { type: 'room-updated'; room: SidebarRoom }
@@ -143,17 +168,31 @@ export type ChatAction =
   | { type: 'typing-expired'; now: number }
   | { type: 'presence'; userId: string; status: PresenceStatus; lastSeenAt: string | null }
   /** The connection dropped: nobody's presence is known until the server tells us again. */
-  | { type: 'presence-cleared' };
+  | { type: 'presence-cleared' }
+  | { type: 'notification' }
+  | { type: 'notifications-read' }
+  | { type: 'receipts-set'; conversationId: string; receipts: Receipts | null }
+  | { type: 'receipt'; conversationId: string; kind: 'delivered' | 'read'; seq: number };
 
 export function initialChatState(
   rooms: SidebarRoom[],
   users: PublicUser[],
-  options: { meId?: string; unread?: Record<string, number> } = {},
+  options: {
+    meId?: string;
+    unread?: Record<string, number>;
+    dms?: SidebarDm[];
+    blocked?: string[];
+    notificationsUnread?: number;
+  } = {},
 ): ChatState {
   const empty: ChatState = {
     meId: options.meId ?? '',
     status: 'connecting',
     rooms: [],
+    dms: [],
+    blocked: [],
+    notificationsUnread: 0,
+    receipts: {},
     conversations: {},
     users: Object.fromEntries(users.map((u) => [u.id, u])),
     notices: [],
@@ -162,7 +201,14 @@ export function initialChatState(
     presence: {},
     viewing: null,
   };
-  return chatReducer(empty, { type: 'rooms-set', rooms, unread: options.unread ?? {} });
+  return chatReducer(empty, {
+    type: 'rooms-set',
+    rooms,
+    dms: options.dms ?? [],
+    unread: options.unread ?? {},
+    blocked: options.blocked ?? [],
+    notificationsUnread: options.notificationsUnread ?? 0,
+  });
 }
 
 function sortRooms(rooms: SidebarRoom[]): SidebarRoom[] {
@@ -410,16 +456,27 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       // The server's list and counts after a page load or action win over what live events
       // built up. Rooms whose history is not on screen catch up from the server's event number.
       const conversations = { ...state.conversations };
-      for (const room of action.rooms) {
-        const current = conversations[room.id];
-        if (!current) conversations[room.id] = emptyConversation(room.lastEventSeq);
+      const dms = action.dms ?? state.dms;
+      for (const listed of [...action.rooms, ...dms]) {
+        const current = conversations[listed.id];
+        if (!current) conversations[listed.id] = emptyConversation(listed.lastEventSeq);
         else if (!current.loaded) {
-          conversations[room.id] = { ...current, ...jumpCursor(current, room.lastEventSeq) };
+          conversations[listed.id] = { ...current, ...jumpCursor(current, listed.lastEventSeq) };
         }
       }
-      const unread = Object.fromEntries(action.rooms.map((r) => [r.id, action.unread[r.id] ?? 0]));
+      const unread = Object.fromEntries(
+        [...action.rooms, ...dms].map((c) => [c.id, action.unread[c.id] ?? 0]),
+      );
       if (state.viewing && state.viewing in unread) unread[state.viewing] = 0;
-      return { ...state, rooms: sortRooms(action.rooms), conversations, unread };
+      return {
+        ...state,
+        rooms: sortRooms(action.rooms),
+        dms,
+        conversations,
+        unread,
+        blocked: action.blocked ?? state.blocked,
+        notificationsUnread: action.notificationsUnread ?? state.notificationsUnread,
+      };
     }
 
     case 'room-joined': {
@@ -531,6 +588,34 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         presence: { ...state.presence, [action.userId]: { status: action.status, lastSeenAt } },
+      };
+    }
+
+    case 'notification':
+      return { ...state, notificationsUnread: state.notificationsUnread + 1 };
+
+    case 'notifications-read':
+      return state.notificationsUnread === 0 ? state : { ...state, notificationsUnread: 0 };
+
+    case 'receipts-set': {
+      const { [action.conversationId]: _old, ...rest } = state.receipts;
+      return {
+        ...state,
+        receipts: action.receipts ? { ...rest, [action.conversationId]: action.receipts } : rest,
+      };
+    }
+
+    case 'receipt': {
+      // Receipts are only known (and shown) where the server sent them in the first place.
+      const current = state.receipts[action.conversationId];
+      if (!current) return state;
+      const read = action.kind === 'read' ? Math.max(current.read, action.seq) : current.read;
+      // Reading implies delivery.
+      const delivered = Math.max(current.delivered, action.seq, read);
+      if (read === current.read && delivered === current.delivered) return state;
+      return {
+        ...state,
+        receipts: { ...state.receipts, [action.conversationId]: { delivered, read } },
       };
     }
 

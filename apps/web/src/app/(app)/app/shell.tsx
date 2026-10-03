@@ -1,18 +1,19 @@
 'use client';
 
 /**
- * The app shell around every /app page: the sidebar (navigation, your rooms, you), the live
- * connection status and notices from moderators. Mobile gets a compact top bar with the same
+ * The app shell around every /app page: the sidebar (navigation with search and notifications,
+ * your rooms and direct messages with unread counts, you), the live connection status and notices
+ * from moderators. Mobile gets a compact top bar with the same
  * links; Stage F refines the small-screen layout.
  */
-import { Compass, Hash, Home, Lock, Plus, Settings, WifiOff, X } from 'lucide-react';
+import { Bell, Compass, Hash, Home, Lock, Plus, Search, Settings, WifiOff, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { UserAvatar } from '@/components/user-avatar';
 import { useChat } from '@/lib/chat/provider';
-import type { ConnectionStatus as Status, SidebarRoom } from '@/lib/chat/state';
+import type { SidebarDm, ConnectionStatus as Status, SidebarRoom } from '@/lib/chat/state';
 
 import { SignOutButton } from '../sign-out-button';
 
@@ -40,14 +41,29 @@ export function ConnectionStatus() {
   );
 }
 
+function Badge({ count, testId }: { count: number; testId: string }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      data-testid={testId}
+      className="min-w-5 rounded-full bg-accent px-1.5 text-center text-xs leading-5 font-bold text-accent-ink"
+    >
+      <span aria-hidden="true">{count > 99 ? '99+' : count}</span>
+      <span className="sr-only">, {count} unread</span>
+    </span>
+  );
+}
+
 function NavLink({
   href,
   icon,
   children,
+  badge = 0,
 }: {
   href: string;
   icon: React.ReactNode;
   children: React.ReactNode;
+  badge?: number;
 }) {
   const pathname = usePathname();
   const active = pathname === href;
@@ -62,7 +78,8 @@ function NavLink({
       <span aria-hidden="true" className="text-muted">
         {icon}
       </span>
-      {children}
+      <span className="flex-1">{children}</span>
+      <Badge count={badge} testId="notifications-badge" />
     </Link>
   );
 }
@@ -90,17 +107,54 @@ function RoomLink({ room, unread }: { room: SidebarRoom; unread: number }) {
           <Hash aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted" />
         )}
         <span className="flex-1 truncate">{room.name}</span>
-        {unread > 0 ? (
-          <span
-            data-testid="unread-badge"
-            className="min-w-5 rounded-full bg-accent px-1.5 text-center text-xs leading-5 font-bold text-accent-ink"
-          >
-            <span aria-hidden="true">{unread > 99 ? '99+' : unread}</span>
-            <span className="sr-only">, {unread} unread</span>
-          </span>
-        ) : null}
+        <Badge count={unread} testId="unread-badge" />
       </Link>
     </li>
+  );
+}
+
+function DmLink({ dm, unread }: { dm: SidebarDm; unread: number }) {
+  const { state } = useChat();
+  const pathname = usePathname();
+  const href = `/app/dm/${dm.id}`;
+  const active = pathname === href;
+  const person = state.users[dm.otherUserId];
+  return (
+    <li>
+      <Link
+        href={href}
+        aria-current={active ? 'page' : undefined}
+        className={`flex min-h-9 items-center gap-2 rounded-lg px-3 text-sm ${
+          active
+            ? 'bg-accent-soft font-semibold text-ink'
+            : unread > 0
+              ? 'font-bold text-ink hover:bg-surface-2'
+              : 'text-ink-2 hover:bg-surface-2'
+        }`}
+      >
+        <UserAvatar user={person} size="xs" />
+        <span className="flex-1 truncate">{person?.nickname ?? 'Someone'}</span>
+        <Badge count={unread} testId="unread-badge" />
+      </Link>
+    </li>
+  );
+}
+
+function DmList() {
+  const { state, ensureUsers } = useChat();
+  const ids = state.dms.map((d) => d.otherUserId).join(',');
+  useEffect(() => {
+    if (ids !== '') ensureUsers(ids.split(','));
+  }, [ids, ensureUsers]);
+  if (state.dms.length === 0) {
+    return <p className="px-3 text-sm text-muted">No direct messages yet.</p>;
+  }
+  return (
+    <ul className="flex flex-col gap-0.5" aria-label="Direct messages">
+      {state.dms.map((dm) => (
+        <DmLink key={dm.id} dm={dm} unread={state.unread[dm.id] ?? 0} />
+      ))}
+    </ul>
   );
 }
 
@@ -127,7 +181,7 @@ function RoomList() {
 }
 
 export function Sidebar() {
-  const { me } = useChat();
+  const { me, state } = useChat();
   return (
     <aside
       aria-label="Rooms and navigation"
@@ -149,6 +203,16 @@ export function Sidebar() {
         <NavLink href="/app/rooms/new" icon={<Plus className="h-4 w-4" />}>
           New room
         </NavLink>
+        <NavLink href="/app/search" icon={<Search className="h-4 w-4" />}>
+          Search
+        </NavLink>
+        <NavLink
+          href="/app/notifications"
+          icon={<Bell className="h-4 w-4" />}
+          badge={state.notificationsUnread}
+        >
+          Notifications
+        </NavLink>
       </nav>
       <section aria-labelledby="your-rooms" className="mt-4 flex min-h-0 flex-1 flex-col px-2">
         <h2
@@ -159,6 +223,13 @@ export function Sidebar() {
         </h2>
         <div className="min-h-0 flex-1 overflow-y-auto pb-4">
           <RoomList />
+          <h2
+            id="your-dms"
+            className="px-3 pt-4 pb-1 text-xs font-bold tracking-wider text-muted uppercase"
+          >
+            Direct messages
+          </h2>
+          <DmList />
         </div>
       </section>
       <div className="flex flex-col gap-2 border-t border-line p-3">
@@ -183,7 +254,10 @@ export function Sidebar() {
 /** Small screens: the same destinations in a top bar, and rooms in a disclosure. */
 export function MobileBar() {
   const { state } = useChat();
-  const totalUnread = state.rooms.reduce((sum, r) => sum + (state.unread[r.id] ?? 0), 0);
+  const totalUnread = [...state.rooms, ...state.dms].reduce(
+    (sum, c) => sum + (state.unread[c.id] ?? 0),
+    0,
+  );
   return (
     <div className="border-b border-line bg-card md:hidden">
       <div className="airmail-stripe h-1 w-full" aria-hidden="true" />
@@ -207,6 +281,30 @@ export function MobileBar() {
             <Plus aria-hidden="true" className="h-5 w-5" />
           </Link>
           <Link
+            href="/app/search"
+            className="rounded-lg p-2 hover:bg-surface-2"
+            aria-label="Search"
+          >
+            <Search aria-hidden="true" className="h-5 w-5" />
+          </Link>
+          <Link
+            href="/app/notifications"
+            className="relative rounded-lg p-2 hover:bg-surface-2"
+            aria-label={
+              state.notificationsUnread > 0
+                ? `Notifications, ${String(state.notificationsUnread)} unread`
+                : 'Notifications'
+            }
+          >
+            <Bell aria-hidden="true" className="h-5 w-5" />
+            {state.notificationsUnread > 0 ? (
+              <span
+                aria-hidden="true"
+                className="absolute top-1 right-1 h-2 w-2 rounded-full bg-accent"
+              />
+            ) : null}
+          </Link>
+          <Link
             href="/app/settings/profile"
             className="rounded-lg p-2 hover:bg-surface-2"
             aria-label="Settings"
@@ -225,6 +323,10 @@ export function MobileBar() {
         </summary>
         <div className="pt-1">
           <RoomList />
+          <p className="px-3 pt-3 pb-1 text-xs font-bold tracking-wider text-muted uppercase">
+            Direct messages
+          </p>
+          <DmList />
         </div>
       </details>
     </div>

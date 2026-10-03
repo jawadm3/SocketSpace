@@ -4,7 +4,14 @@
  */
 import type { ReactNode } from 'react';
 
-import { getPublicUsers, listUserRooms, unreadCounts } from '@socketspace/db';
+import {
+  countUnreadNotifications,
+  getPublicUsers,
+  listBlocked,
+  listUserDms,
+  listUserRooms,
+  unreadCounts,
+} from '@socketspace/db';
 
 import { ChatProvider } from '@/lib/chat/provider';
 import { getDb } from '@/server/db';
@@ -15,16 +22,22 @@ import { ConnectionBanner, MobileBar, Notices, Sidebar } from './shell';
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const { user } = await requireAppUser('/app');
   const db = getDb();
-  const [rooms, [me], unread] = await Promise.all([
+  const [rooms, dms, [me], unread, blocked, notificationsUnread] = await Promise.all([
     listUserRooms(db, user.id),
+    listUserDms(db, user.id),
     getPublicUsers(db, user.id, [user.id], 'profile'),
     unreadCounts(db, user.id),
+    listBlocked(db, user.id),
+    countUnreadNotifications(db, user.id),
   ]);
   const self = me ?? { id: user.id, nickname: user.nickname ?? 'you', avatar: null };
+  // DM partners, as this viewer may see them, so the sidebar shows names at once.
+  const partners = await getPublicUsers(db, user.id, [...new Set(dms.map((d) => d.otherUserId))]);
 
   return (
     <ChatProvider
       me={self}
+      people={partners}
       rooms={rooms.map((r) => ({
         id: r.id,
         slug: r.slug,
@@ -32,7 +45,14 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         visibility: r.visibility,
         lastEventSeq: r.lastEventSeq,
       }))}
+      dms={dms.map((d) => ({
+        id: d.id,
+        otherUserId: d.otherUserId,
+        lastEventSeq: d.lastEventSeq,
+      }))}
       unread={Object.fromEntries(unread)}
+      blocked={blocked}
+      notificationsUnread={notificationsUnread}
     >
       <div className="flex h-dvh">
         <Sidebar />

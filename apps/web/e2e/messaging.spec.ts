@@ -137,6 +137,13 @@ test('J3: format, edit, react, reply, mention and delete', async ({ browser }) =
   await samComposer.press('Enter');
   await expect(message(ava.page, 'Also @')).toBeVisible();
   expect(await mentionedIn('Thanks @')).toEqual([ava.nickname]);
+  // The reply and the mention reached Ava's notification bell (NOTIF-01).
+  await expect(
+    ava.page
+      .getByRole('complementary', { name: 'Rooms and navigation' })
+      .getByRole('link', { name: /^Notifications/ })
+      .getByTestId('notifications-badge'),
+  ).toHaveText('2, 2 unread');
   expect(await mentionedIn('Also @')).toEqual([]);
 
   // Delete (MSG-03): a tombstone in the same place, for both; the reply's quote says so.
