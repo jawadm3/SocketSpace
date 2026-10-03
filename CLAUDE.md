@@ -8,6 +8,30 @@
 
 After context compaction or in a new session, re-read all three before doing anything else.
 
+## Current working mode: the `continuation` branch (since 2026-10-03)
+
+The owner's Claude plan ends on 2026-10-07. Work continues after that from another Claude account,
+and the owner reviews everything when they renew. Until the owner merges the branch and deletes
+this section, these rules override every mention of `main` elsewhere in this file:
+
+1. **Every session, on any account, works on the branch `continuation`. Never commit to or push
+   `main`.**
+2. **Start of every session**, run these, in order:
+   - `git fetch origin`
+   - `git switch continuation` (the first time on a new machine: `git switch -c continuation origin/continuation`)
+   - `git merge origin/main`, so the branch has anything that reached `main` meanwhile
+   - If uncommitted changes from an earlier session are present, read `PROGRESS.md` to see what
+     they are, then commit them to `continuation` as a labelled work-in-progress commit.
+3. Commit and push (`git push origin continuation`) after every milestone. All other rules in this
+   file apply unchanged.
+4. **Decisions:** record every decision in `docs/development/decisions.md` as usual and mark it
+   "(continuation, needs owner review)". The owner reviews those first.
+5. Anything the brief reserves for the owner (accounts, secrets, money, scope changes) still waits
+   for the owner: list it under "Known problems and things waiting for the owner" in `PROGRESS.md`
+   and carry on with other work.
+6. If `gh` is installed and signed in, keep a draft pull request open from `continuation` to `main`
+   (title "Continuation work for owner review"). If not, skip it; the owner opens it later.
+
 ## What this project is
 
 SocketSpace v1 was a university mini project: a Next.js page plus a Socket.IO server that sent every message to everyone. It is archived, unchanged, in `v1/` (tag `v1.0.0`).
@@ -152,11 +176,9 @@ More than one person (each with their own Claude account) may work on this repos
 
 - Each collaborator clones the repository and runs `pnpm install`, `pnpm setup:local` and
   `pnpm db:start` once. Secrets are generated per machine and never shared or committed.
-- **Work from any other Claude account or person never goes to `main`.** Create a branch
-  `collab/<name>` from the latest `main`, commit and push there after every milestone, and open a
-  pull request to `main` (CI runs on every pull request). Merge the latest `main` into the branch
-  before each session. The owner reviews and merges. Only sessions on the owner's own account push
-  to `main`. If the start prompt does not say whose account it is, ask once before the first commit.
+- While the `continuation` working mode above is active, everyone works on `continuation`. After
+  it ends, each other person works on a branch `collab/<name>` with a pull request to `main` (CI
+  runs on every pull request), and the owner reviews and merges.
 - Before starting, pull the latest `main` and read `PROGRESS.md`. Claim a step by writing your name
   next to it under "In progress" in `PROGRESS.md` and pushing, so two people never work on the same
   step.
