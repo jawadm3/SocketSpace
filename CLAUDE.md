@@ -152,8 +152,11 @@ More than one person (each with their own Claude account) may work on this repos
 
 - Each collaborator clones the repository and runs `pnpm install`, `pnpm setup:local` and
   `pnpm db:start` once. Secrets are generated per machine and never shared or committed.
-- Collaborators work on their own branch and merge through a pull request; CI runs on every pull
-  request. The owner's sessions may push to `main` as described above.
+- **Work from any other Claude account or person never goes to `main`.** Create a branch
+  `collab/<name>` from the latest `main`, commit and push there after every milestone, and open a
+  pull request to `main` (CI runs on every pull request). Merge the latest `main` into the branch
+  before each session. The owner reviews and merges. Only sessions on the owner's own account push
+  to `main`. If the start prompt does not say whose account it is, ask once before the first commit.
 - Before starting, pull the latest `main` and read `PROGRESS.md`. Claim a step by writing your name
   next to it under "In progress" in `PROGRESS.md` and pushing, so two people never work on the same
   step.
