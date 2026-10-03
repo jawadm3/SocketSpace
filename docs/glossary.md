@@ -40,6 +40,8 @@ Every moderator action is written to one.
 announcement reaches every customer. v1 broadcast every chat message to everyone, which is why it
 was not really "1-to-1".
 
+**Browser notification**: A small pop-up from the browser or the operating system, even when the page is not on screen. Websites must ask permission first. _Example:_ a doorbell that rings in every room of the house, not just the hall.
+
 **Bundle / bundler (esbuild)**: A tool that gathers a program and every library it uses into one file. _Example:_ packing everything for a trip into one suitcase instead of carrying forty bags. The realtime server is bundled into one file, so its Docker image needs no `node_modules`.
 
 **Canvas 2D / WebGL**: Two browser technologies for drawing graphics with code. Canvas 2D draws
@@ -86,6 +88,8 @@ hour. _Example:_ kilowatt-hours on an electricity bill. The free plan includes 1
 **Cursor pagination**: Fetching a long list in pages by saying "the items before this one" instead of "page 7". New items arriving at the top cannot shift what the next page contains. _Example:_ a bookmark: "carry on from here" works even if pages were added at the front.
 
 **DiceBear**: A free, open-source (MIT) library that draws avatars from a few settings. _Example:_ a character creator in a video game. SocketSpace runs it inside the app, so no outside service is involved.
+
+**Direct message (DM)**: A private conversation between two people. SocketSpace keeps exactly one per pair. _Example:_ a letter between two pen friends rather than a notice on a board.
 
 **DNS records**: Settings attached to a domain that tell the internet where its website and email live and who may send email for it. _Example:_ the directory board in an office lobby.
 
@@ -246,6 +250,8 @@ each person a small bucket of tokens that refills slowly; each action spends one
 coffee loyalty card that allows a few free refills per hour.
 
 **Read marker / unread count**: The read marker remembers the last message you read in each room; the unread count is how many messages from others came after it. Reading on one tab moves the marker, so every tab clears its badge. _Example:_ a bookmark in a shared book: wherever you pick it up, you know where you stopped.
+
+**Read receipt**: A sign that the other person received ("Delivered") or read ("Seen") your message. In SocketSpace both people must allow them, or neither sees them. _Example:_ the "signed for" note on a recorded delivery.
 
 **Redis**: A very fast in-memory data store, often used to pass messages between servers. SocketSpace can use it to link several realtime servers (the Redis adapter); the free deployment runs one server and does not need it. _Example:_ a shared noticeboard between several office buildings.
 

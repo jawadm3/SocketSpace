@@ -76,7 +76,7 @@ fetches real names it is allowed to see once per person over HTTP (cached). See 
 | `reaction:toggle` | `{ messageId, emoji }`                                           | `{ messageId, reactions, eventSeq }`                | member, emoji in allow-list, at most 20 distinct emoji per message                                         |
 | `typing:set`      | `{ conversationId, typing: boolean }`                            | none (fire and forget, throttled)                   | member                                                                                                     |
 | `read:update`     | `{ conversationId, seq }`                                        | `{ unread }`                                        | member; `seq` can only move forward                                                                        |
-| `delivery:ack`    | `{ items: [{ conversationId, seq }] }` (batched every 2 s)       | none                                                | DMs only                                                                                                   |
+| `delivery:ack`    | `{ items: [{ conversationId, seq }] }` (batched every 1.5 s)     | none                                                | DMs only; only conversations the socket is in                                                              |
 | `sync:request`    | `{ cursors: [{ conversationId, afterEventSeq }] }` (up to 50)    | `{ results: [{ conversationId, events, reset? }] }` | member of each                                                                                             |
 | `presence:set`    | `{ status: 'online' \| 'away' \| 'dnd' }`                        | `{}`                                                |                                                                                                            |
 
@@ -338,3 +338,15 @@ Delivery: 3 attempts with back-off inside the web request; if all fail, the even
   redacted by configuration, and handlers never log message text.
 - Graceful shutdown on `SIGTERM`: stop accepting connections, tell clients to reconnect, flush
   in-flight writes, close the database pool, exit within 10 seconds.
+
+## Direct messages, receipts and notifications (Stage D4, D-042)
+
+- `notification:new` goes to the notified person's tabs when a message or an edit notifies them
+  (mention, reply, DM). The actor is sent by nickname only. The database writes the notification
+  in the same transaction as the message.
+- `delivery:ack` (fire-and-forget, batched) moves the person's delivered mark in a DM. If both
+  people allow read receipts, the other person receives `delivery:updated`; reading sends them
+  `read:updated` in the same way. With receipts off on either side, neither event is sent.
+- A new DM uses the room events: `member.added` for both people (their tabs join the conversation
+  and receive `conversation:joined`). A block (`block.created`) sends `conversation:updated` for
+  their DM to both, so open pages re-read what is allowed.

@@ -297,8 +297,64 @@ D-041.
 | CI (GitHub runner)            | run 37058505770: all 6 jobs green; E2E 11 of 11; 10,000 messages: p95 33.4 ms, worst 54.3 ms, 1 of 548 frames over 50 ms                                                                                                        |
 | Screens inspected             | room offline (banner, a waiting message, everyone shown offline), room at phone width                                                                                                                                           |
 
+## D4: Direct messages, notifications and search (done)
+
+### What was built, and how it works
+
+- **Direct messages** (DM-01). "Message" next to each person in a room's member list opens your
+  DM with them, creating it the first time. There is only ever one DM per pair, even if both
+  start it at the same moment. A DM page is the room page without room tools: the other person
+  in the header with "Block", messages, replies, reactions, edits and the composer. New DMs
+  appear in both people's sidebars at once, with unread badges.
+- **Who may message me** (Settings > Profile > Privacy): anyone, only my contacts, or no new
+  conversations. Existing DMs stay open.
+- **Receipts** (DM-02): your messages in a DM show one tick ("Sent"), two ticks ("Delivered":
+  the other person's device received it) and two blue ticks ("Seen"). They appear only if both
+  people allow read receipts.
+- **Blocking** (SAFE-01): "Block" in the DM header; "Unblock" there or in settings. Neither
+  person can write in the DM or start a new one; the refusal reads the same whoever blocked, so
+  a block is never revealed. Mentions and DMs from a blocked person notify nothing, and their
+  room messages are folded behind "Show".
+- **Notifications** (NOTIF-01, MSG-06): a mention, a reply to your message, or a DM creates a
+  notification in the same database transaction as the message, and it is pushed live. The bell
+  in the sidebar counts them; the notifications page lists them with a link to each message and
+  marks them seen. A burst of DMs makes one notification until it is read.
+- **Browser notifications** (NOTIF-02): an opt-in switch on the notifications page. They show only
+  while the tab is hidden, and never contain message text.
+- **Search** (HIST-03): `/app/search` finds whole words in any letter case, in your rooms and DMs
+  only, newest first, with the words highlighted. A result opens the conversation and scrolls to
+  the message (`?m=`), loading older pages if needed.
+- History pages now live at `/api/conversations/[id]/messages`, shared by rooms and DMs.
+
+### Decisions
+
+D-042.
+
+### Problems and fixes
+
+- **The local database had stopped** while the session was paused (usage limit). The first E2E
+  run failed to connect; `pnpm db:start` fixed it.
+- **J11 broke:** it chose the real-name "Everyone" radio by name, and the new "who can message
+  me" choices also said "Everyone". The new choices now say what they mean ("Anyone can message
+  me", "Only my contacts", "No new conversations"), which is also clearer with a screen reader.
+- **A screenshot showed a DM as "Someone"** until the browser fetched the person. The layout now
+  sends DM partners with the page.
+- A shell heredoc collapsed backslashes in a helper script (the problem CLAUDE.md warns about);
+  nothing had been written. The helper was rewritten with the Write tool.
+
+### Tests run, with actual results
+
+| Check                         | Result                                                                                                                                              |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm check`                  | 13 of 13 tasks; shared 160, db 107, realtime 59 (+2 Redis tests that run in CI), web 114                                                            |
+| Same tests on PostgreSQL 17.9 | shared 160, db 107, realtime 59 (+2), web 114                                                                                                       |
+| New tests                     | db 10 (DMs, policy, blocks, notifications, receipts, search, reading rules); realtime 3 (notification push, receipts, opt-out); web 7               |
+| End-to-end                    | 13 of 13 in 1.6 min, including J6 (new: one DM per pair, Sent → Delivered → Seen, notifications, blocking) and search (new); J3 checks the bell now |
+| Screens inspected             | DM with "Seen" ticks, notifications page, search results with highlights                                                                            |
+
 ## What comes next
 
-D4: direct messages (with the "who may message me" setting and blocks), in-app notifications
-(mentions, replies, DMs; this completes MSG-06 and NOTIF-01), and full-text search (HIST-03).
-Then D5: media (image uploads, avatar photos) and link previews.
+D5: media. The upload pipeline (checking real file types, re-encoding images, removing EXIF, size
+limits) for message images and avatar photos, storage on Vercel Blob (free tier) with a local
+driver for development, and text-only link previews fetched by the server with SSRF protection
+(journey J9).

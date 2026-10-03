@@ -37,6 +37,10 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
     virtualised message list (10,000 messages measured); reply quotes load their original;
     an outbox that keeps unsent messages across reloads and sends them in order; an offline
     banner, and reconnecting as soon as the network returns.
+  - D4: direct messages (one per pair, "who may message me", Delivered and Seen ticks when both
+    allow read receipts), blocking, in-app notifications for mentions, replies and DMs with a
+    bell and an opt-in for browser notifications, and full-text search that jumps to the
+    message.
 - **Stage C (foundations), 2026-10-02**
   - Secret scanning: a pinned, checksum-verified gitleaks 8.30.1 (`scripts/tools/gitleaks.mjs`),
     run by a git pre-commit hook (`.githooks/pre-commit`) and by `pnpm secrets:scan`.

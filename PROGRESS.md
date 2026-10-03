@@ -1,12 +1,12 @@
 # PROGRESS
 
-_Last updated: 2026-10-03, session 4 (Stage D in progress: D1, D2 and D3 done; D4 next)._
+_Last updated: 2026-10-03, session 4 (Stage D in progress: D1 to D4 done; D5 next)._
 
 ## Current stage
 
-**Stage D (community mode) is in progress.** D1 (profiles and rooms), D2 (messaging) and D3
-(history and reliability) are done and tested end to end; **next is D4: DMs, notifications and
-search** (see "Exact next step").
+**Stage D (community mode) is in progress.** D1 (profiles and rooms), D2 (messaging), D3
+(history and reliability) and D4 (DMs, notifications, search) are done and tested end to end;
+**next is D5: media and link previews** (see "Exact next step").
 Stage C is complete and closed. Step log: `docs/development/steps/STEP-D-community-mode.md`.
 
 ## Owner decisions (2026-10-01)
@@ -139,6 +139,20 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
   - Found and fixed before release: one scroll to the top loaded every page (scroll anchor).
   - Requirements matrix: 77 Done (one "to be kept current"), 33 In progress, 67 Planned of 177.
 
+- **D4 DMs, notifications and search** (session 4; D-042):
+  - DMs from the member list ("Message"), one per pair; DM pages reuse the room view; DMs in the
+    sidebar with unread badges; "who may message me" and read receipts in Settings.
+  - Sent / Delivered / Seen ticks when both people allow read receipts (`delivery:ack`,
+    `delivery:updated`, `read:updated` to the other person).
+  - Blocking: DMs refused both ways, no notifications from the blocked person, their room
+    messages folded; block in the DM header, unblock there or in Settings.
+  - Notifications for mentions, replies and DMs, written with the message and pushed live; bell
+    with count; notifications page that links to each message; opt-in browser notifications.
+  - Search (`/app/search`): whole words, only your conversations, highlighted, jumps to the
+    message.
+  - Requirements matrix: 82 Done (one "to be kept current"), 33 In progress, 62 Planned of 177.
+    NOTIF-02 waits for a hand check in a real browser (Stage G).
+
 ## Verified (with evidence)
 
 | What                                                                        | Evidence                                                                                                                                                                                                                                                                                                                                                             |
@@ -160,6 +174,7 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
 | Journeys J1, J11, SEC-05 headers, live connection, AUTH-06 revocation       | Playwright 5/5 locally and in CI (run 36956890831).                                                                                                                                                                                                                                                                                                                  |
 | CI green after D1 and D2 server side                                        | Run 37048118755 on `bd13d82`: all 6 jobs succeeded (checks, PostgreSQL + Redis, E2E, Docker, gitleaks, audit); CodeQL green, 0 open alerts.                                                                                                                                                                                                                          |
 | CI green after D3                                                           | Run 37058505770 on `4f19ce0` (D3 plus the CLAUDE.md handover rules): all 6 jobs succeeded; E2E 11 passed in 1.5 min; on the CI runner the 10,000-message test gave p95 33.4 ms, worst 54.3 ms, 1 of 548 frames over 50 ms. CodeQL green; 0 open code-scanning and Dependabot alerts. (Run 37058395720 on `3d12f46` was cancelled by CI when the newer push arrived.) |
+| Stage D4 complete locally (session 4)                                       | `pnpm check` 13/13 (shared 160, db 107, realtime 59 +2 Redis, web 114); same on PostgreSQL 17.9; E2E 13/13 in 1.6 min including J6 and search.                                                                                                                                                                                                                       |
 | Stage D3 complete locally (session 4)                                       | `pnpm check` 13/13 (shared 160, db 97, realtime 56 +2 Redis, web 107); same on PostgreSQL 17.9; E2E 11/11 in 1.4 min including J4 and the 10,000-message test (p95 frame 30.6 ms, at most 24 rows in the page).                                                                                                                                                      |
 | Stage D2 complete locally (session 4)                                       | `pnpm check` 13/13 (shared 160, db 97, realtime 56 +2 Redis, web 93); same on PostgreSQL 17.9; E2E 9/9 in 41.3 s including J2 (typing, unread on two tabs, presence, invisible mode) and J3 (new).                                                                                                                                                                   |
 | CI green after D2                                                           | Run 37054784622 on `8f790f4`: all 6 jobs succeeded (E2E 9 passed in 35.7 s); CodeQL green; 0 open code-scanning and 0 open Dependabot alerts.                                                                                                                                                                                                                        |
@@ -173,7 +188,7 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
 
 ## In progress
 
-- Nothing. D3 is complete; nothing is half-edited.
+- Nothing. D4 is complete; nothing is half-edited.
 
 ## Known problems and things waiting for the owner
 
@@ -195,26 +210,27 @@ reversible on GitHub. Any new alert in v1's lockfile would need the same treatme
 
 ## Exact next step
 
-Stage D, **D4: DMs, notifications and search** (plan.md; requirements DM-01, DM-02, NOTIF-01,
-NOTIF-02, HIST-03, MSG-06's notifications; journeys in `qa/acceptance_criteria.md` that mention
-DMs and notifications):
+Stage D, **D5: media and link previews** (plan.md; requirements MSG-08, MSG-09, PROF-08, SEC-07,
+SEC-12; journey J9 in `qa/acceptance_criteria.md`):
 
-1. **Direct messages**: start a DM from a member list or profile, respecting the "who may message
-   me" setting and blocks (both directions); DM conversations in the sidebar with unread badges;
-   the same message features as rooms (the room page's list, composer and actions are reusable).
-   Delivered and seen ticks in DMs with the reciprocal opt-out (DM-02).
-2. **In-app notifications** for mentions, replies and DMs: created where the mention rows are
-   written (D2), pushed live (`notification:new`), a bell with a list and "mark as read".
-   Optional browser notifications (opt-in, NOTIF-02).
-3. **Search** (HIST-03): PostgreSQL full text (`body_tsv` already exists), only in conversations
-   the person belongs to, with results that jump to the message (the list can already load older
-   pages to reach it).
-4. Tests: db, realtime and E2E for each; update the matrix, STEP-D, PROGRESS; commit, push, check
-   CI.
+1. **Upload pipeline**: check the real file type from its first bytes (not the name), size and
+   pixel limits, re-encode images (sharp) and remove EXIF and other metadata; refuse polyglots
+   and fakes. Unit tests with hostile files.
+2. **Storage drivers**: Vercel Blob for production (free tier; the owner creates the token in
+   Stage H) and a local disk driver for development and tests; signed upload flow; the
+   `attachment` table already exists.
+3. **Message images** (`attachmentIds` on `message:send` already exists in the contract) and
+   **avatar photos** (PROF-08, reportable later in Stage E).
+4. **Link previews**: fetched by the server, text only, with SSRF protection (private and
+   metadata addresses refused, redirects re-checked, size and time limits), cached 7 days
+   (`link_preview` table exists); never in random mode.
+5. Tests and E2E J9; update the matrix, STEP-D, PROGRESS; commit, push, check CI. After D5, the
+   Stage D exit criteria in `qa/acceptance_criteria.md` close Stage D.
 
-Local state: run `pnpm db:start` before tests against PostgreSQL or E2E, and
-`pnpm db:migrate:local` after pulling. `apps/web/.env.local` and `apps/realtime/.env.local` exist
-(generated by `pnpm setup:local`). `pnpm build` before `pnpm --filter @socketspace/web e2e`.
+Local state: run `pnpm db:start` before tests against PostgreSQL or E2E (it stops when the laptop
+restarts), and `pnpm db:migrate:local` after pulling. `apps/web/.env.local` and
+`apps/realtime/.env.local` exist (generated by `pnpm setup:local`). `pnpm build` before
+`pnpm --filter @socketspace/web e2e`.
 
 ## Effort guide (from Anthropic's Claude Code docs, checked 2026-10-01)
 
