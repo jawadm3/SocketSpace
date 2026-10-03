@@ -4,7 +4,10 @@
  * The browser never names an address to fetch. It names a message; the server reads that
  * message's text itself (only if this viewer may read it), finds the first links outside code,
  * and answers from a 7-day cache. Only a link not in the cache is fetched, by the safe fetcher
- * (safe-fetch.ts), and each person can cause only a limited number of fetches a minute.
+ * (safe-fetch.ts), and each person can cause only a limited number of fetches a minute. When many
+ * people open the same new link at once, one request fetches it and the others are told to ask
+ * again in a moment (`pending`), so one message can never make our server send a burst of
+ * requests to someone else's site.
  *
  * Random-mode messages are never stored, so they have no ID and can never reach this.
  */
@@ -13,6 +16,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 
 import {
+  claimLinkPreviewFetch,
   getFreshLinkPreviews,
   getReadableMessageBody,
   hitRateLimit,
@@ -92,8 +96,8 @@ export async function loadLinkPreviews(
   if (current.user.isAnonymous || !current.user.onboardedAt) {
     return error(403, 'FORBIDDEN', 'Finish setting up your account first.');
   }
-  const answer = (previews: LinkPreviewWire[], maxAge: number) => {
-    const body: LinkPreviewsResponse = { previews };
+  const answer = (previews: LinkPreviewWire[], maxAge: number, pending = false) => {
+    const body: LinkPreviewsResponse = pending ? { previews, pending } : { previews };
     return Response.json(body, {
       headers: { 'Cache-Control': maxAge > 0 ? `private, max-age=${String(maxAge)}` : 'no-store' },
     });
@@ -132,13 +136,19 @@ export async function loadLinkPreviews(
     links.map((l) => l.hash),
   );
   const lookup = deps.lookup ?? ((url: string) => fetchPreview(url, deps.fetchOptions));
-  // Some links were skipped because of the fetch limit: the answer must not be kept by the browser.
+  // Links skipped because of the fetch limit: the answer must not be kept by the browser.
   const skipped: string[] = [];
+  // Being fetched for another reader right now.
+  const waiting: string[] = [];
   const found = new Map<string, LinkPreviewWire>();
   const okHashes: string[] = [];
   await Promise.all(
     links.map(async ({ url, hash }) => {
       const hit = cached.get(hash);
+      if (hit?.pending) {
+        waiting.push(hash);
+        return;
+      }
       if (hit) {
         if (hit.status === 'ok' && hit.title) {
           okHashes.push(hash);
@@ -159,6 +169,10 @@ export async function loadLinkPreviews(
       );
       if (!allowed.allowed) {
         skipped.push(hash);
+        return;
+      }
+      if (!(await claimLinkPreviewFetch(deps.db, hash, url))) {
+        waiting.push(hash);
         return;
       }
       let result: PreviewLookup;
@@ -194,5 +208,6 @@ export async function loadLinkPreviews(
     const preview = found.get(hash);
     return preview ? [preview] : [];
   });
-  return answer(previews, skipped.length === 0 ? 300 : 0);
+  const settled = skipped.length === 0 && waiting.length === 0;
+  return answer(previews, settled ? 300 : 0, waiting.length > 0);
 }

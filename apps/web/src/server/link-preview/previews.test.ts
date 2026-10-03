@@ -9,7 +9,15 @@ import type { AddressInfo } from 'node:net';
 import { v4 as uuidv4 } from 'uuid';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { deleteMessage, eq, roomCreate, schema, sendMessage, sql } from '@socketspace/db';
+import {
+  claimLinkPreviewFetch,
+  deleteMessage,
+  eq,
+  roomCreate,
+  schema,
+  sendMessage,
+  sql,
+} from '@socketspace/db';
 import { LIMITS } from '@socketspace/shared/limits';
 import type { LinkPreviewsResponse } from '@socketspace/shared/media';
 
@@ -201,6 +209,79 @@ describe('GET /api/messages/[id]/previews', () => {
     await deleteMessage(h.db, { messageId: id, actorId: ava.id });
     expect((await previews(ava.cookie, id, fetcher)).response.status).toBe(404);
     expect(fetcher.asked).toEqual([]);
+  });
+
+  it('fetches a new link once however many people open the message at the same moment', async () => {
+    const ava = await person();
+    const readers = [ava, await person(), await person(), await person()];
+    const id = await messageIn('public', ava.id, 'everyone look https://example.com/popular');
+    const asked: string[] = [];
+    let release: (answer: PreviewLookup) => void = () => undefined;
+    const slow = {
+      lookup: (url: string) => {
+        asked.push(url);
+        return new Promise<PreviewLookup>((resolve) => {
+          release = resolve;
+        });
+      },
+    };
+
+    // The page is still being fetched while everyone else's request is answered.
+    let answered = 0;
+    const all = readers.map((reader) =>
+      previews(reader.cookie, id, slow).then((result) => {
+        answered += 1;
+        return result;
+      }),
+    );
+    await expect.poll(() => answered, { timeout: 10_000 }).toBe(readers.length - 1);
+    expect(asked).toHaveLength(1);
+    release(ok('Popular page'));
+    const answers = await Promise.all(all);
+
+    expect(asked).toEqual(['https://example.com/popular']);
+    const winners = answers.filter((a) => a.body?.previews.length === 1);
+    const told = answers.filter((a) => a.body?.pending === true);
+    expect(winners).toHaveLength(1);
+    expect(told).toHaveLength(readers.length - 1);
+    for (const waiting of told) {
+      expect(waiting.body?.previews).toEqual([]);
+      expect(waiting.response.headers.get('cache-control')).toBe('no-store');
+    }
+    // Asking again a moment later: answered from the cache, still one fetch.
+    const later = await previews(readers[1]?.cookie ?? null, id, slow);
+    expect(later.body).toEqual({
+      previews: [
+        {
+          url: 'https://example.com/popular',
+          title: 'Popular page',
+          description: null,
+          siteName: 'example.com',
+        },
+      ],
+    });
+    expect(asked).toHaveLength(1);
+  });
+
+  it('lets someone else fetch when a claimed fetch never finished', async () => {
+    const ava = await person();
+    const id = await messageIn('public', ava.id, 'https://example.com/abandoned');
+    const hash = hashLink('https://example.com/abandoned');
+    const fetcher = recorder(() => ok('Recovered'));
+
+    // A claim left behind by a request that died.
+    expect(await claimLinkPreviewFetch(h.db, hash, 'https://example.com/abandoned')).toBe(true);
+    expect(await claimLinkPreviewFetch(h.db, hash, 'https://example.com/abandoned')).toBe(false);
+    expect((await previews(ava.cookie, id, fetcher)).body).toEqual({ previews: [], pending: true });
+    expect(fetcher.asked).toEqual([]);
+
+    // The claim runs out after a few seconds.
+    await h.db
+      .update(schema.linkPreview)
+      .set({ expiresAt: sql`now() - interval '1 second'` })
+      .where(eq(schema.linkPreview.urlHash, hash));
+    expect((await previews(ava.cookie, id, fetcher)).body?.previews[0]?.title).toBe('Recovered');
+    expect(fetcher.asked).toHaveLength(1);
   });
 
   it('limits how many fetches one person can cause, and can be switched off', async () => {

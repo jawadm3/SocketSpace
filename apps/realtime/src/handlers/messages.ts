@@ -116,7 +116,7 @@ export function refusalToAck(
     case 'attachment_invalid':
       return ackError(
         'VALIDATION',
-        'A picture in this message is no longer available. Remove it and attach it again.',
+        'A picture in this message is no longer available. Delete the message and attach it again.',
       );
     case 'client_id_conflict':
       return ackError('CONFLICT', 'This message ID was already used. Please send again.');

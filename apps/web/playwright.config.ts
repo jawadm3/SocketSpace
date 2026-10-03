@@ -19,6 +19,9 @@ const realtimePort = Number(process.env.E2E_REALTIME_PORT ?? 4100);
 // 127.0.0.1, not localhost: the realtime server binds IPv4, and localhost may resolve to ::1 first.
 const realtimeURL = `http://127.0.0.1:${String(realtimePort)}`;
 const internalSecret = 'y'.repeat(48);
+// A small web server started by e2e/media.spec.ts plays 'a site on the internet' for link
+// previews. The web app reaches the made-up name preview.test at this local port.
+const previewPort = Number(process.env.E2E_PREVIEW_PORT ?? 4199);
 
 export const E2E = {
   baseURL,
@@ -28,6 +31,9 @@ export const E2E = {
   adminDatabaseUrl:
     process.env.E2E_DATABASE_ADMIN_URL ?? 'postgres://socketspace@127.0.0.1:54329/postgres',
   mailDir: resolve(repoRoot, '.cache', 'e2e-mail'),
+  uploadsDir: resolve(repoRoot, '.cache', 'e2e-uploads'),
+  previewPort,
+  previewHost: 'preview.test',
 };
 
 export default defineConfig({
@@ -65,6 +71,9 @@ export default defineConfig({
         INTERNAL_EVENTS_SECRET: internalSecret,
         EMAIL_DRIVER: 'file',
         DEV_MAIL_DIR: E2E.mailDir,
+        STORAGE_DRIVER: 'local',
+        STORAGE_LOCAL_DIR: E2E.uploadsDir,
+        LINK_PREVIEW_DEV_HOSTS: `${E2E.previewHost}=127.0.0.1:${String(previewPort)}`,
         // The breached-password check needs a third-party service; it is covered by integration
         // tests with a stub instead, so these runs do not depend on someone else's uptime.
         HIBP_ENABLED: 'false',

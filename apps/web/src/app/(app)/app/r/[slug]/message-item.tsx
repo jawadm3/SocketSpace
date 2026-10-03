@@ -505,20 +505,26 @@ export function MessageItem({
           <EditForm message={message} onDone={onEditDone} />
         ) : (
           <>
+            {message.body === '' ? null : (
+              <div className="flex items-end gap-1.5">
+                <MessageBody
+                  body={message.body}
+                  myNickname={me.nickname}
+                  className="min-w-0 text-[0.95rem] text-ink"
+                />
+                {message.editedAt ? (
+                  <span className="shrink-0 text-xs text-muted" title={message.editedAt}>
+                    (edited)
+                  </span>
+                ) : null}
+                {mine ? <ReceiptMark receipt={receipt ?? 'sent'} /> : null}
+              </div>
+            )}
+            {/* A picture with no text: the tick sits beside the picture instead. */}
             <div className="flex items-end gap-1.5">
-              <MessageBody
-                body={message.body}
-                myNickname={me.nickname}
-                className="min-w-0 text-[0.95rem] text-ink"
-              />
-              {message.editedAt ? (
-                <span className="shrink-0 text-xs text-muted" title={message.editedAt}>
-                  (edited)
-                </span>
-              ) : null}
-              {mine ? <ReceiptMark receipt={receipt ?? 'sent'} /> : null}
+              <MessageAttachments attachments={message.attachments} authorName={name} />
+              {message.body === '' && mine ? <ReceiptMark receipt={receipt ?? 'sent'} /> : null}
             </div>
-            <MessageAttachments attachments={message.attachments} authorName={name} />
             <LinkPreviews messageId={message.id} body={message.body} editedAt={message.editedAt} />
           </>
         )}

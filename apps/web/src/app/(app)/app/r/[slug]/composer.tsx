@@ -13,7 +13,7 @@
  *   small preview above the box; it is sent with the next message (text is optional then). A
  *   picture that was refused shows the server's reason.
  */
-import { CornerUpLeft, ImagePlus, X } from 'lucide-react';
+import { CornerUpLeft, ImageOff, ImagePlus, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 
 import type { MessageWire } from '@socketspace/shared/events';
@@ -313,16 +313,23 @@ export function Composer({
                   : 'border-line bg-surface-2'
               }`}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element -- a local preview of the chosen file */}
-              <img
-                src={draft.previewUrl}
-                alt=""
-                width={48}
-                height={48}
-                className={`h-12 w-12 shrink-0 rounded-lg object-cover ${
-                  draft.status === 'uploading' ? 'opacity-50' : ''
-                }`}
-              />
+              {draft.status === 'failed' ? (
+                // A refused file may not be a picture at all, so there is nothing to preview.
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-card text-danger">
+                  <ImageOff aria-hidden="true" className="h-5 w-5" />
+                </span>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element -- a local preview of the chosen file
+                <img
+                  src={draft.previewUrl}
+                  alt=""
+                  width={48}
+                  height={48}
+                  className={`h-12 w-12 shrink-0 rounded-lg object-cover ${
+                    draft.status === 'uploading' ? 'opacity-50' : ''
+                  }`}
+                />
+              )}
               <span className="min-w-0">
                 <span className="block truncate font-semibold">{draft.name}</span>
                 {draft.status === 'uploading' ? (

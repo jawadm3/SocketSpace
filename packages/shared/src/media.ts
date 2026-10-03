@@ -81,5 +81,7 @@ export type LinkPreviewWire = z.infer<typeof linkPreviewWireSchema>;
 /** The answer of `GET /api/messages/<id>/previews`. */
 export const linkPreviewsResponseSchema = z.strictObject({
   previews: z.array(linkPreviewWireSchema).max(LIMITS.linkPreview.perMessage),
+  /** A link is being fetched for someone else right now: ask again in a moment. */
+  pending: z.boolean().optional(),
 });
 export type LinkPreviewsResponse = z.infer<typeof linkPreviewsResponseSchema>;

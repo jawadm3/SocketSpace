@@ -3,7 +3,7 @@
  * (MSG-09, PROF-08, SEC-12, journey J9): who may upload, what is refused and why, what is stored,
  * and who may see it afterwards.
  */
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 import sharp from 'sharp';
@@ -23,7 +23,14 @@ import { LIMITS } from '@socketspace/shared/limits';
 import { uploadResponseSchema } from '@socketspace/shared/media';
 
 import { cookieHeader, createAuthHarness, type AuthHarness } from '../../test/auth-harness';
-import { createLocalStorage, createMemoryStorage, isStorageKey, newStorageKey } from '../storage';
+import {
+  createLocalStorage,
+  createMemoryStorage,
+  createVercelBlobStorage,
+  isStorageKey,
+  newStorageKey,
+  type BlobApi,
+} from '../storage';
 import { collectAttachmentGarbage, serveMedia } from './media';
 import { handleUpload } from './upload';
 
@@ -317,8 +324,58 @@ describe('storage drivers', () => {
     }
   });
 
+  it('vercel-blob: stores privately under our own key and never adds to or overwrites it', async () => {
+    const calls: { op: string; key: string | string[]; options: Record<string, unknown> }[] = [];
+    const files = new Map<string, Buffer>();
+    const api: BlobApi = {
+      put: (pathname, body, options) => {
+        calls.push({ op: 'put', key: pathname, options });
+        files.set(pathname, body);
+        return Promise.resolve({});
+      },
+      get: (pathname, options) => {
+        calls.push({ op: 'get', key: pathname, options });
+        const found = files.get(pathname);
+        return Promise.resolve(
+          found ? { statusCode: 200, stream: new Response(new Uint8Array(found)).body } : null,
+        );
+      },
+      del: (pathnames, options) => {
+        calls.push({ op: 'del', key: pathnames, options });
+        for (const pathname of pathnames) files.delete(pathname);
+        return Promise.resolve();
+      },
+    };
+    const blob = createVercelBlobStorage('test-token', api);
+    const key = newStorageKey('message');
+    await blob.put(key, Buffer.from('picture'), 'image/webp');
+    expect(calls[0]).toEqual({
+      op: 'put',
+      key,
+      options: {
+        access: 'private',
+        token: 'test-token',
+        contentType: 'image/webp',
+        addRandomSuffix: false,
+        allowOverwrite: false,
+      },
+    });
+    expect((await blob.get(key))?.toString()).toBe('picture');
+    expect(calls[1]?.options).toEqual({ access: 'private', token: 'test-token' });
+    expect(await blob.get(newStorageKey('message'))).toBeNull();
+    await blob.delete([key]);
+    expect(files.size).toBe(0);
+    await blob.delete([]);
+    expect(calls.filter((c) => c.op === 'del')).toHaveLength(1);
+    await expect(blob.get('../other-store/file')).rejects.toThrow('Invalid storage key');
+    await expect(blob.delete([key, 'https://evil.example/x'])).rejects.toThrow();
+  });
+
   it('local: writes, reads and deletes inside its folder only', async () => {
-    const directory = await mkdtemp(join(resolve(process.cwd(), '..', '..', '.cache'), 'storage-'));
+    // Inside the repository's git-ignored cache folder (created here on a fresh checkout).
+    const cache = resolve(process.cwd(), '..', '..', '.cache');
+    await mkdir(cache, { recursive: true });
+    const directory = await mkdtemp(join(cache, 'storage-'));
     try {
       const local = createLocalStorage(directory);
       const key = newStorageKey('avatar');

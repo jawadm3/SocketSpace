@@ -9,6 +9,7 @@
  *   page; the browser never contacts the linked site until the person clicks, and the card holds
  *   no image, so the site cannot track who saw the message.
  */
+import { ImageOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { extractLinks } from '@socketspace/shared/markdown';
@@ -33,6 +34,52 @@ export function displaySize(attachment: Pick<AttachmentWire, 'width' | 'height'>
   };
 }
 
+function Picture({ attachment, label }: { attachment: AttachmentWire; label: string }) {
+  const [missing, setMissing] = useState(false);
+  const size = displaySize(attachment);
+  const box = {
+    width: size.width,
+    aspectRatio: `${String(size.width)} / ${String(size.height)}`,
+  };
+  if (missing) {
+    // Deleted meanwhile, or no longer yours to see: say so instead of a broken-image mark.
+    return (
+      <span
+        className="flex max-w-full items-center justify-center rounded-xl border border-line bg-surface-2 p-2 text-center text-xs text-muted"
+        style={{ ...box, minWidth: 96, minHeight: 64 }}
+      >
+        <ImageOff aria-hidden="true" className="mr-1 h-4 w-4 shrink-0" />
+        Picture not available
+      </span>
+    );
+  }
+  return (
+    <a
+      href={mediaPath(attachment.id)}
+      target="_blank"
+      rel="noopener"
+      className="block overflow-hidden rounded-xl border border-line bg-surface-2"
+      aria-label={`${label} (opens in a new tab)`}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element -- our own media route, already small WebP */}
+      <img
+        src={mediaPath(attachment.id)}
+        alt={label}
+        width={size.width}
+        height={size.height}
+        loading="lazy"
+        decoding="async"
+        data-testid="message-picture"
+        className="block max-w-full"
+        style={box}
+        onError={() => {
+          setMissing(true);
+        }}
+      />
+    </a>
+  );
+}
+
 export function MessageAttachments({
   attachments,
   authorName,
@@ -46,40 +93,18 @@ export function MessageAttachments({
   if (attachments.length === 0) return null;
   return (
     <ul className={`mt-1 flex flex-wrap gap-2 ${dimmed ? 'opacity-70' : ''}`} aria-label="Pictures">
-      {attachments.map((attachment, index) => {
-        const size = displaySize(attachment);
-        const label =
-          attachments.length === 1
-            ? `Picture from ${authorName}`
-            : `Picture ${String(index + 1)} of ${String(attachments.length)} from ${authorName}`;
-        return (
-          <li key={attachment.id}>
-            <a
-              href={mediaPath(attachment.id)}
-              target="_blank"
-              rel="noopener"
-              className="block overflow-hidden rounded-xl border border-line bg-surface-2"
-              aria-label={`${label} (opens in a new tab)`}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element -- our own media route, already small WebP */}
-              <img
-                src={mediaPath(attachment.id)}
-                alt={label}
-                width={size.width}
-                height={size.height}
-                loading="lazy"
-                decoding="async"
-                data-testid="message-picture"
-                className="block max-w-full"
-                style={{
-                  width: size.width,
-                  aspectRatio: `${String(size.width)} / ${String(size.height)}`,
-                }}
-              />
-            </a>
-          </li>
-        );
-      })}
+      {attachments.map((attachment, index) => (
+        <li key={attachment.id}>
+          <Picture
+            attachment={attachment}
+            label={
+              attachments.length === 1
+                ? `Picture from ${authorName}`
+                : `Picture ${String(index + 1)} of ${String(attachments.length)} from ${authorName}`
+            }
+          />
+        </li>
+      ))}
     </ul>
   );
 }
@@ -87,22 +112,32 @@ export function MessageAttachments({
 /** One request per message version, shared by every place that shows the message. */
 const previewCache = new Map<string, Promise<LinkPreviewWire[]>>();
 const CACHE_MAX = 500;
+const PENDING_RETRY_MS = 1500;
+const PENDING_RETRIES = 4;
 
 function loadPreviews(messageId: string, version: string): Promise<LinkPreviewWire[]> {
   const key = `${messageId}:${version}`;
   const cached = previewCache.get(key);
   if (cached) return cached;
-  const request = fetch(`/api/messages/${messageId}/previews`, { credentials: 'same-origin' })
-    .then(async (response) => {
-      if (!response.ok) throw new Error(String(response.status));
-      const parsed = linkPreviewsResponseSchema.safeParse(await response.json());
-      return parsed.success ? parsed.data.previews : [];
-    })
-    .catch(() => {
-      // Not kept: the next time the message is shown, it is tried again.
-      previewCache.delete(key);
-      return [];
+  const ask = async (triesLeft: number): Promise<LinkPreviewWire[]> => {
+    const response = await fetch(`/api/messages/${messageId}/previews`, {
+      credentials: 'same-origin',
     });
+    if (!response.ok) throw new Error(String(response.status));
+    const parsed = linkPreviewsResponseSchema.safeParse(await response.json());
+    if (!parsed.success) return [];
+    // Another reader's request is fetching the page right now: ask again shortly.
+    if (parsed.data.pending && triesLeft > 0) {
+      await new Promise((done) => setTimeout(done, PENDING_RETRY_MS));
+      return ask(triesLeft - 1);
+    }
+    return parsed.data.previews;
+  };
+  const request = ask(PENDING_RETRIES).catch(() => {
+    // Not kept: the next time the message is shown, it is tried again.
+    previewCache.delete(key);
+    return [];
+  });
   if (previewCache.size >= CACHE_MAX) {
     const oldest = previewCache.keys().next().value;
     if (oldest !== undefined) previewCache.delete(oldest);

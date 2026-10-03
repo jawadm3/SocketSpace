@@ -5,6 +5,10 @@
  * The cache is keyed by a hash of the normalised address. A good answer is kept for 7 days; a
  * refusal ("blocked", for example a private address) or a failure is kept for a shorter time, so
  * the same bad link is not fetched again by every reader.
+ *
+ * Many people may open a message with a new link at the same moment. So that our server fetches
+ * the page once, not once per reader, a reader first "claims" the address (a short-lived
+ * placeholder entry); everyone else sees the placeholder and asks again a moment later.
  */
 import { and, eq, gt, inArray, sql } from 'drizzle-orm';
 
@@ -12,7 +16,13 @@ import type { Queryable } from '../client';
 import { linkPreview, message, messageLink } from '../schema/messages';
 import { canReadConversation } from './dms';
 
-export type LinkPreviewRow = typeof linkPreview.$inferSelect;
+export type LinkPreviewRow = typeof linkPreview.$inferSelect & {
+  /** A placeholder: someone is fetching this address right now. */
+  pending: boolean;
+};
+
+/** How long a claim lasts. Longer than a fetch can take (3 seconds), short enough to retry soon. */
+export const LINK_PREVIEW_CLAIM_SECONDS = 10;
 
 /** Cached previews that have not expired yet (database clock), by address hash. */
 export async function getFreshLinkPreviews(
@@ -26,7 +36,48 @@ export async function getFreshLinkPreviews(
     .where(
       and(inArray(linkPreview.urlHash, [...urlHashes]), gt(linkPreview.expiresAt, sql`now()`)),
     );
-  return new Map(rows.map((row) => [row.urlHash, row]));
+  return new Map(
+    rows.map((row) => [
+      row.urlHash,
+      {
+        ...row,
+        // Only a claim lives this briefly (both times come from the database clock).
+        pending:
+          row.expiresAt.getTime() - row.fetchedAt.getTime() <= LINK_PREVIEW_CLAIM_SECONDS * 1000,
+      },
+    ]),
+  );
+}
+
+/**
+ * Claims the right to fetch an address that has no fresh cache entry. Exactly one caller gets
+ * `true` (the insert or update happens once); the others get `false` and should ask again later.
+ * If the winner never stores a result, the claim runs out by itself.
+ */
+export async function claimLinkPreviewFetch(
+  db: Queryable,
+  urlHash: string,
+  url: string,
+): Promise<boolean> {
+  const expiresAt = sql`now() + make_interval(secs => ${LINK_PREVIEW_CLAIM_SECONDS})`;
+  const claimed = await db
+    .insert(linkPreview)
+    .values({ urlHash, url, status: 'error', fetchedAt: sql`now()`, expiresAt })
+    .onConflictDoUpdate({
+      target: linkPreview.urlHash,
+      set: {
+        url,
+        status: 'error',
+        title: null,
+        description: null,
+        siteName: null,
+        fetchedAt: sql`now()`,
+        expiresAt,
+      },
+      setWhere: sql`${linkPreview.expiresAt} <= now()`,
+    })
+    .returning({ urlHash: linkPreview.urlHash });
+  return claimed.length > 0;
 }
 
 export interface SaveLinkPreview {
