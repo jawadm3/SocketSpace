@@ -12,9 +12,8 @@ import {
   canReadConversation,
   getPublicUsers,
   hitRateLimit,
-  listReactions,
   listRecentMessages,
-  toMessageWire,
+  loadMessageWires,
   type Database,
 } from '@socketspace/db';
 import type { MessageWire } from '@socketspace/shared/events';
@@ -104,15 +103,11 @@ export async function loadRoomHistory(
   });
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(1) : rows;
-  const reactions = await listReactions(
-    deps.db,
-    page.map((m) => m.id),
-  );
   const users = await getPublicUsers(deps.db, current.user.id, [
     ...new Set(page.map((m) => m.authorId)),
   ]);
   const body: HistoryPage = {
-    messages: page.map((m) => toMessageWire(m, reactions.get(m.id) ?? [])),
+    messages: await loadMessageWires(deps.db, page),
     users,
     hasMore,
   };

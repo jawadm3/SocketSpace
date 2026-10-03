@@ -7,6 +7,7 @@
 import { and, asc, eq, gt, inArray, isNull, lte, ne, or, sql, type SQL } from 'drizzle-orm';
 
 import { extractMentions } from '@socketspace/shared/markdown';
+import type { AttachmentWire } from '@socketspace/shared/media';
 
 import type { Database, Queryable } from '../client';
 import { dbNow } from '../clock';
@@ -17,6 +18,7 @@ import { conversation, conversationMember, roomBan } from '../schema/conversatio
 import { mention, message } from '../schema/messages';
 import { block } from '../schema/social';
 import { userSanction } from '../schema/safety';
+import { attachToMessage, lockPendingAttachments } from './attachments';
 import { notifyForMessage, type NotificationRow } from './notifications';
 
 export type MessageRow = typeof message.$inferSelect;
@@ -29,6 +31,8 @@ export interface SendMessageInput {
   /** Already validated and normalised by the shared contract. */
   body: string;
   replyToId?: string | null;
+  /** Pictures uploaded beforehand by the author (MSG-09). */
+  attachmentIds?: readonly string[];
   /** A fixed clock for tests. Without it, every time check uses the database's own clock. */
   now?: Date;
 }
@@ -47,6 +51,8 @@ export type SendRefusal =
   | { reason: 'room_banned'; until: Date | null }
   | { reason: 'blocked' }
   | { reason: 'reply_not_found' }
+  /** A picture is missing, someone else's, or already used. */
+  | { reason: 'attachment_invalid' }
   | { reason: 'client_id_conflict' };
 
 export type SendMessageResult =
@@ -58,6 +64,8 @@ export type SendMessageResult =
       mentions: string[];
       /** Notifications this message created (NOTIF-01; empty for a re-send). */
       notifications: NotificationRow[];
+      /** Pictures attached by this call (empty for a re-send: load them with the message). */
+      attachments: AttachmentWire[];
     }
   | ({ ok: false } & SendRefusal);
 
@@ -77,7 +85,14 @@ function duplicateOrConflict(existing: MessageRow, conversationId: string): Send
   // The same client ID used for a different conversation is a client bug or a probe: refuse it
   // rather than returning a message from another conversation.
   return existing.conversationId === conversationId
-    ? { ok: true, message: existing, duplicate: true, mentions: [], notifications: [] }
+    ? {
+        ok: true,
+        message: existing,
+        duplicate: true,
+        mentions: [],
+        notifications: [],
+        attachments: [],
+      }
     : { ok: false, reason: 'client_id_conflict' };
 }
 
@@ -87,7 +102,8 @@ function duplicateOrConflict(existing: MessageRow, conversationId: string): Send
  * 1. Lock the conversation row (`FOR UPDATE`). This serialises writers in the same conversation,
  *    which is what makes sequence numbers gap-free and ordered.
  * 2. If this author already sent this client ID, return the saved message (idempotent re-send).
- * 3. Check every permission against the current state of the database.
+ * 3. Check every permission against the current state of the database, and that every picture
+ *    is the author's own unused upload.
  * 4. Insert the message with `seq = last_event_seq + 1` and move the counter forward.
  *
  * If any check fails, nothing is written.
@@ -123,6 +139,10 @@ export async function sendMessage(
         clock,
       });
       if (refusal) return { ok: false, ...refusal } as const;
+      const attachmentIds = input.attachmentIds ?? [];
+      if (!(await lockPendingAttachments(tx, input.authorId, attachmentIds))) {
+        return { ok: false, reason: 'attachment_invalid' } as const;
+      }
 
       const seq = conv.lastEventSeq + 1;
       const [saved] = await tx
@@ -156,13 +176,21 @@ export async function sendMessage(
             eq(conversationMember.userId, input.authorId),
           ),
         );
+      const attachments = await attachToMessage(tx, saved.id, attachmentIds);
       const mentions = await saveMentions(tx, saved);
       const notifications = await notifyForMessage(tx, saved, mentions, {
         conversationKind: conv.kind,
         includeReplyAndDm: true,
       });
 
-      return { ok: true, message: saved, duplicate: false, mentions, notifications } as const;
+      return {
+        ok: true,
+        message: saved,
+        duplicate: false,
+        mentions,
+        notifications,
+        attachments,
+      } as const;
     });
   } catch (error) {
     // Two copies of the same re-send racing each other: the second hits the unique key on

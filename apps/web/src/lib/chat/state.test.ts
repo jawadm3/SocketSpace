@@ -38,6 +38,7 @@ function msg(seq: number, overrides: Partial<MessageWire> = {}): MessageWire {
     moderationState: 'visible',
     createdAt: new Date(Date.UTC(2030, 0, 1, 0, 0, seq)).toISOString(),
     reactions: [],
+    attachments: [],
     ...overrides,
   };
 }

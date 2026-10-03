@@ -23,6 +23,36 @@ export const LIMITS = {
     eventsPerConversation: 200,
   },
 
+  upload: {
+    /** Largest file accepted (security.md 3.7). Vercel functions accept bodies up to 4.5 MB. */
+    maxBytes: 4 * 1024 * 1024,
+    /** Largest picture decoded, in pixels (width x height). */
+    maxPixels: 25_000_000,
+    /** Uploads per person per hour. */
+    perHour: 20,
+    /** Message images are scaled down to fit a square of this many pixels. */
+    imageMaxEdge: 1600,
+    /** Avatar photos are cropped to a square of this many pixels. */
+    avatarEdge: 256,
+  },
+
+  linkPreview: {
+    /** Links per message that get a preview (the first ones). */
+    perMessage: 3,
+    titleMax: 200,
+    descriptionMax: 300,
+    siteNameMax: 80,
+    /** A fetched preview is reused for this long (security.md 3.8). */
+    ttlSeconds: 7 * 24 * 60 * 60,
+    /** A link that could not be fetched is tried again after this long. */
+    errorTtlSeconds: 60 * 60,
+    maxBytes: 512 * 1024,
+    timeoutMs: 3000,
+    maxRedirects: 3,
+    /** New fetches one person may cause per minute (cached previews are free). */
+    fetchesPerMinute: 20,
+  },
+
   profile: {
     nicknameMin: 3,
     nicknameMax: 24,

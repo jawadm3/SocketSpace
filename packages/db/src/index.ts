@@ -25,7 +25,9 @@ export * from './queries/message-actions';
 export * from './queries/read-state';
 export * from './queries/notifications';
 export * from './queries/dms';
-export { toMessageWire } from './wire';
+export * from './queries/attachments';
+export * from './queries/link-previews';
+export { loadMessageWires, toMessageWire } from './wire';
 export { isUniqueViolation } from './errors';
 // The query-building operators, re-exported so apps use this package's Drizzle instance.
 export { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';

@@ -4,7 +4,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { eq, schema } from '@socketspace/db';
+import { createAttachment, eq, schema } from '@socketspace/db';
 import { createTestDm, createTestRoom, createTestUser } from '@socketspace/db/testing';
 import type { MessageWire } from '@socketspace/shared/events';
 
@@ -181,6 +181,84 @@ describe('message:send', () => {
       body: 'hey',
     });
     expect(ack).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } });
+    socket.close();
+  });
+});
+
+describe('message:send with pictures (MSG-09)', () => {
+  const upload = (uploaderId: string) =>
+    createAttachment(h.db, {
+      uploaderId,
+      storageKey: `m/${uuidv4().replaceAll('-', '')}.webp`,
+      mime: 'image/webp',
+      width: 640,
+      height: 480,
+      bytes: 2048,
+      sha256: 'b'.repeat(64),
+    });
+
+  it('sends a picture with no text, delivers it, and keeps it on a re-send and a resync', async () => {
+    const ava = await createTestUser(h.db);
+    const sam = await createTestUser(h.db);
+    const room = await createTestRoom(h.db, ava.id, [sam.id]);
+    const picture = await upload(ava.id);
+    const avaSocket = await h.connectAs(ava.id);
+    const samSocket = await h.connectAs(sam.id);
+
+    const delivered = nextEvent<{ message: MessageWire }>(samSocket, 'message:new');
+    const payload = {
+      conversationId: room.id,
+      clientId: uuidv4(),
+      body: '',
+      attachmentIds: [picture.id],
+    };
+    const ack = await request<MessageAck>(avaSocket, 'message:send', payload);
+    if (!ack.ok) throw new Error(ack.error.message);
+    const expected = [{ id: picture.id, width: 640, height: 480 }];
+    expect(ack.data.message.attachments).toEqual(expected);
+    expect((await delivered).message.attachments).toEqual(expected);
+
+    const again = await request<MessageAck>(avaSocket, 'message:send', payload);
+    if (!again.ok) throw new Error(again.error.message);
+    expect(again.data.message.id).toBe(ack.data.message.id);
+    expect(again.data.message.attachments).toEqual(expected);
+
+    const sync = await request<{ results: { events: { message: MessageWire }[] }[] }>(
+      samSocket,
+      'sync:request',
+      { cursors: [{ conversationId: room.id, afterEventSeq: 0 }] },
+    );
+    if (!sync.ok) throw new Error(sync.error.message);
+    expect(sync.data.results[0]?.events[0]?.message.attachments).toEqual(expected);
+    avaSocket.close();
+    samSocket.close();
+  });
+
+  it("refuses someone else's picture and an empty message without one", async () => {
+    const ava = await createTestUser(h.db);
+    const sam = await createTestUser(h.db);
+    const room = await createTestRoom(h.db, ava.id, [sam.id]);
+    const sams = await upload(sam.id);
+    const socket = await h.connectAs(ava.id);
+
+    const stolen = await request(socket, 'message:send', {
+      conversationId: room.id,
+      clientId: uuidv4(),
+      body: 'mine now',
+      attachmentIds: [sams.id],
+    });
+    expect(stolen).toMatchObject({ ok: false, error: { code: 'VALIDATION' } });
+    const empty = await request(socket, 'message:send', {
+      conversationId: room.id,
+      clientId: uuidv4(),
+      body: '   ',
+    });
+    expect(empty).toMatchObject({ ok: false, error: { code: 'VALIDATION' } });
+    const rows = await h.db
+      .select()
+      .from(schema.message)
+      .where(eq(schema.message.conversationId, room.id));
+    expect(rows).toHaveLength(0);
     socket.close();
   });
 });

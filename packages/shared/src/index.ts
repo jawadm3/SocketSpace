@@ -14,6 +14,7 @@ export * from './errors';
 export * from './events';
 export * from './internal-events';
 export * from './limits';
+export * from './media';
 export * from './primitives';
 export * from './profile';
 export * from './realtime-token';

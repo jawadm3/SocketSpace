@@ -10,6 +10,7 @@ import { LIMITS } from '@socketspace/shared/limits';
 import {
   avatarConfigSchema,
   nameDisplaySchema,
+  photoAvatarSchema,
   realNameSchema,
   realNameVisibilitySchema,
   type AvatarConfig,
@@ -20,21 +21,31 @@ import { formText } from '@/lib/forms';
 
 import { sanitizeAvatarConfig } from './avatar';
 
-export interface ParsedAvatar {
-  kind: 'preset' | 'custom';
-  config: AvatarConfig;
-}
+export type ParsedAvatar =
+  | { kind: 'preset' | 'custom'; config: AvatarConfig }
+  /** An uploaded photo, by ID. The database checks it is this person's own upload (PROF-08). */
+  | { kind: 'photo'; config: { attachmentId: string } };
 
 /** The picked picture, or `null` when missing or not a real choice. */
 export function parseAvatarField(form: FormData): ParsedAvatar | null {
   const raw = formText(form, 'avatar');
   const kind = formText(form, 'avatarKind');
-  if (raw === '' || raw.length > 4000 || (kind !== 'preset' && kind !== 'custom')) return null;
+  if (
+    raw === '' ||
+    raw.length > 4000 ||
+    (kind !== 'preset' && kind !== 'custom' && kind !== 'photo')
+  ) {
+    return null;
+  }
   let json: unknown;
   try {
     json = JSON.parse(raw);
   } catch {
     return null;
+  }
+  if (kind === 'photo') {
+    const photo = photoAvatarSchema.safeParse(json);
+    return photo.success ? { kind, config: photo.data } : null;
   }
   const parsed = avatarConfigSchema.safeParse(json);
   if (!parsed.success) return null;

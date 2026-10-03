@@ -162,6 +162,7 @@ describe('acknowledgements', () => {
     moderationState: 'visible',
     createdAt: '2026-10-02T09:30:00.000Z',
     reactions: [],
+    attachments: [],
   } as const;
 
   it('validate the success and error shapes', () => {

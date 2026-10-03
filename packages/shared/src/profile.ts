@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import { NAME_DISPLAYS, REAL_NAME_VISIBILITIES } from './domain';
 import { LIMITS } from './limits';
+import { MEDIA_PATH_PATTERN } from './media';
 import { uuid } from './primitives';
 import { codePointLength, normalizeSingleLine } from './text';
 
@@ -192,10 +193,16 @@ export const avatarConfigSchema = z.strictObject({
 
 export type AvatarConfig = z.infer<typeof avatarConfigSchema>;
 
-/** How an avatar travels to browsers: settings to render locally, or a photo URL. */
+/** What the database keeps for a photo avatar: the stored picture's ID (PROF-08). */
+export const photoAvatarSchema = z.strictObject({ attachmentId: uuid });
+
+/**
+ * How an avatar travels to browsers: settings to render locally, or a photo. A photo is always a
+ * path on our own server (`/api/media/<id>`), never another site's address.
+ */
 export const avatarWireSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('generated'), config: avatarConfigSchema }),
-  z.strictObject({ kind: z.literal('photo'), url: z.url({ protocol: /^https?$/ }) }),
+  z.strictObject({ kind: z.literal('photo'), url: z.string().regex(MEDIA_PATH_PATTERN) }),
 ]);
 
 export type AvatarWire = z.infer<typeof avatarWireSchema>;

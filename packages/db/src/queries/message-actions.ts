@@ -21,6 +21,7 @@ import { user } from '../schema/auth';
 import { conversation, conversationMember, roomBan } from '../schema/conversations';
 import { mention, message, messageRevision, reaction } from '../schema/messages';
 import { moderationAction } from '../schema/safety';
+import { removeMessageAttachments } from './attachments';
 import { checkCanPost, saveMentions, type MessageRow, type SendRefusal } from './messages';
 import { notifyForMessage, type NotificationRow } from './notifications';
 
@@ -205,7 +206,7 @@ export interface DeleteMessageInput {
 /**
  * Deletes a message (MSG-03): by its author, or by a room moderator or owner who outranks the
  * author, or by a site admin. The row stays as a tombstone ("Message deleted") so order and
- * replies stay intact; its text, reactions and mentions go. A moderator's deletion is recorded in
+ * replies stay intact; its text, reactions, mentions and pictures go. A moderator's deletion is recorded in
  * the audit log.
  */
 export async function deleteMessage(
@@ -303,6 +304,7 @@ export async function deleteMessage(
     if (!updated) throw new Error('UPDATE ... RETURNING returned no row');
     await tx.delete(reaction).where(eq(reaction.messageId, row.id));
     await tx.delete(mention).where(eq(mention.messageId, row.id));
+    await removeMessageAttachments(tx, row.id);
     if (!own) {
       await tx.insert(moderationAction).values({
         id: newId(),

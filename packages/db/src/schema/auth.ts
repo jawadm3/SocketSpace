@@ -49,7 +49,7 @@ export const user = pgTable(
     /** Lower-cased by Better Auth before it is stored. Guests get a placeholder address. */
     email: text('email').notNull().unique(),
     emailVerified: boolean('email_verified').notNull().default(false),
-    /** For `avatar_kind = 'photo'`: storage key of the re-encoded image. */
+    /** Better Auth's column: a picture address from a social sign-in. Never shown (D-023). */
     image: text('image'),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
@@ -62,7 +62,10 @@ export const user = pgTable(
     nameDisplay: nameDisplayEnum('name_display').notNull().default('nickname'),
     /** Required before onboarding completes (D-023). */
     avatarKind: avatarKindEnum('avatar_kind'),
-    /** For preset/custom avatars: DiceBear style, seed and options. */
+    /**
+     * For preset/custom avatars: DiceBear style, seed and options. For a photo:
+     * `{ attachmentId }`, the stored, re-encoded picture (PROF-08).
+     */
     avatarConfig: jsonb('avatar_config'),
     theme: themeEnum('theme').notNull().default('airmail'),
     colorMode: colorModeEnum('color_mode').notNull().default('system'),

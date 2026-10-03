@@ -31,6 +31,7 @@ export default async function OnboardingPage() {
           <OnboardingForm
             presets={presets}
             builder={avatarBuilder()}
+            canUpload={current.user.emailVerified}
             names={{
               // Better Auth stores a name from Google or Facebook here; private until changed.
               realName: current.user.name,

@@ -15,6 +15,7 @@
  */
 import type { AckError } from '@socketspace/shared/errors';
 import { messageSendSchema, type MessageWire } from '@socketspace/shared/events';
+import { attachmentWireSchema, type AttachmentWire } from '@socketspace/shared/media';
 
 export const OUTBOX_MAX_ATTEMPTS = 5;
 const MAX_ITEMS = 100;
@@ -25,6 +26,8 @@ export interface OutboxItem {
   conversationId: string;
   body: string;
   replyToId?: string;
+  /** Pictures already uploaded (the server keeps unused uploads for 24 hours). */
+  attachments?: AttachmentWire[];
   /** Set once the outbox has given up; cleared by "Try again". */
   failed?: { code: string; message: string };
 }
@@ -95,12 +98,18 @@ function parseSaved(raw: string | null): OutboxItem[] {
   const valid: OutboxItem[] = [];
   for (const entry of items.slice(0, MAX_ITEMS)) {
     if (typeof entry !== 'object' || entry === null) continue;
-    const { clientId, conversationId, body, replyToId, failed } = entry as Record<string, unknown>;
+    const { clientId, conversationId, body, replyToId, failed, attachments } = entry as Record<
+      string,
+      unknown
+    >;
+    const pictures = attachmentWireSchema.array().safeParse(attachments ?? []);
+    if (!pictures.success) continue;
     const checked = messageSendSchema.safeParse({
       clientId,
       conversationId,
       body,
       ...(replyToId === undefined ? {} : { replyToId }),
+      ...(pictures.data.length > 0 ? { attachmentIds: pictures.data.map((a) => a.id) } : {}),
     });
     if (!checked.success) continue;
     valid.push({
@@ -108,6 +117,7 @@ function parseSaved(raw: string | null): OutboxItem[] {
       conversationId: conversationId as string,
       body: body as string,
       ...(typeof replyToId === 'string' ? { replyToId } : {}),
+      ...(pictures.data.length > 0 ? { attachments: pictures.data } : {}),
       ...(isFailure(failed) ? { failed: { code: failed.code, message: failed.message } } : {}),
     });
   }

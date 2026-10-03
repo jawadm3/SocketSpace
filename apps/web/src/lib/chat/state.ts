@@ -19,6 +19,7 @@
  * Time never comes from inside the reducer: actions that need it carry `now`.
  */
 import type { MessageWire, PRESENCE_STATUSES } from '@socketspace/shared/events';
+import type { AttachmentWire } from '@socketspace/shared/media';
 import type { PublicUser } from '@socketspace/shared/profile';
 
 export type ConnectionStatus =
@@ -38,6 +39,8 @@ export interface PendingMessage {
   conversationId: string;
   body: string;
   replyToId?: string;
+  /** Pictures already uploaded, waiting to be sent with this message (MSG-09). */
+  attachments?: AttachmentWire[];
   status: 'sending' | 'failed';
   error?: { code: string; message: string; retryAfterMs?: number };
 }
@@ -411,11 +414,12 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'message-deleted':
       return withConversation(state, action.conversationId, (conversation) => ({
         ...conversation,
-        // A tombstone keeps its place but loses its text and reactions.
+        // A tombstone keeps its place but loses its text, reactions and pictures.
         messages: updateMessage(conversation, action.messageId, action.eventSeq, (m) => ({
           ...m,
           body: '',
           reactions: [],
+          attachments: [],
           deletedAt: m.deletedAt ?? action.deletedAt,
         })),
         ...advanceCursor(conversation.lastEventSeq, conversation.ahead, [action.eventSeq]),

@@ -20,6 +20,7 @@ import type { MessageWire } from '@socketspace/shared/events';
 import type { PublicUser } from '@socketspace/shared/profile';
 
 import { MessageBody } from '@/components/message-body';
+import { MessageAttachments } from '@/components/message-media';
 import { UserAvatar } from '@/components/user-avatar';
 import { useChat } from '@/lib/chat/provider';
 import type { PendingMessage } from '@/lib/chat/state';
@@ -27,7 +28,7 @@ import type { PendingMessage } from '@/lib/chat/state';
 import {
   isRemoved,
   MessageItem,
-  snippet,
+  messageSnippet,
   type MessagePermissions,
   type Receipt,
 } from './message-item';
@@ -77,7 +78,7 @@ function PendingItem({
       </div>
       <div className="min-w-0 flex-1">
         {pending.replyToId && original && !isRemoved(original) ? (
-          <p className="mb-0.5 truncate text-xs text-ink-2">↪ {snippet(original.body)}</p>
+          <p className="mb-0.5 truncate text-xs text-ink-2">↪ {messageSnippet(original)}</p>
         ) : null}
         <p className="flex items-baseline gap-2">
           <span className="font-bold text-ink">{me.nickname}</span>
@@ -89,6 +90,11 @@ function PendingItem({
           body={pending.body}
           myNickname={me.nickname}
           className={`text-[0.95rem] ${failed ? 'text-ink' : 'text-ink-2 opacity-70'}`}
+        />
+        <MessageAttachments
+          attachments={pending.attachments ?? []}
+          authorName={me.nickname}
+          dimmed={!failed}
         />
         {failed ? (
           <div role="alert" className="mt-1 flex flex-wrap items-center gap-2 text-sm">
@@ -224,7 +230,7 @@ export function MessageList({
     if (lastRow?.kind === 'message' && lastRow.message.authorId !== me.id) {
       const author = state.users[lastRow.message.authorId]?.nickname ?? 'Someone';
       setAnnouncement(
-        isRemoved(lastRow.message) ? '' : `${author}: ${snippet(lastRow.message.body, 200)}`,
+        isRemoved(lastRow.message) ? '' : `${author}: ${messageSnippet(lastRow.message, 200)}`,
       );
       if (!atBottom.current) setUnseen(true);
     }

@@ -6,10 +6,9 @@ import { cache } from 'react';
 import {
   getPublicUsers,
   getRoomForViewer,
-  listReactions,
   listRecentMessages,
   listRoomMembers,
-  toMessageWire,
+  loadMessageWires,
 } from '@socketspace/db';
 
 import { uuid } from '@socketspace/shared/primitives';
@@ -81,10 +80,7 @@ export default async function RoomPage({
   ]);
   const hasOlder = latest.length > PAGE_SIZE;
   const messages = hasOlder ? latest.slice(1) : latest;
-  const reactions = await listReactions(
-    db,
-    messages.map((m) => m.id),
-  );
+  const initialMessages = await loadMessageWires(db, messages);
   const people = await getPublicUsers(db, user.id, [
     ...new Set([...members.map((m) => m.userId), ...messages.map((m) => m.authorId)]),
   ]);
@@ -109,7 +105,7 @@ export default async function RoomPage({
           : null
       }
       emailVerified={user.emailVerified}
-      initialMessages={messages.map((m) => toMessageWire(m, reactions.get(m.id) ?? []))}
+      initialMessages={initialMessages}
       hasOlder={hasOlder}
       {...(focus.success ? { focusMessageId: focus.data } : {})}
       initialMembers={members.map((m) => ({
