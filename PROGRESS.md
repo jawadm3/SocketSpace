@@ -298,6 +298,11 @@ reversible on GitHub. Any new alert in v1's lockfile would need the same treatme
 
 ## Exact next step
 
+**First, look at CI for the last E1 push** (`077f332` and the commit after it): run 37149777766
+(CI) and its CodeQL run were still running when session 6 ended. The earlier E1 push (`8efd3b6`,
+the server side) was green: CI run 37148486767 and CodeQL run 37148486763. If the later run
+failed, fix that before anything else.
+
 Stage E, **E2: random mode** (plan.md; requirements RAND-01 to RAND-11; journey J7 in
 `qa/acceptance_criteria.md`; protocol in `docs/architecture/realtime-protocol.md`, "Events:
 random-match mode"; the contracts already exist in `packages/shared/src/events/random.ts`):
