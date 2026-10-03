@@ -215,5 +215,7 @@ jobs:
           node-version-file: .node-version
       - name: Install pnpm
         run: npm install --global pnpm@${{ env.PNPM_VERSION }}
+      # Advisories accepted for now are listed by ID in pnpm-workspace.yaml (auditConfig), each
+      # with a reason in docs/development/decisions.md.
       - name: pnpm audit (fails on high and critical advisories)
         run: pnpm audit --audit-level high

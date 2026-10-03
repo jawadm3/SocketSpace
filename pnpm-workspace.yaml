@@ -33,3 +33,12 @@ allowBuilds:
   '@embedded-postgres/linux-x64': true
   '@embedded-postgres/windows-x64': true
   esbuild: false
+
+# Security advisories accepted for now, by ID. Each one needs a reason in
+# docs/development/decisions.md and is removed as soon as a fixed version exists.
+# - GHSA-vfj7-8cjw-p6xm (D-044): braces <= 3.0.3, no fixed version published. It reaches this
+#   repository only through the ESLint plugin for Next.js (a development tool); it is not part of
+#   the web app or the realtime server.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-vfj7-8cjw-p6xm
