@@ -20,6 +20,7 @@ import type { Queryable } from '../client';
 import { newId } from '../schema/_common';
 import { user } from '../schema/auth';
 import { attachment, message } from '../schema/messages';
+import { report } from '../schema/safety';
 import { canReadConversation } from './dms';
 
 export type AttachmentRow = typeof attachment.$inferSelect;
@@ -263,6 +264,9 @@ export interface AttachmentGarbage {
 /**
  * Pictures whose files can be deleted: removed ones, and uploads never used within 24 hours
  * (database clock). The caller deletes the files first, then the rows (`deleteAttachmentRows`).
+ *
+ * A picture named in the evidence of a report that is still open is kept until the report is
+ * closed, so the moderator can see what was reported even if it was replaced or deleted since.
  */
 export async function listAttachmentGarbage(
   db: Queryable,
@@ -272,12 +276,19 @@ export async function listAttachmentGarbage(
     .select({ id: attachment.id, storageKey: attachment.storageKey })
     .from(attachment)
     .where(
-      or(
-        eq(attachment.status, 'removed'),
-        and(
-          eq(attachment.status, 'pending'),
-          lt(attachment.createdAt, sql`now() - make_interval(hours => ${PENDING_UPLOAD_HOURS})`),
+      and(
+        or(
+          eq(attachment.status, 'removed'),
+          and(
+            eq(attachment.status, 'pending'),
+            lt(attachment.createdAt, sql`now() - make_interval(hours => ${PENDING_UPLOAD_HOURS})`),
+          ),
         ),
+        sql`not exists (
+          select 1 from ${report}
+          where ${report.status} in ('open', 'in_review')
+            and jsonb_exists(${report.evidence} -> 'attachmentIds', ${attachment.id}::text)
+        )`,
       ),
     )
     .orderBy(asc(attachment.id))

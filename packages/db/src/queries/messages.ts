@@ -19,6 +19,7 @@ import { mention, message } from '../schema/messages';
 import { block } from '../schema/social';
 import { userSanction } from '../schema/safety';
 import { attachToMessage, lockPendingAttachments } from './attachments';
+import { recordWordListFlag } from './reports';
 import { notifyForMessage, type NotificationRow } from './notifications';
 
 export type MessageRow = typeof message.$inferSelect;
@@ -33,12 +34,43 @@ export interface SendMessageInput {
   replyToId?: string | null;
   /** Pictures uploaded beforehand by the author (MSG-09). */
   attachmentIds?: readonly string[];
+  /** What the word-list filter found in `body` (SAFE-02). Omitted: nothing. */
+  filter?: FilterFinding;
   /** A fixed clock for tests. Without it, every time check uses the database's own clock. */
   now?: Date;
 }
 
+/** What the word-list filter found in a text (packages/shared moderation, `scanText`). */
+export interface FilterFinding {
+  /** 0 nothing, 1 low, 2 medium (stored, masked for readers, flagged), 3 high (blocked). */
+  severity: 0 | 1 | 2 | 3;
+  categories: readonly string[];
+}
+
+/**
+ * High severity: the text is not stored. A flag for the moderators is, with the text, so they see
+ * what was attempted (security.md 4.2).
+ */
+export async function blockedByFilter(
+  db: Queryable,
+  authorId: string,
+  body: string,
+  filter: FilterFinding | undefined,
+): Promise<boolean> {
+  if (filter?.severity !== 3) return false;
+  await recordWordListFlag(db, {
+    userId: authorId,
+    severity: 'high',
+    categories: filter.categories,
+    text: body,
+  });
+  return true;
+}
+
 /** Why a send was refused. The realtime server maps these to `FORBIDDEN`, `NOT_FOUND`, etc. */
 export type SendRefusal =
+  /** The word-list filter found high-severity content: nothing was stored. */
+  | { reason: 'content_blocked' }
   | { reason: 'conversation_not_found' }
   | { reason: 'conversation_archived' }
   | { reason: 'account_inactive' }
@@ -113,6 +145,10 @@ export async function sendMessage(
   input: SendMessageInput,
 ): Promise<SendMessageResult> {
   const clock = dbNow(input.now);
+  if (await blockedByFilter(db, input.authorId, input.body, input.filter)) {
+    return { ok: false, reason: 'content_blocked' };
+  }
+  const flagged = input.filter?.severity === 2;
   try {
     return await db.transaction(async (tx) => {
       const [conv] = await tx
@@ -157,10 +193,21 @@ export async function sendMessage(
           kind: 'text',
           body: input.body,
           replyToId: input.replyToId ?? null,
+          filterSeverity: input.filter?.severity ?? 0,
+          moderationState: flagged ? 'flagged' : 'visible',
           createdAt: input.now ?? clock,
         })
         .returning();
       if (!saved) throw new Error('INSERT ... RETURNING returned no row');
+      if (flagged) {
+        await recordWordListFlag(tx, {
+          userId: input.authorId,
+          severity: 'medium',
+          categories: input.filter?.categories ?? [],
+          text: input.body,
+          messageId: saved.id,
+        });
+      }
 
       await tx
         .update(conversation)

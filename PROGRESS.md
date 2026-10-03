@@ -213,7 +213,23 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
 
 ## In progress
 
-- Nothing. Stage D is complete; nothing is half-edited.
+- **Stage E1 (safety core), session 6, `continuation` branch.** Server side done and tested
+  (`pnpm check` 13/13: shared 251, db 156, realtime 72 +2 Redis, web 231; db and realtime the same
+  on PostgreSQL 17.9):
+  - word-list filter in `packages/shared/src/moderation/` (normaliser, list, matcher, masking,
+    `moderateText` for community and random mode), wired into `message:send` and `message:edit`
+    (high blocked with `CONTENT_BLOCKED`, medium stored as written, masked for readers and
+    flagged in `content_flag`);
+  - reports in `packages/db/src/queries/reports.ts` (`createReport` with the server's own
+    snapshot; reported pictures are kept while a report is open);
+  - sanctions in `packages/db/src/queries/sanctions.ts` (`applySanction`, `liftSanction`,
+    `resolveSignInStanding`; migration 0003 adds two audit-log action kinds), announced live by
+    the realtime server (`user.sanctioned`, `user.unsanctioned`).
+  - **Still to do for E1:** the web side (report dialog and buttons on messages, people and
+    rooms; the server action with its rate limit; sign-in refusal that names the reason; the
+    account-standing page; `sanctionUser`/`liftUserSanction` wrappers that send the internal
+    events), an E2E journey, then the documents (decisions, step log STEP-E, matrix, glossary,
+    protocol and security docs, changelog).
 
 ## Known problems and things waiting for the owner
 

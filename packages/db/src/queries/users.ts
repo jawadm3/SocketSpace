@@ -50,6 +50,7 @@ export interface ActiveSanction {
   kind: 'warn' | 'mute' | 'suspend' | 'ban' | 'random_timeout';
   scope: 'global' | 'random';
   reason: string;
+  startsAt: Date;
   expiresAt: Date | null;
 }
 
@@ -66,6 +67,7 @@ export async function getActiveSanctions(
       kind: userSanction.kind,
       scope: userSanction.scope,
       reason: userSanction.reason,
+      startsAt: userSanction.startsAt,
       expiresAt: userSanction.expiresAt,
     })
     .from(userSanction)

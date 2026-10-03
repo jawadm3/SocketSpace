@@ -88,8 +88,13 @@ export const MODERATION_ACTION_KINDS = [
   'room_unban',
   'room_remove',
   'room_delete',
+  // Added in Stage E (migration 0003): random-mode timeouts, set by a moderator or automatically.
+  'random_timeout',
+  'random_timeout_lifted',
 ] as const;
 export const SANCTION_KINDS = ['warn', 'mute', 'suspend', 'ban', 'random_timeout'] as const;
+/** A warning is a record, not a restriction, so there is nothing to lift. */
+export const LIFTABLE_SANCTION_KINDS = ['mute', 'suspend', 'ban', 'random_timeout'] as const;
 export const SANCTION_SCOPES = ['global', 'random'] as const;
 
 export type UserRole = (typeof USER_ROLES)[number];
@@ -107,7 +112,11 @@ export type NotifyLevel = (typeof NOTIFY_LEVELS)[number];
 export type MessageKind = (typeof MESSAGE_KINDS)[number];
 export type DeletedBy = (typeof DELETED_BY)[number];
 export type ModerationState = (typeof MODERATION_STATES)[number];
+export type ReportTarget = (typeof REPORT_TARGETS)[number];
 export type ReportReason = (typeof REPORT_REASONS)[number];
+export type ReportStatus = (typeof REPORT_STATUSES)[number];
+export type FlagSeverity = (typeof FLAG_SEVERITIES)[number];
 export type ModerationActionKind = (typeof MODERATION_ACTION_KINDS)[number];
 export type SanctionKind = (typeof SANCTION_KINDS)[number];
+export type LiftableSanctionKind = (typeof LIFTABLE_SANCTION_KINDS)[number];
 export type SanctionScope = (typeof SANCTION_SCOPES)[number];

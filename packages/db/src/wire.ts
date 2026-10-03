@@ -6,6 +6,7 @@ import type { MessageWire } from '@socketspace/shared/events';
 import type { AttachmentWire } from '@socketspace/shared/media';
 
 import type { Queryable } from './client';
+import { visibleBody } from './masking';
 import { listAttachments } from './queries/attachments';
 import { listReactions, type ReactionSummary } from './queries/message-actions';
 import type { MessageRow } from './queries/messages';
@@ -25,7 +26,7 @@ export function toMessageWire(
     clientId: row.clientId,
     kind: row.kind,
     // Deleted and removed messages keep their place but never their text.
-    body: removed ? '' : row.body,
+    body: removed ? '' : visibleBody(row),
     replyToId: row.replyToId,
     editedAt: row.editedAt?.toISOString() ?? null,
     deletedAt: row.deletedAt?.toISOString() ?? null,

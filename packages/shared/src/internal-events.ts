@@ -10,7 +10,7 @@
  */
 import { z } from 'zod';
 
-import { MEMBER_ROLES } from './domain';
+import { LIFTABLE_SANCTION_KINDS, MEMBER_ROLES, SANCTION_KINDS } from './domain';
 import { isoDateTime, uuid } from './primitives';
 
 export const INTERNAL_TIMESTAMP_HEADER = 'x-ss-timestamp';
@@ -35,7 +35,7 @@ export const internalEventSchema = z.discriminatedUnion('type', [
     ...base,
     type: z.literal('user.sanctioned'),
     userId: uuid,
-    kind: z.enum(['warn', 'mute', 'suspend', 'ban']),
+    kind: z.enum(SANCTION_KINDS),
     reason: z.string().max(1000),
     until: isoDateTime.nullable(),
   }),
@@ -43,7 +43,7 @@ export const internalEventSchema = z.discriminatedUnion('type', [
     ...base,
     type: z.literal('user.unsanctioned'),
     userId: uuid,
-    kind: z.enum(['mute', 'suspend', 'ban']),
+    kind: z.enum(LIFTABLE_SANCTION_KINDS),
   }),
   z.strictObject({
     ...base,

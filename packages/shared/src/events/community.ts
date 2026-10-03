@@ -233,8 +233,19 @@ export const roomNoticeSchema = z.strictObject({
 });
 /** Someone's nickname or avatar changed. Nickname only: it goes to many viewers at once. */
 export const userUpdatedSchema = z.strictObject({ user: publicUserSchema });
+export const MODERATION_NOTICE_KINDS = [
+  'warned',
+  'muted',
+  'unmuted',
+  'suspended',
+  'banned',
+  'random_timeout',
+  'random_timeout_lifted',
+] as const;
+/** Told only to the person concerned: a site moderator acted on their account (ADMIN-03). */
 export const moderationNoticeSchema = z.strictObject({
-  kind: z.enum(['warned', 'muted', 'suspended', 'banned']),
+  kind: z.enum(MODERATION_NOTICE_KINDS),
+  /** The moderator's statement of reasons; empty when a sanction was lifted. */
   reason: z.string(),
   until: isoDateTime.nullable(),
 });

@@ -19,6 +19,10 @@
  *
  * `sync:request` (RECON-02): everything that changed after the client's last known event number,
  * only for conversations the person belongs to.
+ *
+ * The word-list filter (SAFE-02) reads every new and edited text before the database is asked:
+ * high severity is refused with `CONTENT_BLOCKED` and never stored; medium is stored as written,
+ * reaches readers masked, and is flagged for a moderator; low is left alone in community mode.
  */
 import {
   deleteMessage,
@@ -42,6 +46,7 @@ import {
 import type { DenyReason } from '@socketspace/shared/authz';
 import { ackError, ackOk, type Ack } from '@socketspace/shared/errors';
 import { LIMITS } from '@socketspace/shared/limits';
+import { moderateText } from '@socketspace/shared/moderation';
 
 import { rooms, type HandlerContext, type IoSocket } from '../types';
 import { registerHandler, registerSignal, type InFlight } from './define';
@@ -97,6 +102,11 @@ export function refusalToAck(
 ): Ack<never> {
   const after = (until: Date | null) => (until ? Math.max(0, until.getTime() - nowMs) : undefined);
   switch (refusal.reason) {
+    case 'content_blocked':
+      return ackError(
+        'CONTENT_BLOCKED',
+        'This message was not sent: it contains words that are not allowed here.',
+      );
     case 'message_not_found':
       return ackError('NOT_FOUND', 'This message no longer exists.');
     case 'not_author':
@@ -148,6 +158,13 @@ export function registerMessageHandlers(
   ctx: HandlerContext,
   inFlight: InFlight,
 ): void {
+  /** What the word-list filter found, counted for the metrics (never the text itself). */
+  const filterOf = (body: string) => {
+    const { severity, categories } = moderateText(body, 'community');
+    if (severity > 0) ctx.metrics.increment('ss_filter_hits_total', { severity: String(severity) });
+    return { severity, categories };
+  };
+
   registerHandler(socket, ctx, inFlight, 'message:send', async (payload, sender) => {
     const result = await sendMessage(ctx.db, {
       conversationId: payload.conversationId,
@@ -156,6 +173,7 @@ export function registerMessageHandlers(
       body: payload.body,
       replyToId: payload.replyToId ?? null,
       attachmentIds: payload.attachmentIds ?? [],
+      filter: filterOf(payload.body),
     });
     ctx.afterDatabaseWork();
     if (!result.ok) return refusalToAck(result, Date.now());
@@ -213,6 +231,7 @@ export function registerMessageHandlers(
       messageId,
       editorId: editor.data.userId,
       body,
+      filter: filterOf(body),
     });
     ctx.afterDatabaseWork();
     if (!result.ok) return refusalToAck(result, Date.now());

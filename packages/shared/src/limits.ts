@@ -76,6 +76,24 @@ export const LIMITS = {
 
   report: {
     detailsMax: 1000,
+    /** Reports one person may file per hour (realtime-protocol.md, rate limits). */
+    perHour: 10,
+    /** Messages before and after a reported message that the server copies as context. */
+    contextMessages: 5,
+  },
+
+  sanction: {
+    reasonMax: 500,
+    /** Shortest and longest timed sanction (mute, suspension, random-mode timeout). */
+    minSeconds: 60,
+    maxSeconds: 365 * 24 * 60 * 60,
+  },
+
+  flag: {
+    /** Characters of a flagged message kept for the moderator. */
+    excerptMax: 500,
+    /** Unreviewed word-list flags kept per person per hour; further ones are not stored. */
+    perUserPerHour: 20,
   },
 
   password: {
