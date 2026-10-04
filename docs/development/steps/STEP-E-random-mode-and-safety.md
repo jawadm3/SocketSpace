@@ -243,6 +243,13 @@ for the owner's review.
 - **The end screen forgot the contact just added and showed an empty message box** (seen in a
   screenshot). It now says "You and <name> are now contacts" and hides the box when there were no
   messages.
+- **The new browser test failed in CI on its first run** (run 37195603223; every other job and
+  CodeQL passed). It looked for "Widening the search to everyone" on the screen of the person who
+  joined second, where that line shows for less than half a second before the match arrives; the
+  local runs happened to catch it, CI did not. The product was right and the test was wrong. The
+  test now checks the line for one person waiting alone, and then that a newcomer with another
+  interest is paired only 9 seconds or more after joining. It passed three times in a row
+  locally afterwards.
 - **A long shell command with apostrophes failed again** (as the notes warned); patch scripts were
   written as files.
 

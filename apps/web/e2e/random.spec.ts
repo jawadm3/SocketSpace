@@ -232,16 +232,18 @@ test('J7: the random fallback, add contact when both ask, suggested rooms, the p
     await passGate(person.page);
   }
 
-  // No shared interest: they are paired with each other only after waiting 10 seconds.
+  // Bea waits alone: after 10 seconds the search widens to everyone (nobody is there yet).
   await startSearch(bea.page, `knitting${id}`);
-  await startSearch(cal.page, `lounge${id}`);
-  const startedAt = Date.now();
-  await expect(cal.page.getByText('Widening the search to everyone.')).toBeVisible({
+  await expect(bea.page.getByText('Widening the search to everyone.')).toBeVisible({
     timeout: 20_000,
   });
+  // Cal has another interest and gets his own 10 seconds for a shared-interest match first;
+  // only then are the two paired, with no shared interest.
+  await startSearch(cal.page, `lounge${id}`);
+  const startedAt = Date.now();
   for (const person of [bea, cal]) {
     await expect(person.page.getByText('No shared interests: a random match.')).toBeVisible({
-      timeout: 20_000,
+      timeout: 25_000,
     });
   }
   expect(Date.now() - startedAt).toBeGreaterThanOrEqual(9000);
