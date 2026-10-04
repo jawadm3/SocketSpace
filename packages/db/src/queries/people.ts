@@ -7,8 +7,10 @@
  */
 import { and, eq, inArray } from 'drizzle-orm';
 
+import { mediaPath } from '@socketspace/shared/media';
 import {
   avatarConfigSchema,
+  photoAvatarSchema,
   realNameForViewer,
   type AvatarWire,
   type PublicUser,
@@ -53,8 +55,8 @@ export interface PersonRow {
 
 /**
  * The avatar as browsers receive it. Generated avatars travel as settings (rendered locally, with
- * no third-party request). Photo avatars arrive with the upload pipeline in Stage D5; until then a
- * photo shows the fallback avatar.
+ * no third-party request). A photo travels as a path on our own server (`/api/media/<id>`), which
+ * serves the stored, re-encoded picture (PROF-08).
  */
 export function avatarWireOf(
   row: Pick<PersonRow, 'avatarKind' | 'avatarConfig'>,
@@ -62,6 +64,10 @@ export function avatarWireOf(
   if (row.avatarKind === 'preset' || row.avatarKind === 'custom') {
     const config = avatarConfigSchema.safeParse(row.avatarConfig);
     return config.success ? { kind: 'generated', config: config.data } : null;
+  }
+  if (row.avatarKind === 'photo') {
+    const photo = photoAvatarSchema.safeParse(row.avatarConfig);
+    return photo.success ? { kind: 'photo', url: mediaPath(photo.data.attachmentId) } : null;
   }
   return null;
 }

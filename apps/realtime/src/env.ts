@@ -52,6 +52,9 @@ export const realtimeEnvSchema = z.object({
   MAX_CONNECTIONS_PER_IP: positive(10_000).default(LIMITS.connections.perIp),
   NEW_CONNECTIONS_PER_IP_PER_MINUTE: positive(10_000).default(LIMITS.connections.newPerIpPerMinute),
 
+  /** The kill switch for random-match mode (RAND-11): `false` refuses every random event. */
+  RANDOM_MODE_ENABLED: envBoolean.default(true),
+
   /** Time allowed for a clean shutdown before the process exits anyway. */
   SHUTDOWN_GRACE_MS: positive(60_000).default(10_000),
   LOG_LEVEL: envLogLevel.default('info'),

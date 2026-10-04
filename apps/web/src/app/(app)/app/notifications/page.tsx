@@ -1,4 +1,4 @@
-import { AtSign, CornerUpLeft, MessageSquare } from 'lucide-react';
+import { AtSign, CornerUpLeft, MessageSquare, ShieldAlert } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
@@ -19,9 +19,13 @@ const ICONS = {
   mention: AtSign,
   reply: CornerUpLeft,
   dm: MessageSquare,
+  moderation: ShieldAlert,
 } as const;
 
-/** Mentions, replies and direct messages (NOTIF-01), newest first; opening the page marks them seen. */
+/**
+ * Mentions, replies, direct messages (NOTIF-01) and messages from the moderators (ADMIN-03),
+ * newest first; opening the page marks them seen.
+ */
 export default async function NotificationsPage() {
   const { user } = await requireAppUser('/app/notifications');
   const db = getDb();
@@ -52,7 +56,13 @@ export default async function NotificationsPage() {
                 : item.conversationId
                   ? `/app/dm/${item.conversationId}`
                   : '/app';
-            const href = item.messageId ? `${base}?m=${item.messageId}` : base;
+            // A moderator's decision is explained on the account-standing page.
+            const fromModerators = item.type === 'moderation';
+            const href = fromModerators
+              ? '/app/settings/standing'
+              : item.messageId
+                ? `${base}?m=${item.messageId}`
+                : base;
             const Icon = item.type in ICONS ? ICONS[item.type as keyof typeof ICONS] : AtSign;
             const text = item.messageBody === null ? null : plainText(item.messageBody);
             return (
@@ -71,7 +81,11 @@ export default async function NotificationsPage() {
                       {item.readAt === null ? <span className="sr-only">(new)</span> : null}
                     </span>
                     <span className="block truncate text-sm text-ink-2">
-                      {text === null ? 'This message was deleted.' : text.slice(0, 160)}
+                      {fromModerators
+                        ? 'Open your account standing to read it.'
+                        : text === null
+                          ? 'This message was deleted.'
+                          : text.slice(0, 160)}
                     </span>
                     <span className="text-xs text-muted">
                       <LocalTime iso={item.createdAt.toISOString()} withDate />

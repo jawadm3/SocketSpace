@@ -88,6 +88,7 @@ function stored(item: OutboxItem): MessageWire {
     moderationState: 'visible',
     createdAt: '2030-01-01T00:00:00.000Z',
     reactions: [],
+    attachments: [],
   };
 }
 
@@ -165,6 +166,34 @@ describe('Outbox', () => {
     second.outbox.connected();
     await flush();
     expect(second.sentIds).toEqual([id(7)]);
+  });
+
+  it('keeps the pictures of an unsent message across a reload, even with no text (MSG-09)', () => {
+    const first = setup({ connected: false });
+    const picture = { id: id(8), width: 640, height: 480 };
+    first.outbox.add({
+      clientId: id(9),
+      conversationId: CONV,
+      body: '',
+      attachments: [picture],
+    });
+    first.outbox.dispose();
+    expect(setup({ storage: first.storage }).outbox.restore()).toEqual([
+      { clientId: id(9), conversationId: CONV, body: '', attachments: [picture] },
+    ]);
+
+    // Tampered pictures, or an empty message without any: dropped.
+    const key = first.storage.key(0) ?? '';
+    for (const attachments of [[{ id: 'not-an-id', width: 1, height: 1 }], [], 'nonsense']) {
+      first.storage.setItem(
+        key,
+        JSON.stringify({
+          v: 1,
+          items: [{ clientId: id(9), conversationId: CONV, body: '', attachments }],
+        }),
+      );
+      expect(setup({ storage: first.storage }).outbox.restore()).toEqual([]);
+    }
   });
 
   it('retries a passing failure with growing waits, then gives up after 5 attempts', async () => {

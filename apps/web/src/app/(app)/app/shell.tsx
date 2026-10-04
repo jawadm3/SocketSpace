@@ -6,7 +6,19 @@
  * from moderators. Mobile gets a compact top bar with the same
  * links; Stage F refines the small-screen layout.
  */
-import { Bell, Compass, Hash, Home, Lock, Plus, Search, Settings, WifiOff, X } from 'lucide-react';
+import {
+  Bell,
+  Compass,
+  Hash,
+  Home,
+  Lock,
+  Plus,
+  Search,
+  Settings,
+  Shuffle,
+  WifiOff,
+  X,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -181,7 +193,7 @@ function RoomList() {
 }
 
 export function Sidebar() {
-  const { me, state } = useChat();
+  const { me, state, randomEnabled } = useChat();
   return (
     <aside
       aria-label="Rooms and navigation"
@@ -206,6 +218,11 @@ export function Sidebar() {
         <NavLink href="/app/search" icon={<Search className="h-4 w-4" />}>
           Search
         </NavLink>
+        {randomEnabled ? (
+          <NavLink href="/app/random" icon={<Shuffle className="h-4 w-4" />}>
+            Random chat
+          </NavLink>
+        ) : null}
         <NavLink
           href="/app/notifications"
           icon={<Bell className="h-4 w-4" />}
@@ -253,7 +270,7 @@ export function Sidebar() {
 
 /** Small screens: the same destinations in a top bar, and rooms in a disclosure. */
 export function MobileBar() {
-  const { state } = useChat();
+  const { state, randomEnabled } = useChat();
   const totalUnread = [...state.rooms, ...state.dms].reduce(
     (sum, c) => sum + (state.unread[c.id] ?? 0),
     0,
@@ -287,6 +304,15 @@ export function MobileBar() {
           >
             <Search aria-hidden="true" className="h-5 w-5" />
           </Link>
+          {randomEnabled ? (
+            <Link
+              href="/app/random"
+              className="rounded-lg p-2 hover:bg-surface-2"
+              aria-label="Random chat"
+            >
+              <Shuffle aria-hidden="true" className="h-5 w-5" />
+            </Link>
+          ) : null}
           <Link
             href="/app/notifications"
             className="relative rounded-lg p-2 hover:bg-surface-2"

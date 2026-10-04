@@ -5,13 +5,13 @@ import { cache } from 'react';
 import {
   getDmForViewer,
   getPublicUsers,
-  listReactions,
   listRecentMessages,
-  toMessageWire,
+  loadMessageWires,
 } from '@socketspace/db';
 import { uuid } from '@socketspace/shared/primitives';
 
 import { getDb } from '@/server/db';
+import { getAccountMute } from '@/server/moderation';
 import { requireAppUser } from '@/server/session';
 
 import { RoomView } from '../../r/[slug]/room-view';
@@ -56,10 +56,7 @@ export default async function DmPage({
   const latest = await listRecentMessages(db, view.id, { limit: PAGE_SIZE + 1 });
   const hasOlder = latest.length > PAGE_SIZE;
   const messages = hasOlder ? latest.slice(1) : latest;
-  const reactions = await listReactions(
-    db,
-    messages.map((m) => m.id),
-  );
+  const initialMessages = await loadMessageWires(db, messages);
   const people = await getPublicUsers(db, user.id, [
     ...new Set([user.id, view.otherUserId, ...messages.map((m) => m.authorId)]),
   ]);
@@ -76,8 +73,9 @@ export default async function DmPage({
         lastEventSeq: view.lastEventSeq,
       }}
       membership={{ role: 'member', mutedUntil: null }}
+      accountMute={await getAccountMute(db, user.id)}
       emailVerified={user.emailVerified}
-      initialMessages={messages.map((m) => toMessageWire(m, reactions.get(m.id) ?? []))}
+      initialMessages={initialMessages}
       initialMembers={[user.id, view.otherUserId].map((userId) => ({
         userId,
         role: 'member' as const,

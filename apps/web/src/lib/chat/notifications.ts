@@ -34,6 +34,44 @@ export function describeNotification(
   }
 }
 
+export type ModerationNoticeKind =
+  | 'warned'
+  | 'muted'
+  | 'unmuted'
+  | 'suspended'
+  | 'banned'
+  | 'random_timeout'
+  | 'random_timeout_lifted';
+
+/**
+ * What a person reads when a site moderator acts on their account (ADMIN-03): what happened, until
+ * when, and the moderator's reason. `until` is already written in the reader's own time.
+ */
+export function describeModerationNotice(
+  kind: ModerationNoticeKind,
+  reason: string,
+  until: string | null,
+): string {
+  const when = until ? ` until ${until}` : '';
+  const why = reason ? ` Reason: ${reason}` : '';
+  switch (kind) {
+    case 'warned':
+      return `A moderator sent you a warning.${why}`;
+    case 'muted':
+      return `A moderator muted your account${when}. You can still read.${why}`;
+    case 'unmuted':
+      return 'You can post again.';
+    case 'suspended':
+      return `Your account was suspended${when}.${why}`;
+    case 'banned':
+      return `Your account was banned${when}.${why}`;
+    case 'random_timeout':
+      return `You cannot use random chat${when}.${why}`;
+    case 'random_timeout_lifted':
+      return 'You can use random chat again.';
+  }
+}
+
 export function browserNotificationsSupported(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window;
 }

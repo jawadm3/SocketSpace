@@ -20,6 +20,7 @@ import {
 import { createRealtimeServer, type RealtimeServer } from '../app';
 import { loadRealtimeEnv, type RealtimeEnv } from '../env';
 import { createLogger } from '../logger';
+import type { RandomTimings } from '../random/manager';
 
 export const WEB_ORIGIN = 'http://localhost:3000';
 
@@ -117,7 +118,10 @@ export function request<T = unknown>(
   return socket.timeout(5000).emitWithAck(event, payload) as Promise<Ack<T>>;
 }
 
-export async function startHarness(overrides: Record<string, string> = {}): Promise<Harness> {
+export async function startHarness(
+  overrides: Record<string, string> = {},
+  options: { randomTimings?: Partial<RandomTimings> } = {},
+): Promise<Harness> {
   const database = await createTestDatabase();
   const env = loadRealtimeEnv({ ...TEST_ENV, ...overrides });
   const { publicKey, privateKey } = await generateKeyPair('EdDSA', { crv: 'Ed25519' });
@@ -136,6 +140,7 @@ export async function startHarness(overrides: Record<string, string> = {}): Prom
       keys: createLocalJWKSet({ keys: [jwk] }),
       checkKeys: () => Promise.resolve(true),
       logger,
+      ...(options.randomTimings && { randomTimings: options.randomTimings }),
     });
     const port = await created.listen(0, '127.0.0.1');
     return { created, url: `http://127.0.0.1:${String(port)}` };

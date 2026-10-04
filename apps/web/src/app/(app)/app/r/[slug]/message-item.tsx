@@ -3,10 +3,11 @@
 /**
  * One message and what you can do with it (MSG-02 to MSG-07): the text rendered from
  * markdown-lite, a quote of the message it replies to (which jumps to the original), reactions,
- * and the action bar (reply, react, edit, delete). The action bar appears on hover and whenever
- * keyboard focus is inside the message, so every action is reachable with Tab.
+ * and the action bar (reply, react, edit, delete, and report for other people's messages,
+ * SAFE-01). The action bar appears on hover and whenever keyboard focus is inside the message,
+ * so every action is reachable with Tab.
  */
-import { Check, CheckCheck, CornerUpLeft, Pencil, SmilePlus, Trash2 } from 'lucide-react';
+import { Check, CheckCheck, CornerUpLeft, Flag, Pencil, SmilePlus, Trash2 } from 'lucide-react';
 import {
   useEffect,
   useLayoutEffect,
@@ -25,6 +26,7 @@ import type { PublicUser } from '@socketspace/shared/profile';
 import { codePointLength } from '@socketspace/shared/text';
 
 import { MessageBody } from '@/components/message-body';
+import { LinkPreviews, MessageAttachments } from '@/components/message-media';
 import { UserAvatar } from '@/components/user-avatar';
 import { useChat } from '@/lib/chat/provider';
 
@@ -71,10 +73,22 @@ export function isRemoved(message: MessageWire): boolean {
   return message.deletedAt !== null || message.moderationState === 'removed';
 }
 
-/** A one-line preview of a message, for reply quotes. */
+/** A one-line preview of a message's text. */
 export function snippet(body: string, max = 120): string {
   const text = plainText(body);
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+/** A one-line preview of a message, for reply quotes: its text, or "Picture" when it has none. */
+export function messageSnippet(
+  message: Pick<MessageWire, 'body' | 'attachments'>,
+  max = 120,
+): string {
+  const text = snippet(message.body, max);
+  if (text !== '') return text;
+  const pictures = message.attachments.length;
+  if (pictures === 0) return '';
+  return pictures === 1 ? 'Picture' : `${String(pictures)} pictures`;
 }
 
 function ReplyQuote({
@@ -113,11 +127,11 @@ function ReplyQuote({
         onJump(original.id);
       }}
       className="mb-0.5 flex max-w-full items-center gap-1.5 rounded-md text-left text-xs text-ink-2 hover:text-ink"
-      aria-label={`Replying to ${author ?? 'someone'}: ${snippet(original.body, 80)}. Go to the original message.`}
+      aria-label={`Replying to ${author ?? 'someone'}: ${messageSnippet(original, 80)}. Go to the original message.`}
     >
       <CornerUpLeft aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted" />
       <span className="font-semibold">{author ?? 'Someone'}</span>
-      <span className="truncate">{snippet(original.body)}</span>
+      <span className="truncate">{messageSnippet(original)}</span>
     </button>
   );
 }
@@ -401,6 +415,7 @@ export function MessageItem({
   onEdit,
   onEditDone,
   onReply,
+  onReport,
   onJump,
   measureRef,
   index,
@@ -418,6 +433,8 @@ export function MessageItem({
   onEdit: (messageId: string) => void;
   onEditDone: () => void;
   onReply: (messageId: string) => void;
+  /** Open the report dialog for this message (other people's messages only). */
+  onReport: (messageId: string) => void;
   /** Scroll to (and if needed load) another message. */
   onJump: (messageId: string) => void;
   /** The list measures each row's height (virtualised list). */
@@ -491,19 +508,29 @@ export function MessageItem({
         ) : editing ? (
           <EditForm message={message} onDone={onEditDone} />
         ) : (
-          <div className="flex items-end gap-1.5">
-            <MessageBody
-              body={message.body}
-              myNickname={me.nickname}
-              className="min-w-0 text-[0.95rem] text-ink"
-            />
-            {message.editedAt ? (
-              <span className="shrink-0 text-xs text-muted" title={message.editedAt}>
-                (edited)
-              </span>
-            ) : null}
-            {mine ? <ReceiptMark receipt={receipt ?? 'sent'} /> : null}
-          </div>
+          <>
+            {message.body === '' ? null : (
+              <div className="flex items-end gap-1.5">
+                <MessageBody
+                  body={message.body}
+                  myNickname={me.nickname}
+                  className="min-w-0 text-[0.95rem] text-ink"
+                />
+                {message.editedAt ? (
+                  <span className="shrink-0 text-xs text-muted" title={message.editedAt}>
+                    (edited)
+                  </span>
+                ) : null}
+                {mine ? <ReceiptMark receipt={receipt ?? 'sent'} /> : null}
+              </div>
+            )}
+            {/* A picture with no text: the tick sits beside the picture instead. */}
+            <div className="flex items-end gap-1.5">
+              <MessageAttachments attachments={message.attachments} authorName={name} />
+              {message.body === '' && mine ? <ReceiptMark receipt={receipt ?? 'sent'} /> : null}
+            </div>
+            <LinkPreviews messageId={message.id} body={message.body} editedAt={message.editedAt} />
+          </>
         )}
         {removed ? null : <Reactions message={message} />}
         {confirming ? (
@@ -567,6 +594,16 @@ export function MessageItem({
               <Trash2 aria-hidden="true" className="h-4 w-4" />
             </ActionButton>
           ) : null}
+          {mine ? null : (
+            <ActionButton
+              label="Report"
+              onClick={() => {
+                onReport(message.id);
+              }}
+            >
+              <Flag aria-hidden="true" className="h-4 w-4" />
+            </ActionButton>
+          )}
         </div>
       )}
       {picking ? (

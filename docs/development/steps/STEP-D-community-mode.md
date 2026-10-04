@@ -1,8 +1,9 @@
 # Step D: Community mode
 
 - **Started:** 2026-10-02 (session 3).
-- **Status:** In progress. D1 (profiles and rooms) is done; D2 (messaging) has its database and
-  realtime parts done, the browser part next; D3 to D5 follow.
+- **Status:** Complete (2026-10-03, session 5). D1 to D5 are done and the stage exit criteria are
+  met (see "Stage D close-out" at the end). D5 was built on the `continuation` branch and waits
+  for the owner's review (pull request jawadm3/SocketSpace#1).
 
 ## Goal
 
@@ -12,13 +13,13 @@ previews, images), presence, history, search, notifications and uploads, all liv
 Stage exit (`qa/acceptance_criteria.md`): journeys J2 to J6, J9 and J11 pass as automated tests;
 virtualised list; search; notifications; uploads.
 
-| Milestone                     | Status                                | Commits                         |
-| ----------------------------- | ------------------------------------- | ------------------------------- |
-| D1 Profiles and rooms         | Done                                  | `3570c15`, `7b5fc4f`, `1652b83` |
-| D2 Messaging                  | Half: data and realtime done, UI next | `7c85aca` and the next commit   |
-| D3 History and reliability    |                                       |                                 |
-| D4 DMs, notifications, search |                                       |                                 |
-| D5 Media                      |                                       |                                 |
+| Milestone                     | Status | Commits                                              |
+| ----------------------------- | ------ | ---------------------------------------------------- |
+| D1 Profiles and rooms         | Done   | `3570c15`, `7b5fc4f`, `1652b83`                      |
+| D2 Messaging                  | Done   | `cf8538d`, `7db91f1`, `c19528d`                      |
+| D3 History and reliability    | Done   | `2c45809`                                            |
+| D4 DMs, notifications, search | Done   | `f2c0587`                                            |
+| D5 Media                      | Done   | `874a682` and the commits after it on `continuation` |
 
 ## D1: Profiles and rooms
 
@@ -352,9 +353,130 @@ D-042.
 | End-to-end                    | 13 of 13 in 1.6 min, including J6 (new: one DM per pair, Sent → Delivered → Seen, notifications, blocking) and search (new); J3 checks the bell now |
 | Screens inspected             | DM with "Seen" ticks, notifications page, search results with highlights                                                                            |
 
+## D5: Pictures, photo avatars and link previews (done)
+
+### What was built, and how it works
+
+- **The image pipeline** (MSG-09, SEC-12). Every uploaded file goes through the same checks
+  before anything is stored: at most 4 MB; the type is read from the file's first bytes ("magic
+  bytes"), so a script renamed to `.png` is refused whatever it is called; the picture must really
+  decode as that type; at most 25 million pixels, read from the file's header before decoding
+  (a tiny file can claim to be enormous: a "decompression bomb"). The pixels are then drawn again
+  into a new WebP file. Only that new file is kept, so nothing else from the original survives:
+  no GPS position, no camera details, and nothing hidden after the picture (a "polyglot" file).
+- **Pictures in messages.** The picture button (or pasting a picture) uploads at once and shows a
+  small preview above the message box with "Uploading", "Ready to send" or the reason it was
+  refused. The next message carries the ready pictures; text is optional. Both people see the
+  picture at once, sized before it loads so the list does not jump. A click opens it in a new
+  tab. An unsent message keeps its pictures across a reload.
+- **Who can see a picture.** Pictures are stored privately and always served by our own server
+  (`/api/media/<id>`), which checks every request: a message picture needs the right to read
+  that conversation; an unsent upload belongs to its uploader; a profile photo needs a signed-in
+  account. Deleting a message removes its pictures for everyone.
+- **A photo as profile picture** (PROF-08). The picture chooser has a third tab, "Upload a
+  photo", in onboarding and in settings. The photo is cropped to a 256-pixel square and stripped
+  of metadata like any other picture. Other people see it at once. Going back to a generated
+  picture removes the photo. Uploading needs a confirmed email address; until then the tab says
+  so.
+- **Storage.** A small "driver" interface with three implementations: Vercel Blob with private
+  access (production), a folder under `.cache` (development and end-to-end tests) and memory
+  (automated tests). File names are random and made by the server.
+- **Link previews** (MSG-08, SEC-07). A message with a link shows a small text card under it:
+  site name, title, description. No picture, and the reader's browser never contacts the linked
+  site. The server fetches the page under strict rules (below), reads only those three pieces of
+  text, and keeps the result for 7 days.
+- **The fetcher's safety rules.** Only http and https on the standard ports. The server looks
+  the name up itself, refuses it if any of its addresses is private (this computer, the local
+  network, the cloud provider's metadata address 169.254.169.254, and their IPv6 forms), and
+  connects to exactly the address it checked. Every redirect is checked again in full. At most 3
+  redirects, 3 seconds, 512 KB, HTML only. The browser cannot name an address at all: it names a
+  message, and the server reads the links from that message's text.
+- **Clean-up.** A function deletes the files of removed pictures and of uploads never used
+  within 24 hours. The daily retention job of Stage E will call it.
+
+### Decisions
+
+D-043 (marked "continuation, needs owner review").
+
+### Problems and fixes
+
+- **Two readers, two fetches.** The first end-to-end run showed the preview server being asked
+  twice for one new link, once per reader. In a large room, one message could have made our
+  server send a burst of requests to someone else's site. Fix: the first request "claims" the
+  address in the cache for 10 seconds; the others are told to ask again a moment later. Tested
+  with four simultaneous readers: one fetch.
+- **That new test then failed on real PostgreSQL** (it passed on the in-memory test database):
+  it assumed the slower requests always arrive before the fetch finishes. With real concurrency
+  some arrived after and were answered from the cache, which is also correct. The test now holds
+  the fetch open until the other three have been answered.
+- **The pixel limit made the header check fail in the wrong way.** With the image library's own
+  pixel limit switched on, reading the header of a 30-megapixel picture threw an error, so the
+  person would have been told "damaged" instead of "too large". The header is now read without
+  that limit (no pixels are decoded for it), the size is checked by us, and the limit stays on
+  for decoding.
+- **A direction-changing character landed in a test file** (the problem CLAUDE.md warns about):
+  the escape for U+202E was written as the real character. The source check caught it; the test
+  now builds the character from its number.
+- **Shell commands with embedded multi-line text failed to parse** twice and wrote nothing. Edits
+  were redone with the file tools and a small find-and-replace helper.
+- **Screenshots showed three faults**, all fixed: a refused file showed a broken-image mark in
+  the composer (now an icon); a picture-only message showed its "sent" tick on an empty line
+  above the picture (now beside it); a picture that can no longer be loaded showed a broken
+  image with its label spilling out (now "Picture not available").
+- **Lint**: a few findings in new code (an unneeded `String()`, a condition TypeScript could not
+  follow across a callback, unbound methods in a test), fixed before the first commit.
+
+### Tests run, with actual results
+
+| Check                         | Result                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm check`                  | 13 of 13 tasks; shared 168, db 119, realtime 61 (+2 Redis tests that run in CI), web 231                                                                                                                                                                                                                                      |
+| Same tests on PostgreSQL 17.9 | shared 168, db 119, realtime 61 (+2), web 231                                                                                                                                                                                                                                                                                 |
+| New tests                     | shared 8 (file signatures, picture messages, wire shapes, link extraction); db 12 (attaching, who may see, deletion, clean-up, photo avatars, preview cache); realtime 2 (picture messages live, refusals); web 117 (image pipeline 19, uploads, media and storage 10, safe fetcher and page reader 79, previews 8, outbox 1) |
+| Guard really tested           | With the IPv4 private-address check switched off, 28 of the link-preview tests fail (then restored)                                                                                                                                                                                                                           |
+| End-to-end                    | 16 of 16 in 2.1 min, including three new journeys: J9 pictures, J9 link previews, J11 profile photo. J9 also covers a refused message with "Try again" and "Delete" (UI-05)                                                                                                                                                   |
+| HIST-04 in the same run       | 10,000 messages: p95 frame 40.7 ms, worst 91.4 ms, 4 of 548 frames over 50 ms (an earlier run in this session, with the laptop less busy: p95 31.5 ms, worst 56.8 ms, 1 over 50 ms)                                                                                                                                           |
+| Screens inspected             | Composer with a picture ready, a refused file, a room with pictures at desktop and phone width, a link preview card, the "Upload a photo" tab, a refused message                                                                                                                                                              |
+
+Not covered by an automated test: the fetcher over https (the tests use http on this computer;
+https uses the same code with Node's own certificate checks) and Vercel Blob itself (the driver
+is tested against a stand-in; the real store needs the owner's token, Stage H). Both are on the
+Stage H smoke-test list.
+
+## Stage D close-out
+
+Exit criteria (`qa/acceptance_criteria.md`): "Journeys J2 to J6, J9 and J11 pass locally as
+automated tests; virtualised list; search; notifications; uploads."
+
+| Criterion        | Evidence                                                                                                               |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| J2               | `e2e/rooms.spec.ts` "J2: two people chat in a public room, live"                                                       |
+| J3               | `e2e/messaging.spec.ts` "J3: format, edit, react, reply, mention and delete"                                           |
+| J4               | `e2e/reconnect.spec.ts` "J4: offline sending, catching up, and an outbox that survives a reload"                       |
+| J5               | `e2e/rooms.spec.ts` "J5: private room, one-use invite, mute and ban reach the person at once"                          |
+| J6               | `e2e/dms.spec.ts` "J6: one DM per pair, Sent, Delivered, Seen, notifications, and blocking"                            |
+| J9               | `e2e/media.spec.ts`, two tests (pictures; link previews)                                                               |
+| J11              | `e2e/j1-sign-up-and-verify.spec.ts` (suggestions), `e2e/profile.spec.ts` (names, avatars), `e2e/media.spec.ts` (photo) |
+| Virtualised list | `e2e/history.spec.ts` (10,000 messages, at most 24 rows in the page)                                                   |
+| Search           | `e2e/dms.spec.ts` "HIST-03"                                                                                            |
+| Notifications    | `e2e/dms.spec.ts` J6, `e2e/messaging.spec.ts` J3                                                                       |
+| Uploads          | `e2e/media.spec.ts`; `upload.test.ts`, `image.test.ts`                                                                 |
+
+All 16 end-to-end tests passed in one run on 2026-10-03 (2.1 min).
+
+Carried into later stages, as the requirements matrix shows:
+
+- J4's third point (restarting the realtime server in the middle of a conversation) is covered
+  by realtime tests, not end to end (D-041).
+- J11's Google line (a Google name becomes a private real name) needs a real Google app: Stage H.
+- NOTIF-02 (browser notifications) needs a hand check in a real browser: Stage G.
+- UI-04 (empty, loading and error states on every screen) and A11Y-01 (axe checks, keyboard
+  pass) are finished and checked in Stage F.
+- SAFE-01: reporting (everywhere, including profile photos) arrives with the report system in
+  Stage E.
+
 ## What comes next
 
-D5: media. The upload pipeline (checking real file types, re-encoding images, removing EXIF, size
-limits) for message images and avatar photos, storage on Vercel Blob (free tier) with a local
-driver for development, and text-only link previews fetched by the server with SSRF protection
-(journey J9).
+Stage E: random mode and safety (plan.md). Guests and the 18+ gate, matching, the word filter and
+AI moderation module, reports and the moderation dashboard, legal pages, account deletion and
+export, and the daily retention job (which will also run the picture clean-up from D5).

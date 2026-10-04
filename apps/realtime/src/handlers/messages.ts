@@ -13,10 +13,16 @@
  *
  * `message:send` (MSG-01, RT-02, RECON-03): every permission is checked by the database inside the
  * same transaction that numbers the message (packages/db sendMessage). A re-send with the same
- * client ID returns the original message and is not broadcast twice.
+ * client ID returns the original message and is not broadcast twice. Pictures (MSG-09) are
+ * uploaded to the web app beforehand; the message names them by ID, and the same transaction
+ * checks that each one is the sender's own unused upload.
  *
  * `sync:request` (RECON-02): everything that changed after the client's last known event number,
  * only for conversations the person belongs to.
+ *
+ * The word-list filter (SAFE-02) reads every new and edited text before the database is asked:
+ * high severity is refused with `CONTENT_BLOCKED` and never stored; medium is stored as written,
+ * reaches readers masked, and is flagged for a moderator; low is left alone in community mode.
  */
 import {
   deleteMessage,
@@ -25,7 +31,7 @@ import {
   filterMemberConversations,
   getPersonRows,
   listEventsSince,
-  listReactions,
+  loadMessageWires,
   markDelivered,
   markRead,
   nicknameOnly,
@@ -40,6 +46,7 @@ import {
 import type { DenyReason } from '@socketspace/shared/authz';
 import { ackError, ackOk, type Ack } from '@socketspace/shared/errors';
 import { LIMITS } from '@socketspace/shared/limits';
+import { moderateText } from '@socketspace/shared/moderation';
 
 import { rooms, type HandlerContext, type IoSocket } from '../types';
 import { registerHandler, registerSignal, type InFlight } from './define';
@@ -95,6 +102,11 @@ export function refusalToAck(
 ): Ack<never> {
   const after = (until: Date | null) => (until ? Math.max(0, until.getTime() - nowMs) : undefined);
   switch (refusal.reason) {
+    case 'content_blocked':
+      return ackError(
+        'CONTENT_BLOCKED',
+        'This message was not sent: it contains words that are not allowed here.',
+      );
     case 'message_not_found':
       return ackError('NOT_FOUND', 'This message no longer exists.');
     case 'not_author':
@@ -111,6 +123,11 @@ export function refusalToAck(
       return ackError('NOT_FOUND', 'This conversation does not exist.');
     case 'reply_not_found':
       return ackError('NOT_FOUND', 'The message you replied to is not in this conversation.');
+    case 'attachment_invalid':
+      return ackError(
+        'VALIDATION',
+        'A picture in this message is no longer available. Delete the message and attach it again.',
+      );
     case 'client_id_conflict':
       return ackError('CONFLICT', 'This message ID was already used. Please send again.');
     case 'not_member':
@@ -141,6 +158,13 @@ export function registerMessageHandlers(
   ctx: HandlerContext,
   inFlight: InFlight,
 ): void {
+  /** What the word-list filter found, counted for the metrics (never the text itself). */
+  const filterOf = (body: string) => {
+    const { severity, categories } = moderateText(body, 'community');
+    if (severity > 0) ctx.metrics.increment('ss_filter_hits_total', { severity: String(severity) });
+    return { severity, categories };
+  };
+
   registerHandler(socket, ctx, inFlight, 'message:send', async (payload, sender) => {
     const result = await sendMessage(ctx.db, {
       conversationId: payload.conversationId,
@@ -148,16 +172,16 @@ export function registerMessageHandlers(
       clientId: payload.clientId,
       body: payload.body,
       replyToId: payload.replyToId ?? null,
+      attachmentIds: payload.attachmentIds ?? [],
+      filter: filterOf(payload.body),
     });
     ctx.afterDatabaseWork();
     if (!result.ok) return refusalToAck(result, Date.now());
 
-    const message = toMessageWire(
-      result.message,
-      result.duplicate
-        ? ((await listReactions(ctx.db, [result.message.id])).get(result.message.id) ?? [])
-        : [],
-    );
+    // A new message has no reactions yet; a re-send returns the stored one as it is now.
+    const message = result.duplicate
+      ? ((await loadMessageWires(ctx.db, [result.message]))[0] ?? toMessageWire(result.message))
+      : toMessageWire(result.message, [], result.attachments);
     if (!result.duplicate) {
       ctx.metrics.increment('ss_messages_total');
       // Everyone in the conversation, including the sender's other tabs, but not this socket
@@ -188,19 +212,13 @@ export function registerMessageHandlers(
         cursor.afterEventSeq,
         LIMITS.sync.eventsPerConversation,
       );
-      const reactions = await listReactions(
-        ctx.db,
-        since.messages.map((m) => m.id),
-      );
+      const messages = await loadMessageWires(ctx.db, since.messages);
       results.push(
         since.reset
           ? { conversationId: cursor.conversationId, events: [], reset: true }
           : {
               conversationId: cursor.conversationId,
-              events: since.messages.map((row) => ({
-                type: 'message' as const,
-                message: toMessageWire(row, reactions.get(row.id) ?? []),
-              })),
+              events: messages.map((message) => ({ type: 'message' as const, message })),
             },
       );
     }
@@ -213,11 +231,12 @@ export function registerMessageHandlers(
       messageId,
       editorId: editor.data.userId,
       body,
+      filter: filterOf(body),
     });
     ctx.afterDatabaseWork();
     if (!result.ok) return refusalToAck(result, Date.now());
-    const reactions = (await listReactions(ctx.db, [messageId])).get(messageId) ?? [];
-    const message = toMessageWire(result.message, reactions);
+    const message =
+      (await loadMessageWires(ctx.db, [result.message]))[0] ?? toMessageWire(result.message);
     if (result.changed) {
       editor
         .to(rooms.conversation(message.conversationId))

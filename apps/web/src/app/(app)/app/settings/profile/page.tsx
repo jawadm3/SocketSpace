@@ -7,7 +7,7 @@ import {
   getPublicUsers,
   listBlocked,
 } from '@socketspace/db';
-import { avatarConfigSchema } from '@socketspace/shared/profile';
+import { avatarConfigSchema, photoAvatarSchema } from '@socketspace/shared/profile';
 
 import { Card } from '@/components/ui';
 import { avatarBuilder, presetGallery } from '@/server/avatar';
@@ -35,10 +35,13 @@ export default async function ProfileSettingsPage() {
   ]);
   const blocked = await getPublicUsers(db, user.id, blockedIds);
   const config = avatarConfigSchema.safeParse(profile?.avatarConfig);
+  const photo = photoAvatarSchema.safeParse(profile?.avatarConfig);
   const avatar =
-    config.success && (profile?.avatarKind === 'preset' || profile?.avatarKind === 'custom')
-      ? { kind: profile.avatarKind, config: config.data }
-      : null;
+    profile?.avatarKind === 'photo' && photo.success
+      ? { kind: 'photo' as const, attachmentId: photo.data.attachmentId }
+      : config.success && (profile?.avatarKind === 'preset' || profile?.avatarKind === 'custom')
+        ? { kind: profile.avatarKind, config: config.data }
+        : null;
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8">
@@ -48,6 +51,10 @@ export default async function ProfileSettingsPage() {
           Also in settings:{' '}
           <Link href="/settings/sessions" className="font-semibold text-accent underline">
             devices and sessions
+          </Link>
+          ,{' '}
+          <Link href="/app/settings/standing" className="font-semibold text-accent underline">
+            account standing
           </Link>
           .
         </p>
@@ -62,6 +69,7 @@ export default async function ProfileSettingsPage() {
           }}
           bio={profile?.bio ?? ''}
           avatar={avatar}
+          canUpload={user.emailVerified}
           presets={presetGallery(4).map((p) => ({ config: p.config, src: p.dataUri }))}
           builder={avatarBuilder()}
         />

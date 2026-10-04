@@ -1,6 +1,7 @@
 /**
  * Where a browser loads an avatar from. Generated avatars come from our own `/api/avatar`, which
- * renders the saved settings to SVG (no third-party request, D-023); photos from their storage URL.
+ * renders the saved settings to SVG (no third-party request, D-023); photos from our own
+ * `/api/media/<id>`, which serves the stored, re-encoded picture (PROF-08).
  * The settings travel in the URL, so the same avatar is the same URL and is cached for good.
  */
 import type { AvatarConfig, AvatarWire } from '@socketspace/shared/profile';

@@ -3,11 +3,19 @@
  * realtime server for live events and by the web app for history it renders on the server.
  */
 import type { MessageWire } from '@socketspace/shared/events';
+import type { AttachmentWire } from '@socketspace/shared/media';
 
-import type { ReactionSummary } from './queries/message-actions';
+import type { Queryable } from './client';
+import { visibleBody } from './masking';
+import { listAttachments } from './queries/attachments';
+import { listReactions, type ReactionSummary } from './queries/message-actions';
 import type { MessageRow } from './queries/messages';
 
-export function toMessageWire(row: MessageRow, reactions: ReactionSummary[] = []): MessageWire {
+export function toMessageWire(
+  row: MessageRow,
+  reactions: ReactionSummary[] = [],
+  attachments: AttachmentWire[] = [],
+): MessageWire {
   const removed = row.moderationState === 'removed' || row.deletedAt !== null;
   return {
     id: row.id,
@@ -18,7 +26,7 @@ export function toMessageWire(row: MessageRow, reactions: ReactionSummary[] = []
     clientId: row.clientId,
     kind: row.kind,
     // Deleted and removed messages keep their place but never their text.
-    body: removed ? '' : row.body,
+    body: removed ? '' : visibleBody(row),
     replyToId: row.replyToId,
     editedAt: row.editedAt?.toISOString() ?? null,
     deletedAt: row.deletedAt?.toISOString() ?? null,
@@ -27,5 +35,19 @@ export function toMessageWire(row: MessageRow, reactions: ReactionSummary[] = []
     createdAt: row.createdAt.toISOString(),
     // Reaction emoji come from the allow-list (checked before they are stored).
     reactions: removed ? [] : (reactions as MessageWire['reactions']),
+    attachments: removed ? [] : attachments,
   };
+}
+
+/** Messages with their reactions and pictures, in the order given (two queries for any number). */
+export async function loadMessageWires(
+  db: Queryable,
+  rows: readonly MessageRow[],
+): Promise<MessageWire[]> {
+  const ids = rows.map((row) => row.id);
+  const reactions = await listReactions(db, ids);
+  const attachments = await listAttachments(db, ids);
+  return rows.map((row) =>
+    toMessageWire(row, reactions.get(row.id) ?? [], attachments.get(row.id) ?? []),
+  );
 }

@@ -6,16 +6,16 @@ import { cache } from 'react';
 import {
   getPublicUsers,
   getRoomForViewer,
-  listReactions,
   listRecentMessages,
   listRoomMembers,
-  toMessageWire,
+  loadMessageWires,
 } from '@socketspace/db';
 
 import { uuid } from '@socketspace/shared/primitives';
 
 import { Alert, buttonClasses, Card } from '@/components/ui';
 import { getDb } from '@/server/db';
+import { getAccountMute } from '@/server/moderation';
 import { timeLeft } from '@/server/rooms';
 import { requireAppUser } from '@/server/session';
 
@@ -44,9 +44,11 @@ export default async function RoomPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ m?: string | string[] }>;
+  searchParams: Promise<{ m?: string | string[]; from?: string | string[] }>;
 }) {
   const { slug } = await params;
+  // `?from=random`: opened from a room suggestion at the end of a random chat (RAND-09).
+  const fromRandom = (await searchParams).from === 'random';
   // `?m=<message id>` (from search or a notification): the list jumps to that message.
   const focus = uuid.safeParse((await searchParams).m);
   const { user, view } = await loadRoom(slug);
@@ -74,17 +76,15 @@ export default async function RoomPage({
   }
 
   const db = getDb();
-  const [latest, members] = await Promise.all([
+  const [latest, members, accountMute] = await Promise.all([
     // One extra row tells whether older messages exist (loaded on scroll, HIST-02).
     listRecentMessages(db, room.id, { limit: PAGE_SIZE + 1 }),
     listRoomMembers(db, room.id, { limit: 200 }),
+    getAccountMute(db, user.id),
   ]);
   const hasOlder = latest.length > PAGE_SIZE;
   const messages = hasOlder ? latest.slice(1) : latest;
-  const reactions = await listReactions(
-    db,
-    messages.map((m) => m.id),
-  );
+  const initialMessages = await loadMessageWires(db, messages);
   const people = await getPublicUsers(db, user.id, [
     ...new Set([...members.map((m) => m.userId), ...messages.map((m) => m.authorId)]),
   ]);
@@ -108,8 +108,10 @@ export default async function RoomPage({
             }
           : null
       }
+      accountMute={accountMute}
+      fromRandom={fromRandom}
       emailVerified={user.emailVerified}
-      initialMessages={messages.map((m) => toMessageWire(m, reactions.get(m.id) ?? []))}
+      initialMessages={initialMessages}
       hasOlder={hasOlder}
       {...(focus.success ? { focusMessageId: focus.data } : {})}
       initialMembers={members.map((m) => ({

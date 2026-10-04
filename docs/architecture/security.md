@@ -106,10 +106,15 @@ nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Polic
 - File type decided by **magic bytes**, not the file name or the browser's claim.
 - Decoded and re-encoded to WebP with sharp (`limitInputPixels`, metadata dropped, orientation
   applied), which removes EXIF/GPS data and destroys most "polyglot" tricks.
-- Stored under random keys; served from the storage provider's own domain (not ours) with
-  `Content-Type: image/webp` and `nosniff`. Images in private rooms use private storage and
-  short-lived signed URLs.
-- Upload rate limit: 20 per hour per user.
+- Stored under random keys in private storage. Browsers load every picture from our own
+  `/api/media/<id>`, which checks on each request that this viewer may see it, and sends it with
+  `Content-Type: image/webp`, `nosniff` and a policy that allows it nothing if opened as a page.
+  No storage address ever reaches a browser (D-043; this replaced the earlier idea of serving
+  from the storage provider's domain with signed addresses).
+- Upload rate limit: 20 per hour per user, counting refused files. Uploads need a confirmed
+  email address and must come from our own pages (Origin check).
+- A deleted message's pictures can no longer be loaded; a daily clean-up deletes those files and
+  uploads never used within 24 hours.
 
 ### 3.8 Link previews without SSRF
 
@@ -125,6 +130,11 @@ Server-side fetching is risky: a malicious link could make our server request
 5. Extract only title, description and site name (text). No preview images in v2 (each one would
    be another fetch to secure and a tracking pixel for the link's owner).
 6. Results cached for 7 days; never fetched in random mode (links are blocked there).
+7. The browser never names an address to fetch: it names a message, and the server reads the
+   links from that message's own text, only for a viewer who may read it (D-043).
+8. One fetch per link however many people open the message at once (the first request claims
+   the address, the others ask again a moment later), and at most 20 new fetches a minute per
+   person, so a message cannot turn our server into a source of traffic against another site.
 
 ### 3.9 Secrets, supply chain and CI (ASVS V13 "Configuration", V15 "Secure coding and architecture")
 
@@ -183,18 +193,38 @@ Server-side fetching is risky: a malicious link could make our server request
 Every message, user profile, room and random session has "Report" and "Block". Reports capture a
 server-side snapshot as evidence. Reporters are told when their report is resolved.
 
+As built in Stage E1 (D-046): a message, a person (behaviour, profile picture, or name and bio)
+and a room can be reported from the message, the member list, the DM header and the room header.
+The snapshot is taken inside the transaction that stores the report: the message as stored (not
+the masked text), its earlier versions, its pictures and the five messages before and after; the
+profile as that reporter could see it; or the room's name, topic and owners. A reported picture is
+kept until the report is closed. You can report only what you can see, 10 times an hour, and the
+same thing once while it is open. A random chat can be reported during the chat and for 5 minutes
+after it (E2, D-049): the evidence is the realtime server's own record of its last 20 messages.
+Telling the reporter about the outcome comes with the dashboard (E3).
+
 ### 4.2 Word-list filter (baseline, always on)
 
-- A curated list in `packages/shared/moderation/` with categories and **severity**:
+- A curated list in `packages/shared/src/moderation/` (server-side only: it is never part of a
+  browser bundle) with categories and **severity**:
   - _low_ (mild profanity): allowed in community rooms; masked in random mode;
-  - _medium_ (harassment, sexual terms): masked and flagged for review;
+  - _medium_ (harassment, sexual terms, and slurs that are also ordinary words or names
+    somewhere): masked and flagged for review. The text is stored as written and masked on the
+    way out, so the reviewer sees what was said;
   - _high_ (slurs, threats, sexual content involving minors, doxxing patterns): **blocked**, flagged,
     and in random mode the session ends with a 1-hour random-mode timeout.
 - Matching on normalised text: lower-case, Unicode NFKC, homoglyph and "leet-speak" folding
   (`@ → a`, `0 → o`), collapsed repeats (`soooo → so`), and **word boundaries** to avoid the
   "Scunthorpe problem" (blocking innocent words that contain a bad word).
-- Room owners can add their own words to a room-level list (medium severity at most).
 - The list and the normaliser are unit-tested with tricky cases, including false positives.
+- Matching is on whole tokens; spaced-out letters ("s h i t") are read as one word; a few entries
+  match anywhere in a token, with their innocent exceptions listed.
+- At most 20 unreviewed flags an hour are kept per person.
+- **Not built (D-045):** room-level word lists set by room owners, and "doxxing patterns" in
+  community mode (contact details in random mode are refused, see 4.3). Names, bios and room names
+  are not yet checked against the list.
+- In random mode a flag never carries the text (D-049): random-mode text is stored only in a
+  report's evidence.
 
 ### 4.3 Random mode protections
 
@@ -211,12 +241,30 @@ server-side snapshot as evidence. Reporters are told when their report is resolv
   guest account and hashed IP.
 - Ephemeral: no message text stored; minimal metadata kept 30 days; evidence only through reports.
 
+As built in Stage E2 (D-048 to D-050): the gate is checked by the realtime server on every join,
+not only by the page. Links, email addresses, phone numbers (also spelled as words) and usernames
+on other apps are refused with the rule named, including the usual disguises; ordinary sentences
+with a forgotten space after a full stop pass. The automatic pauses are sanctions like any other
+(audit-log entry by the system, reason shown, visible under Account standing). A paused guest is
+also kept out by a keyed hash of their network address for the same time. The anti-harvesting
+pause is 2 minutes after three skips within 3 seconds each. A site-wide mute pauses random mode
+too. The retention job that deletes metadata after 30 days comes with E5; the function it will
+call exists and is tested.
+
 ### 4.4 Moderation (admin dashboard)
 
 Queues for open reports and automatic flags; user search; actions **warn, mute (timed), suspend
 (timed), ban, remove message, restore message, dismiss**; every action requires a reason, notifies
 the affected user with the reason (a "statement of reasons", in the spirit of the EU Digital
 Services Act) and is written to the append-only audit log, which admins can browse and filter.
+
+The sanctions themselves are built (Stage E1, D-047): warning, mute, suspension, ban and
+random-mode timeout, applied only by site administrators (never to themselves or another
+administrator), each in one transaction with its audit entry. They are enforced in three
+independent places: the database refuses a sanctioned person's writes; the realtime server tells
+the person the reason and closes every connection on suspension or ban; and signing in is refused
+with the reason while a suspension or ban is in force. The person finds every decision in force,
+with its reason and end, under Settings > Account standing. The dashboard that applies them is E3.
 
 ### 4.5 Optional AI moderation
 

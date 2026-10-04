@@ -15,6 +15,8 @@ import {
   type Database,
   type Queryable,
 } from '@socketspace/db';
+import type { SanctionKind } from '@socketspace/shared/domain';
+import type { ServerPayload } from '@socketspace/shared/events';
 import { internalEventSchema, type InternalEvent } from '@socketspace/shared/internal-events';
 
 import { describeError } from './handlers/define';
@@ -22,6 +24,7 @@ import { sendPresenceSnapshot } from './handlers/presence';
 import type { Logger } from './logger';
 import type { Metrics } from './metrics';
 import type { PresenceTracker } from './presence';
+import type { RandomManager } from './random/manager';
 import { rooms, type IoServer } from './types';
 
 export interface InternalEventDeps {
@@ -29,7 +32,18 @@ export interface InternalEventDeps {
   db: Queryable;
   /** When given, profile changes also update invisible mode (PROF-02). */
   presence?: PresenceTracker;
+  /** When given, sanctions and blocks also reach random mode (RAND-04, RAND-05). */
+  random?: RandomManager | null;
 }
+
+/** How each sanction is named in the notice the person receives. */
+const SANCTION_NOTICE = {
+  warn: 'warned',
+  mute: 'muted',
+  suspend: 'suspended',
+  ban: 'banned',
+  random_timeout: 'random_timeout',
+} as const satisfies Record<SanctionKind, ServerPayload<'moderation:notice'>['kind']>;
 
 /** Disconnects every socket in a room after telling it why. Works across instances with Redis. */
 async function endSockets(
@@ -75,27 +89,34 @@ export async function applyInternalEvent(
       await endSockets(io, rooms.user(event.userId), 'deleted');
       return;
     case 'user.sanctioned': {
-      const until = event.until;
-      const notice = { reason: event.reason, until };
+      // The person is told what happened and why (ADMIN-03). Mutes are enforced on every send
+      // by the database, so there is nothing to remember here.
+      io.in(rooms.user(event.userId)).emit('moderation:notice', {
+        kind: SANCTION_NOTICE[event.kind],
+        reason: event.reason,
+        until: event.until,
+      });
+      // Anything but a warning also stops random mode: out of the queue, chat ended.
+      if (event.kind !== 'warn') deps.random?.removeUser(event.userId);
       if (event.kind === 'suspend' || event.kind === 'ban') {
-        io.in(rooms.user(event.userId)).emit('moderation:notice', {
-          kind: event.kind === 'ban' ? 'banned' : 'suspended',
-          ...notice,
-        });
         await endSockets(
           io,
           rooms.user(event.userId),
           event.kind === 'ban' ? 'banned' : 'suspended',
         );
-      } else {
-        // Mutes are enforced on every send by the database; here the person is just told.
-        io.in(rooms.user(event.userId)).emit('moderation:notice', {
-          kind: event.kind === 'mute' ? 'muted' : 'warned',
-          ...notice,
-        });
       }
       return;
     }
+    case 'user.unsanctioned':
+      // After a suspension or ban the person has no open connection to tell.
+      if (event.kind === 'mute' || event.kind === 'random_timeout') {
+        io.in(rooms.user(event.userId)).emit('moderation:notice', {
+          kind: event.kind === 'mute' ? 'unmuted' : 'random_timeout_lifted',
+          reason: '',
+          until: null,
+        });
+      }
+      return;
     case 'user.updated': {
       const [person] = await getPersonRows(db, [event.userId]);
       if (!person) return;
@@ -207,6 +228,8 @@ export async function applyInternalEvent(
       return;
     }
     case 'block.created': {
+      // They leave any random chat with each other and are not matched again (RAND-04).
+      deps.random?.blockCreated(event.blockerId, event.blockedId);
       // Their DM can no longer be written to: both people's pages re-read it (SAFE-01).
       const dmId = await findDmBetween(db, event.blockerId, event.blockedId);
       if (!dmId) return;
@@ -219,8 +242,7 @@ export async function applyInternalEvent(
       }
       return;
     }
-    // Handled from Stage E onwards (lifting sanctions, moderation broadcasts, random-mode blocks).
-    case 'user.unsanctioned':
+    // Handled with the moderation dashboard (Stage E3): a moderator removed or restored a message.
     case 'message.moderated':
       return;
   }
@@ -261,6 +283,7 @@ export class OutboxDrainer {
       logger: Logger;
       metrics: Metrics;
       presence?: PresenceTracker;
+      random?: RandomManager | null;
     },
     private readonly minIntervalMs = 10_000,
   ) {}

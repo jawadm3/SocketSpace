@@ -34,6 +34,7 @@ export const CLIENT_EVENTS = {
   'random:block': { payload: r.randomSessionSchema, ack: c.emptyAckSchema },
   'random:offer': { payload: r.randomOfferSchema, ack: c.emptyAckSchema },
   'random:accept': { payload: r.randomOfferSchema, ack: c.emptyAckSchema },
+  'random:resume': { payload: r.randomSessionSchema, ack: r.randomResumeAckSchema },
 } as const satisfies Record<string, { payload: z.ZodType; ack: z.ZodType | null }>;
 
 export const SERVER_EVENTS = {

@@ -355,7 +355,7 @@ export interface PublicRoom extends RoomSummary {
 }
 
 /** `%` and `_` are wildcards in LIKE patterns; searching for them literally needs escaping. */
-function likePattern(query: string): string {
+export function likePattern(query: string): string {
   return `%${query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 

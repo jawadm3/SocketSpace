@@ -35,6 +35,7 @@ import {
   useLayoutEffect,
   useReducer,
   useRef,
+  useState,
   type ReactNode,
 } from 'react';
 
@@ -46,11 +47,16 @@ import type {
   MessageWire,
 } from '@socketspace/shared/events';
 import type { ReactionEmoji } from '@socketspace/shared/emoji';
+import type { AttachmentWire } from '@socketspace/shared/media';
 import type { PublicUser } from '@socketspace/shared/profile';
 
 import { connectRealtime, TokenRequestError, type RealtimeSocket } from '@/lib/realtime-client';
 
-import { describeNotification, showBrowserNotification } from './notifications';
+import {
+  describeModerationNotice,
+  describeNotification,
+  showBrowserNotification,
+} from './notifications';
 import {
   chatReducer,
   conversationsWithGaps,
@@ -69,7 +75,17 @@ export type MemberEvent =
 interface ChatContextValue {
   state: ChatState;
   me: PublicUser;
-  send: (conversationId: string, body: string, replyToId?: string) => void;
+  /** The live connection, for pages with events of their own (random chat); null until open. */
+  socket: RealtimeSocket | null;
+  /** False when random chat is switched off (RAND-11): its link is hidden. */
+  randomEnabled: boolean;
+  /** `attachments`: pictures already uploaded (the body may then be empty). */
+  send: (
+    conversationId: string,
+    body: string,
+    replyToId?: string,
+    attachments?: AttachmentWire[],
+  ) => void;
   retry: (clientId: string) => void;
   dismiss: (clientId: string) => void;
   /** Resolves `true` once the server stored the edit. */
@@ -148,6 +164,7 @@ export function ChatProvider({
   unread,
   blocked,
   notificationsUnread,
+  randomEnabled = false,
   children,
 }: {
   me: PublicUser;
@@ -158,9 +175,11 @@ export function ChatProvider({
   unread: Record<string, number>;
   blocked: string[];
   notificationsUnread: number;
+  randomEnabled?: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
+  const [liveSocket, setLiveSocket] = useState<RealtimeSocket | null>(null);
   const [state, dispatch] = useReducer(chatReducer, undefined, () =>
     initialChatState(rooms, [me, ...people], {
       meId: me.id,
@@ -356,6 +375,9 @@ export function ChatProvider({
             clientId: item.clientId,
             body: item.body,
             ...(item.replyToId ? { replyToId: item.replyToId } : {}),
+            ...(item.attachments?.length
+              ? { attachmentIds: item.attachments.map((a) => a.id) }
+              : {}),
           })
           .then(
             (ack: Ack<AckData<'message:send'>>) => {
@@ -402,6 +424,7 @@ export function ChatProvider({
           conversationId: item.conversationId,
           body: item.body,
           ...(item.replyToId ? { replyToId: item.replyToId } : {}),
+          ...(item.attachments?.length ? { attachments: item.attachments } : {}),
         },
       });
       if (item.failed)
@@ -450,6 +473,7 @@ export function ChatProvider({
       }
       socket = connected;
       socketRef.current = connected;
+      setLiveSocket(connected);
 
       connected.on('server:hello', () => {
         dispatch({ type: 'status', status: 'connected' });
@@ -585,8 +609,23 @@ export function ChatProvider({
         router.refresh();
       });
       connected.on('moderation:notice', ({ kind, reason, until }) => {
-        const when = until ? ` until ${new Date(until).toLocaleString()}` : '';
-        notifyError(`Your account was ${kind}${when}: ${reason}`);
+        const lifted = kind === 'unmuted' || kind === 'random_timeout_lifted';
+        dispatch({
+          type: 'notice',
+          notice: {
+            id: noticeId(),
+            tone: lifted ? 'info' : 'error',
+            text: describeModerationNotice(
+              kind,
+              reason,
+              until ? new Date(until).toLocaleString() : null,
+            ),
+          },
+        });
+        // A sanction also left a notification with the reason (the bell counts it).
+        if (!lifted) dispatch({ type: 'notification' });
+        // Pages re-read what this person may do now (for example the mute banner).
+        router.refresh();
       });
     };
     start();
@@ -618,6 +657,7 @@ export function ChatProvider({
       window.removeEventListener('online', onOnline);
       if (retryTimer) clearTimeout(retryTimer);
       socketRef.current = null;
+      setLiveSocket(null);
       socket?.close();
     };
   }, [confirmDelivery, ensureUsers, me.id, notifyError, reportPresence, resync, router]);
@@ -728,13 +768,22 @@ export function ChatProvider({
     typingThrottle.current?.stopped(conversationId);
   }, []);
 
-  const send = useCallback((conversationId: string, body: string, replyToId?: string) => {
-    const clientId = crypto.randomUUID();
-    const pending = { clientId, conversationId, body, ...(replyToId ? { replyToId } : {}) };
-    dispatch({ type: 'pending-added', pending });
-    typingThrottle.current?.stopped(conversationId);
-    outboxRef.current?.add(pending);
-  }, []);
+  const send = useCallback(
+    (conversationId: string, body: string, replyToId?: string, attachments?: AttachmentWire[]) => {
+      const clientId = crypto.randomUUID();
+      const pending = {
+        clientId,
+        conversationId,
+        body,
+        ...(replyToId ? { replyToId } : {}),
+        ...(attachments?.length ? { attachments } : {}),
+      };
+      dispatch({ type: 'pending-added', pending });
+      typingThrottle.current?.stopped(conversationId);
+      outboxRef.current?.add(pending);
+    },
+    [],
+  );
 
   const retry = useCallback((clientId: string) => {
     dispatch({ type: 'pending-retried', clientId });
@@ -862,6 +911,8 @@ export function ChatProvider({
     () => ({
       state,
       me,
+      socket: liveSocket,
+      randomEnabled,
       send,
       retry,
       dismiss,
@@ -884,6 +935,8 @@ export function ChatProvider({
     [
       state,
       me,
+      liveSocket,
+      randomEnabled,
       send,
       retry,
       dismiss,

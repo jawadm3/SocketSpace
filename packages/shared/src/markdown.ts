@@ -256,6 +256,20 @@ export function extractMentions(body: string, limit = 20): string[] {
   return [...found];
 }
 
+/** Link addresses in a body (unique, in order, at most `limit`), ignoring code. */
+export function extractLinks(body: string, limit = 3): string[] {
+  const found = new Set<string>();
+  const walk = (nodes: Inline[]) => {
+    for (const node of nodes) {
+      if (found.size >= limit) return;
+      if (node.t === 'link') found.add(node.href);
+      else if ('c' in node) walk(node.c);
+    }
+  };
+  for (const block of parseMarkdownLite(body)) if (block.t !== 'codeblock') walk(block.c);
+  return [...found];
+}
+
 /** The plain text of a body, for quotes, notifications and search snippets. */
 export function plainText(body: string): string {
   const parts: string[] = [];

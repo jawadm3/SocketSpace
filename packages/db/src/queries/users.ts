@@ -8,6 +8,7 @@ import { dbNow } from '../clock';
 import { isUniqueViolation } from '../errors';
 import { session, user } from '../schema/auth';
 import { userSanction } from '../schema/safety';
+import { claimAvatarPhoto, photoAttachmentId, releaseAvatarPhoto } from './attachments';
 
 export interface ConnectionProfile {
   id: string;
@@ -49,6 +50,7 @@ export interface ActiveSanction {
   kind: 'warn' | 'mute' | 'suspend' | 'ban' | 'random_timeout';
   scope: 'global' | 'random';
   reason: string;
+  startsAt: Date;
   expiresAt: Date | null;
 }
 
@@ -65,6 +67,7 @@ export async function getActiveSanctions(
       kind: userSanction.kind,
       scope: userSanction.scope,
       reason: userSanction.reason,
+      startsAt: userSanction.startsAt,
       expiresAt: userSanction.expiresAt,
     })
     .from(userSanction)
@@ -119,35 +122,50 @@ export interface OnboardingInput {
   now?: Date;
 }
 
-export type OnboardingResult = { ok: true } | { ok: false; reason: 'nickname_taken' | 'not_found' };
+export type OnboardingResult =
+  { ok: true } | { ok: false; reason: 'nickname_taken' | 'not_found' | 'avatar_invalid' };
 
 /**
  * Saves the nickname and avatar and marks onboarding complete. The case-insensitive unique index
  * on the nickname decides races: if two people claim the same nickname at once, one gets
- * `nickname_taken`.
+ * `nickname_taken`. A photo avatar must be the person's own unused upload (`avatar_invalid`
+ * otherwise).
  */
 export async function completeOnboarding(
-  db: Queryable,
+  db: Database,
   userId: string,
   input: OnboardingInput,
 ): Promise<OnboardingResult> {
   try {
-    const updated = await db
-      .update(user)
-      .set({
-        nickname: input.nickname,
-        avatarKind: input.avatarKind,
-        avatarConfig: input.avatarConfig,
-        ...(input.names && {
-          name: input.names.realName,
-          realNameVisibility: input.names.realNameVisibility,
-          nameDisplay: input.names.nameDisplay,
-        }),
-        onboardedAt: input.now ?? sql`now()`,
-      })
-      .where(eq(user.id, userId))
-      .returning({ id: user.id });
-    return updated.length > 0 ? { ok: true } : { ok: false, reason: 'not_found' };
+    return await db.transaction(async (tx) => {
+      const [before] = await tx
+        .select({ avatarConfig: user.avatarConfig })
+        .from(user)
+        .where(eq(user.id, userId))
+        .for('update');
+      if (!before) return { ok: false, reason: 'not_found' } as const;
+      if (input.avatarKind === 'photo') {
+        const photo = photoAttachmentId(input.avatarConfig);
+        if (!photo || !(await claimAvatarPhoto(tx, userId, photo, before.avatarConfig))) {
+          return { ok: false, reason: 'avatar_invalid' } as const;
+        }
+      }
+      await tx
+        .update(user)
+        .set({
+          nickname: input.nickname,
+          avatarKind: input.avatarKind,
+          avatarConfig: input.avatarConfig,
+          ...(input.names && {
+            name: input.names.realName,
+            realNameVisibility: input.names.realNameVisibility,
+            nameDisplay: input.names.nameDisplay,
+          }),
+          onboardedAt: input.now ?? sql`now()`,
+        })
+        .where(eq(user.id, userId));
+      return { ok: true } as const;
+    });
   } catch (error) {
     if (isNicknameConflict(error)) return { ok: false, reason: 'nickname_taken' };
     throw error;
@@ -167,7 +185,7 @@ export interface ProfileInput extends NameChoices {
 
 export type ProfileResult =
   | { ok: true; publicChanged: boolean }
-  | { ok: false; reason: 'nickname_taken' | 'not_found' | 'not_onboarded' };
+  | { ok: false; reason: 'nickname_taken' | 'not_found' | 'not_onboarded' | 'avatar_invalid' };
 
 /**
  * Saves profile settings (PROF-01). `publicChanged` says whether what everyone sees (nickname or
@@ -192,6 +210,15 @@ export async function updateProfile(
         .for('update');
       if (!before) return { ok: false, reason: 'not_found' } as const;
       if (!before.onboardedAt) return { ok: false, reason: 'not_onboarded' } as const;
+      if (input.avatar?.kind === 'photo') {
+        const photo = photoAttachmentId(input.avatar.config);
+        if (!photo || !(await claimAvatarPhoto(tx, userId, photo, before.avatarConfig))) {
+          return { ok: false, reason: 'avatar_invalid' } as const;
+        }
+      } else if (input.avatar && before.avatarKind === 'photo') {
+        // A generated picture replaces the photo: the stored photo is no longer needed.
+        await releaseAvatarPhoto(tx, userId, before.avatarConfig);
+      }
       await tx
         .update(user)
         .set({
