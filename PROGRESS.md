@@ -1,6 +1,6 @@
 # PROGRESS
 
-_Last updated: 2026-10-03, session 6 on the `continuation` branch (Stage E1 done; E2 next)._
+_Last updated: 2026-10-04, session 7 on the `continuation` branch (Stage E2: server side done and pushed; the web pages are next)._
 
 ## Current stage
 
@@ -203,6 +203,26 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
     taller than the screen.
   - Requirements matrix: 89 Done (one "to be kept current"), 35 In progress, 53 Planned of 177.
 
+- **E2 random mode, server side** (session 7, `continuation` branch; `d43c219`):
+  - Shared: the 18+ rules with a version (`packages/shared/src/random.ts`), random-mode limits
+    and rate limits, a new event `random:resume`, and a detector for links and contact details
+    (`packages/shared/src/moderation/contact.ts`: emails, phone numbers also spelled as words,
+    usernames on other apps, "example dot com" and similar disguises; 26 ordinary sentences pass).
+  - Database (`packages/db/src/queries/random.ts`): gate record, `random_session` metadata
+    without text, reports with the realtime server's record of the chat as evidence, automatic
+    timeouts through the sanction model (`applyAutomaticRandomTimeout`; guests also by hashed
+    network address in `network_ban`), contacts both people agreed to, room suggestions,
+    aggregate daily counters, deletion of metadata after 30 days. No migration was needed.
+  - Realtime (`apps/realtime/src/random/`, `handlers/random.ts`): queue and matcher in memory
+    (shared interests first; anyone once both have waited 10 seconds or named no interests; never
+    blocked pairs, never the same pair within 10 minutes), relay with the strict filter, evidence
+    buffer of 20 messages kept 5 minutes after a chat, skip, end, report, block (guests: in
+    memory), share profile and add contact only when both ask, 15-second reconnect grace,
+    10-minute silence ending, 2-minute pause after three skips within seconds, kill switch
+    `RANDOM_MODE_ENABLED`, metrics.
+  - Not yet built: every web page of random mode, the guest entry, the E2E journey J7, and the
+    documents (decisions, step log, matrix, glossary, protocol).
+
 ## Verified (with evidence)
 
 | What                                                                        | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -240,7 +260,7 @@ All additions are logged in `docs/BRIEF_CHANGES.md`.
 
 ## In progress
 
-- Nothing. E1 is complete; nothing is half-edited.
+- **E2, web side** (session 7). The server side is committed and pushed; nothing is half-edited.
 
 ## Known problems and things waiting for the owner
 
@@ -298,33 +318,32 @@ reversible on GitHub. Any new alert in v1's lockfile would need the same treatme
 
 ## Exact next step
 
-**First, look at CI for the last E1 push** (`077f332` and the commit after it): run 37149777766
-(CI) and its CodeQL run were still running when session 6 ended. The earlier E1 push (`8efd3b6`,
-the server side) was green: CI run 37148486767 and CodeQL run 37148486763. If the later run
-failed, fix that before anything else.
+**CI for the last E1 push was green** (CI run 37149805786 and CodeQL run 37149805782 on
+`4d31dc6`; run 37149777766 was cancelled by CI when that newer push arrived). **Look at the CI
+run of `d43c219`** (E2 server side) and of anything pushed after it.
 
-Stage E, **E2: random mode** (plan.md; requirements RAND-01 to RAND-11; journey J7 in
-`qa/acceptance_criteria.md`; protocol in `docs/architecture/realtime-protocol.md`, "Events:
-random-match mode"; the contracts already exist in `packages/shared/src/events/random.ts`):
+Stage E, **E2: random mode, the web side** (the server side is done, see "Done"). What remains:
 
-1. **Gate and kill switch** (RAND-02, RAND-11): the 18+ confirmation and random-mode rules,
-   versioned (a new version asks again); `RANDOM_MODE_ENABLED=false` hides and refuses the mode.
-   Guests may enter (RAND-10, D-025) with half the message rate and no contact exchange.
-2. **Queue, matcher and relay** in the realtime server's memory (RAND-03, RAND-04, RAND-07):
-   shared interest tags first, anyone after 10 seconds; never two people where one blocked the
-   other, never the same pair within 10 minutes; `random_session` rows hold metadata only; the
-   last 20 messages of a session stay in memory for reports ("evidence buffer") and are dropped
-   5 minutes after it ends.
-3. **Safety in the relay** (RAND-01, RAND-05, RAND-06): `moderateText(text, 'random')` from E1
-   (low and medium masked, high blocked and the session ends), no links and no contact details,
-   `random:report` storing the evidence buffer as a report (`target_type = 'random_session'`; a
-   new function next to `createReport`), `random:block`, and automatic timeouts through
-   `applySanction` with `actor: { type: 'system' }` (1 hour after a high-severity hit, 24 hours
-   after 3 reports from different people in 24 hours), announced with the same
-   `user.sanctioned` handling the realtime server already has (it must also remove the person
-   from the queue and end their session).
-4. **Offers and the way into the community** (RAND-08, RAND-09): share profile or add contact only
-   after both accept; room suggestions at the end; aggregate counts in `metric_daily`.
+1. **Web pages** (`apps/web`): `RANDOM_MODE_ENABLED` is already in the web env schema. Build:
+   a server action that records the gate (`acceptRandomGate(db, userId, RANDOM_RULES_VERSION)`,
+   refused when the switch is off); `/app/random` for signed-in people (gate, lobby with
+   interests and the pause notice from `getRandomPause`, searching, chat, end screen with the
+   suggested rooms) using the app shell's socket; `/random` for guests (Better Auth anonymous
+   sign-in, then the same gate and chat with its own connection); a "Random chat" link in the
+   sidebar, hidden when the switch is off. The client state belongs in a pure reducer with tests
+   (like `lib/chat/state.ts`). Events and acknowledgement shapes: `packages/shared/src/events/
+random.ts`; on reconnect send `random:resume`; the end screen's "New chat" sends
+   `random:join`; `random:next` is for skipping a live chat.
+2. **Counters from the web side** (RAND-09): `bumpMetric(db, 'random_room_cta_clicked')` when a
+   suggested room is opened and `'room_joined_after_random'` when it is then joined.
+3. **E2E journey J7** (`qa/acceptance_criteria.md`), including a guest.
+4. **Documents:** decisions (next free number is D-048; mark them "(continuation, needs owner
+   review)"): the matcher's "both open" rule, flags without text in random mode, IP hash keyed
+   with `INTERNAL_EVENTS_SECRET`, mute also pausing random mode, block ending with reason
+   `end`, offers only during a live chat, the new `random:resume` event, one realtime instance
+   assumed for random mode. Also: `realtime-protocol.md` (new event, wire reasons, limits),
+   `security.md` 4.3, `data-model.md` (evidence shape, flags), the step log, the matrix
+   (RAND-01 to RAND-11, SAFE-01, SEC-02, TEST-02), the glossary and the changelog.
 5. Then E3 (moderation dashboard: queues for `report` and `content_flag`, the actions calling
    `sanctionUser` / `liftUserSanction`, message removal and restore through the
    `message.moderated` event, an admin-only view of pictures kept as evidence, how the first
