@@ -324,7 +324,7 @@ describe('random mode (main)', () => {
 
       const notice = await told;
       expect(notice.kind).toBe('random_timeout');
-      expect(notice.reason).toContain('1 hour');
+      expect(notice.reason).toContain('words that are not allowed');
       const left = Date.parse(notice.until ?? '') - Date.now();
       expect(left).toBeGreaterThan(3500_000);
       expect(left).toBeLessThanOrEqual(3600_000);
@@ -546,7 +546,7 @@ describe('random mode (main)', () => {
       }
       const notice = await told;
       expect(notice.kind).toBe('random_timeout');
-      expect(notice.reason).toContain('24 hours');
+      expect(notice.reason).toContain('Three different people reported');
       const left = Date.parse(notice.until ?? '') - Date.now();
       expect(left).toBeGreaterThan(23.9 * 3600_000);
       expect(left).toBeLessThanOrEqual(24 * 3600_000);

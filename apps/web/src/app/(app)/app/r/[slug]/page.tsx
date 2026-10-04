@@ -44,9 +44,11 @@ export default async function RoomPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ m?: string | string[] }>;
+  searchParams: Promise<{ m?: string | string[]; from?: string | string[] }>;
 }) {
   const { slug } = await params;
+  // `?from=random`: opened from a room suggestion at the end of a random chat (RAND-09).
+  const fromRandom = (await searchParams).from === 'random';
   // `?m=<message id>` (from search or a notification): the list jumps to that message.
   const focus = uuid.safeParse((await searchParams).m);
   const { user, view } = await loadRoom(slug);
@@ -107,6 +109,7 @@ export default async function RoomPage({
           : null
       }
       accountMute={accountMute}
+      fromRandom={fromRandom}
       emailVerified={user.emailVerified}
       initialMessages={initialMessages}
       hasOlder={hasOlder}

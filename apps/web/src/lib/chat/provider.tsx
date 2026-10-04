@@ -35,6 +35,7 @@ import {
   useLayoutEffect,
   useReducer,
   useRef,
+  useState,
   type ReactNode,
 } from 'react';
 
@@ -74,6 +75,10 @@ export type MemberEvent =
 interface ChatContextValue {
   state: ChatState;
   me: PublicUser;
+  /** The live connection, for pages with events of their own (random chat); null until open. */
+  socket: RealtimeSocket | null;
+  /** False when random chat is switched off (RAND-11): its link is hidden. */
+  randomEnabled: boolean;
   /** `attachments`: pictures already uploaded (the body may then be empty). */
   send: (
     conversationId: string,
@@ -159,6 +164,7 @@ export function ChatProvider({
   unread,
   blocked,
   notificationsUnread,
+  randomEnabled = false,
   children,
 }: {
   me: PublicUser;
@@ -169,9 +175,11 @@ export function ChatProvider({
   unread: Record<string, number>;
   blocked: string[];
   notificationsUnread: number;
+  randomEnabled?: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
+  const [liveSocket, setLiveSocket] = useState<RealtimeSocket | null>(null);
   const [state, dispatch] = useReducer(chatReducer, undefined, () =>
     initialChatState(rooms, [me, ...people], {
       meId: me.id,
@@ -465,6 +473,7 @@ export function ChatProvider({
       }
       socket = connected;
       socketRef.current = connected;
+      setLiveSocket(connected);
 
       connected.on('server:hello', () => {
         dispatch({ type: 'status', status: 'connected' });
@@ -648,6 +657,7 @@ export function ChatProvider({
       window.removeEventListener('online', onOnline);
       if (retryTimer) clearTimeout(retryTimer);
       socketRef.current = null;
+      setLiveSocket(null);
       socket?.close();
     };
   }, [confirmDelivery, ensureUsers, me.id, notifyError, reportPresence, resync, router]);
@@ -901,6 +911,8 @@ export function ChatProvider({
     () => ({
       state,
       me,
+      socket: liveSocket,
+      randomEnabled,
       send,
       retry,
       dismiss,
@@ -923,6 +935,8 @@ export function ChatProvider({
     [
       state,
       me,
+      liveSocket,
+      randomEnabled,
       send,
       retry,
       dismiss,

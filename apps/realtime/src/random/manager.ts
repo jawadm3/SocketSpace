@@ -501,11 +501,11 @@ export class RandomManager {
   private async suggest(session: Session, to: Participant): Promise<void> {
     if (this.stopped) return;
     try {
-      const rooms = await suggestRoomsForInterests(this.deps.db, {
+      const suggested = await suggestRoomsForInterests(this.deps.db, {
         interests: session.sharedInterests.length > 0 ? session.sharedInterests : to.interests,
         viewerId: to.userId,
       });
-      this.send(to, 'random:suggestion', { rooms });
+      this.send(to, 'random:suggestion', { rooms: suggested });
     } catch (error) {
       this.logFailure('room suggestions not sent')(error);
     }

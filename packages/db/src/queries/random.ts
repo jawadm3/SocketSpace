@@ -400,10 +400,9 @@ export type AutomaticTimeoutCause = 'filter' | 'reports';
 
 /** What the person is told (the "statement of reasons" of an automatic decision). */
 export const AUTOMATIC_TIMEOUT_REASON: Record<AutomaticTimeoutCause, string> = {
-  filter:
-    'A message you sent in random chat contained words that are not allowed. Random chat is paused for you for 1 hour.',
+  filter: 'A message you sent in random chat contained words that are not allowed.',
   reports:
-    'Three different people reported your random chats within 24 hours. Random chat is paused for you for 24 hours while a moderator looks at the reports.',
+    'Three different people reported your random chats within 24 hours. A moderator will look at the reports.',
 };
 
 const AUTOMATIC_TIMEOUT_SECONDS: Record<AutomaticTimeoutCause, number> = {

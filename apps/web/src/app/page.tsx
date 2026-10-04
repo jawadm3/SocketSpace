@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { buttonClasses } from '@/components/ui';
+import { getWebEnv } from '@/server/env';
 
 /** Placeholder home page. The animated home page is built in Stage F (HOME-01 to HOME-05). */
 export default function HomePage() {
@@ -25,6 +26,11 @@ export default function HomePage() {
           <Link href="/sign-in" className={buttonClasses('secondary', 'text-base')}>
             Sign in
           </Link>
+          {getWebEnv().RANDOM_MODE_ENABLED ? (
+            <Link href="/random" className={buttonClasses('ghost', 'text-base underline')}>
+              Try random chat as a guest (18+)
+            </Link>
+          ) : null}
         </div>
       </main>
     </div>

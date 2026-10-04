@@ -336,6 +336,7 @@ export function RoomView({
   room,
   membership,
   accountMute = null,
+  fromRandom = false,
   emailVerified,
   initialMessages,
   initialMembers,
@@ -348,6 +349,8 @@ export function RoomView({
   membership: { role: Role; mutedUntil: string | null } | null;
   /** A site moderator muted the whole account (ADMIN-03): until when, and why. */
   accountMute?: { until: string; reason: string } | null;
+  /** The room was opened from a suggestion after a random chat; joining it is counted (RAND-09). */
+  fromRandom?: boolean;
   emailVerified: boolean;
   initialMessages: MessageWire[];
   initialMembers: MemberEntry[];
@@ -537,6 +540,7 @@ export function RoomView({
         <form action={joinRoomAction} className="flex flex-wrap items-center justify-between gap-3">
           <span>You are looking at this room. Join it to chat.</span>
           <input type="hidden" name="conversationId" value={room.id} />
+          {fromRandom ? <input type="hidden" name="from" value="random" /> : null}
           <Button type="submit">Join #{name}</Button>
         </form>
       </CannotPost>

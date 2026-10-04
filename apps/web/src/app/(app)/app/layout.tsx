@@ -15,6 +15,7 @@ import {
 
 import { ChatProvider } from '@/lib/chat/provider';
 import { getDb } from '@/server/db';
+import { getWebEnv } from '@/server/env';
 import { requireAppUser } from '@/server/session';
 
 import { ConnectionBanner, MobileBar, Notices, Sidebar } from './shell';
@@ -53,6 +54,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       unread={Object.fromEntries(unread)}
       blocked={blocked}
       notificationsUnread={notificationsUnread}
+      randomEnabled={getWebEnv().RANDOM_MODE_ENABLED}
     >
       <div className="flex h-dvh">
         <Sidebar />

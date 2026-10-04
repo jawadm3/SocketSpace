@@ -9,6 +9,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import {
+  bumpMetric,
   inviteCreate,
   inviteRedeem,
   inviteRevoke,
@@ -129,6 +130,10 @@ export async function joinRoomAction(form: FormData): Promise<void> {
       userId: actor,
       role: 'member',
     });
+    // The path from a random chat into the community, as an aggregate count only (RAND-09).
+    if (formText(form, 'from') === 'random') {
+      await bumpMetric(getDb(), 'room_joined_after_random');
+    }
   }
   refreshApp();
   redirect(`/app/r/${result.room.slug}`);
