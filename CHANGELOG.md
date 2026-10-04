@@ -17,6 +17,21 @@ v2 is being built in stages (A to I, see `docs/development/plan.md`). It will be
 
 ### Added
 
+- **Stage E2 (random mode), 2026-10-04** (on the `continuation` branch)
+  - Random chat: an optional, text-only way to talk to someone new, for adults. An 18+ gate with
+    versioned rules; interests that pair people who share one, and anyone after 10 seconds;
+    "Stranger" until both agree to share profiles or add each other as contacts.
+  - Safety: links, email addresses, phone numbers and usernames on other apps are refused; the
+    strict word filter masks, or blocks and ends the chat; skip, end, report and block at any
+    time; a report carries the server's own record of the chat's last 20 messages; random chat
+    is paused automatically for 1 hour after a blocked message and for 24 hours after reports
+    from three different people.
+  - Chats are relayed, not stored: the database keeps metadata only, and no chat text outside a
+    report.
+  - Guests can use random chat without an account, with stricter limits.
+  - Room suggestions when a chat ends, and aggregate counters without user IDs.
+  - A kill switch: `RANDOM_MODE_ENABLED=false` turns the whole mode off.
+
 - **Stage E (random mode and safety), in progress**
   - E1 safety core: a word-list filter that undoes disguised spellings and matches whole words
     (mild words allowed in rooms, harsher ones masked and flagged, the worst not sent);

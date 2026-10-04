@@ -193,6 +193,9 @@ A profile photo is an attached row with no message; the profile's `avatar_config
 - The live queue, the pairing and the last 20 messages of each live session (the "evidence
   buffer") exist **only in the realtime server's memory**. If someone reports within 5 minutes of
   the session ending, the server copies that buffer into the report; otherwise it is discarded.
+- The 18+ gate is recorded on the account: `adult_confirmed_at` (kept from the first
+  confirmation), `random_terms_version` and `random_terms_accepted_at` (the rules version in
+  force is in `packages/shared/src/random.ts`).
 
 ### Trust and safety
 
@@ -202,14 +205,17 @@ A profile photo is an attached row with no message; the profile's `avatar_config
   `details` (up to 1,000 characters), `evidence` (JSON snapshot taken **by the server**, not
   supplied by the reporter), `status` (`open`, `in_review`, `actioned`, `dismissed`),
   `assigned_to`, `resolution_note`, `created_at`, `resolved_at`. The evidence has a version
-  number and one of three shapes (message with revisions and context, profile as the reporter
-  saw it with the reported aspect, room), plus `attachmentIds`: stored pictures that the clean-up
-  job keeps while the report is open (D-046).
+  number and one of four shapes (message with revisions and context, profile as the reporter
+  saw it with the reported aspect, room, or a random chat: its metadata and its last 20 messages
+  as written, each with who sent it, when, and whether it was delivered; D-049), plus
+  `attachmentIds`: stored pictures that the clean-up job keeps while the report is open (D-046).
 - **`content_flag`**: automatic flags from the word list or AI: `source`, `severity` (`low`,
   `medium`, `high`), `categories`, `message_id` or `random_session_id`, `excerpt` (the flagged
   message only, at most 500 characters), `user_id`, `reviewed_by`, `reviewed_at`, `outcome`. A
   blocked (high-severity) attempt has no `message_id`, because nothing was stored. At most 20
-  unreviewed word-list flags an hour are kept per person (D-045).
+  unreviewed word-list flags an hour are kept per person (D-045). A flag from random mode names
+  the `random_session_id` and has an empty `excerpt`: random-mode text is never stored outside
+  a report (D-049).
 - **`moderation_action`**: the audit log. `actor_id`, `action` (`warn`, `mute`, `unmute`,
   `suspend`, `unsuspend`, `ban`, `unban`, `remove_message`, `restore_message`, `resolve_report`,
   `dismiss_report`, `role_change`, `room_ban`, plus `room_unban`, `room_remove`, `room_delete`
@@ -224,6 +230,7 @@ A profile photo is an attached row with no message; the profile's `avatar_config
   in force; these rows are the source of truth (D-047).
 - **`network_ban`**: `ip_hash` (HMAC of the IP address with a secret key, so raw IPs are never
   stored), `reason`, `expires_at` (at most 90 days). Used for guests and repeat offenders.
+  Stage E2 writes one when a guest's random mode is paused, for the same time (D-049).
 
 ### Operations
 
@@ -234,8 +241,9 @@ A profile photo is an attached row with no message; the profile's `avatar_config
   (at most every 10 seconds) while it is already handling database work. **Never on an idle timer**,
   so idle connections do not keep the database awake (see the Neon maths in the research doc).
 - **`metric_daily`**: privacy-respecting aggregate counts only (`day`, `name`, `value`), for example
-  `random_sessions_started`, `random_mutual_contact_added`, `random_room_cta_clicked`,
-  `room_joined_after_random`. No user IDs.
+  `random_sessions_started`, `random_reports`, `random_profile_shared`,
+  `random_mutual_contact_added`, `random_room_cta_clicked`, `room_joined_after_random`. No user
+  IDs.
 
 ## Retention
 

@@ -199,8 +199,9 @@ The snapshot is taken inside the transaction that stores the report: the message
 the masked text), its earlier versions, its pictures and the five messages before and after; the
 profile as that reporter could see it; or the room's name, topic and owners. A reported picture is
 kept until the report is closed. You can report only what you can see, 10 times an hour, and the
-same thing once while it is open. Random-session reports come with E2; telling the reporter about
-the outcome comes with the dashboard (E3).
+same thing once while it is open. A random chat can be reported during the chat and for 5 minutes
+after it (E2, D-049): the evidence is the realtime server's own record of its last 20 messages.
+Telling the reporter about the outcome comes with the dashboard (E3).
 
 ### 4.2 Word-list filter (baseline, always on)
 
@@ -220,8 +221,10 @@ the outcome comes with the dashboard (E3).
   match anywhere in a token, with their innocent exceptions listed.
 - At most 20 unreviewed flags an hour are kept per person.
 - **Not built (D-045):** room-level word lists set by room owners, and "doxxing patterns" in
-  community mode (contact details in random mode are blocked in E2). Names, bios and room names
+  community mode (contact details in random mode are refused, see 4.3). Names, bios and room names
   are not yet checked against the list.
+- In random mode a flag never carries the text (D-049): random-mode text is stored only in a
+  report's evidence.
 
 ### 4.3 Random mode protections
 
@@ -237,6 +240,16 @@ the outcome comes with the dashboard (E3).
 - Guests (approved, D-025): stricter limits (half the message rate), cannot exchange contacts, banned by
   guest account and hashed IP.
 - Ephemeral: no message text stored; minimal metadata kept 30 days; evidence only through reports.
+
+As built in Stage E2 (D-048 to D-050): the gate is checked by the realtime server on every join,
+not only by the page. Links, email addresses, phone numbers (also spelled as words) and usernames
+on other apps are refused with the rule named, including the usual disguises; ordinary sentences
+with a forgotten space after a full stop pass. The automatic pauses are sanctions like any other
+(audit-log entry by the system, reason shown, visible under Account standing). A paused guest is
+also kept out by a keyed hash of their network address for the same time. The anti-harvesting
+pause is 2 minutes after three skips within 3 seconds each. A site-wide mute pauses random mode
+too. The retention job that deletes metadata after 30 days comes with E5; the function it will
+call exists and is tested.
 
 ### 4.4 Moderation (admin dashboard)
 

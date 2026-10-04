@@ -210,18 +210,19 @@ Random mode is text only. Links, images and attachments are refused (`CONTENT_BL
 
 ### Client → server
 
-| Event            | Payload                                                     | Ack data           | Checks                                                                                              |
-| ---------------- | ----------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------- |
-| `random:join`    | `{ interests: string[] (0 to 5 tags, each 2 to 24 chars) }` | `{ queued: true }` | 18+ gate and terms accepted (current version), no active `random` sanction, rate limit 6 per minute |
-| `random:leave`   | `{}`                                                        | `{}`               |                                                                                                     |
-| `random:message` | `{ sessionId, clientId, text }` (up to 1,000 chars)         | `{ clientId }`     | in that session, rate limit 1 per second (burst 3), word filter (stricter), no links                |
-| `random:typing`  | `{ sessionId, typing }`                                     | none               |                                                                                                     |
-| `random:next`    | `{ sessionId }`                                             | `{ queued: true }` | ends current session and re-queues; rate limit 20 per 10 minutes                                    |
-| `random:end`     | `{ sessionId }`                                             | `{}`               |                                                                                                     |
-| `random:report`  | `{ sessionId, reason, details? }`                           | `{ reportId }`     | allowed up to 5 minutes after the session ends; ends the session                                    |
-| `random:block`   | `{ sessionId }`                                             | `{}`               | signed-in users: creates a `block`; guests: session-scoped avoid list; ends the session             |
-| `random:offer`   | `{ sessionId, offer: 'share_profile' \| 'add_contact' }`    | `{}`               | signed-in, non-guest users only                                                                     |
-| `random:accept`  | `{ sessionId, offer }`                                      | `{}`               |                                                                                                     |
+| Event            | Payload                                                     | Ack data                                   | Checks                                                                                              |
+| ---------------- | ----------------------------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `random:join`    | `{ interests: string[] (0 to 5 tags, each 2 to 24 chars) }` | `{ queued: true }`                         | 18+ gate and terms accepted (current version), no active `random` sanction, rate limit 6 per minute |
+| `random:leave`   | `{}`                                                        | `{}`                                       |                                                                                                     |
+| `random:message` | `{ sessionId, clientId, text }` (up to 1,000 chars)         | `{ clientId }`                             | in that session, rate limit 1 per second (burst 3), word filter (stricter), no links                |
+| `random:typing`  | `{ sessionId, typing }`                                     | none                                       |                                                                                                     |
+| `random:next`    | `{ sessionId }`                                             | `{ queued: true }`                         | ends current session and re-queues; rate limit 20 per 10 minutes                                    |
+| `random:end`     | `{ sessionId }`                                             | `{}`                                       |                                                                                                     |
+| `random:report`  | `{ sessionId, reason, details? }`                           | `{ reportId }`                             | allowed up to 5 minutes after the session ends; ends the session                                    |
+| `random:block`   | `{ sessionId }`                                             | `{}`                                       | signed-in users: creates a `block`; guests: session-scoped avoid list; ends the session             |
+| `random:offer`   | `{ sessionId, offer: 'share_profile' \| 'add_contact' }`    | `{}`                                       | signed-in, non-guest users only                                                                     |
+| `random:accept`  | `{ sessionId, offer }`                                      | `{}`                                       |                                                                                                     |
+| `random:resume`  | `{ sessionId }`                                             | `{ sessionId, sharedInterests, messages }` | after a reconnect, within 15 seconds: this tab takes the chat again and gets its recent messages    |
 
 ### Server → client
 
@@ -235,8 +236,9 @@ the path from a good random chat into the community).
 ### Matching rules
 
 1. On `random:join`, the user enters an in-memory queue with their interest tags.
-2. Every 500 ms (and on every join) the matcher pairs people who share the most tags. A person who
-   has waited 10 seconds without a shared-tag match is paired with anyone (random fallback).
+2. Every 500 ms (and on every join) the matcher pairs people who share the most tags. Without a
+   shared tag, two people are paired once both are open to anyone: they named no interests, or
+   they have waited 10 seconds (random fallback; D-048).
 3. Never pair: two people where either blocked the other, people who were paired with each other
    in the last 10 minutes, or the same account twice.
 4. Pairing creates a `random_session` row (metadata only), and both sockets join a private
@@ -244,6 +246,34 @@ the path from a good random chat into the community).
 5. Messages are relayed and also kept in the in-memory evidence buffer (last 20, both sides).
 6. A session ends on skip/next, end, disconnect (after a 15-second grace period for reconnects),
    report, block, a high-severity filter hit, or 10 minutes of silence.
+
+### As built in Stage E2 (D-048, D-049)
+
+- **One tab:** the chat belongs to the connection that joined. Another tab of the same account is
+  refused (`CONFLICT`). After a dropped connection the tab sends `random:resume`.
+- **Refusals of `random:join`:** `FORBIDDEN` when random mode is switched off, the gate is not
+  accepted for the current rules, or random mode is paused for the person (a random-mode timeout
+  or a site-wide mute, with `retryAfterMs` and the reason; for guests also a pause of their
+  network address); `RATE_LIMITED` during the 2-minute pause after three skips within 3 seconds
+  each; `CONFLICT` when already waiting or chatting.
+- **`random:message`:** a link or contact detail gives `CONTENT_BLOCKED` with the rule named
+  ("Links aren't allowed in random chats."); the chat goes on. The strict filter masks low and
+  medium severity; high severity gives `CONTENT_BLOCKED`, ends the chat for both (`filter`) and
+  pauses the sender for 1 hour. A relayed message reaches both people (`from: 'them'` and
+  `from: 'me'`), so the sender sees exactly what was delivered. A re-send with the same
+  `clientId` is acknowledged and not relayed twice. Guests: burst 3, then 1 every 2 seconds.
+- **`random:ended` reasons as each person sees them:** `skip`, `end`, `disconnect`,
+  `timeout` (10 minutes of silence) and `filter` are the same for both. After a report the
+  reporter sees `report` and the other person `end`; a block is `end` for both. The person who
+  pressed "Next" gets no `random:ended`: the acknowledgement puts them back in the queue.
+- **`random:suggestion`** follows `random:ended` for each person who received it.
+- **`random:offer` and `random:accept`:** only in a live chat, never with a guest on either side
+  (`FORBIDDEN`). Both people sending `random:offer` for the same thing counts as agreement.
+  `random:accept` without an offer from the other person is `CONFLICT`.
+- **`random:report`:** possible in the chat and for 5 minutes after it; `NOT_FOUND` afterwards.
+  It shares the limit of 10 reports an hour with reports made in the web app.
+- **Sanctions and blocks from elsewhere:** the internal events `user.sanctioned` (anything but a
+  warning) and `block.created` take the person out of the queue and end the chat concerned.
 
 ```mermaid
 sequenceDiagram
@@ -340,7 +370,8 @@ Delivery: 3 attempts with back-off inside the web request; if all fail, the even
 | `typing:set`                      | 1 per 2 seconds (extra events dropped silently)                                                           |
 | `sync:request`                    | 6 per minute                                                                                              |
 | `random:join` / `random:next`     | 6 per minute / 20 per 10 minutes                                                                          |
-| `random:message`                  | burst 3, refill 1 per second                                                                              |
+| `random:message`                  | burst 3, refill 1 per second; guests: refill 1 per 2 seconds                                              |
+| `random:typing` / `random:resume` | 1 per 2 seconds (extra dropped silently) / 6 per minute                                                   |
 | Reports                           | 10 per hour per person, counted in the database (every attempt counts, also for things that do not exist) |
 | Repeated `RATE_LIMITED`           | 20 violations in 1 minute disconnects the socket; repeated disconnects add a 15-minute cooldown           |
 

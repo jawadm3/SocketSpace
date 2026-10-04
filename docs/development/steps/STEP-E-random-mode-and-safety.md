@@ -153,7 +153,131 @@ D-045 (the filter), D-046 (reports and evidence), D-047 (sanctions and enforceme
 - Names, bios and room names are not checked against the word list (D-045, waiting for the
   owner's word).
 
+## E2: Random mode (done)
+
+Built in session 7 on the `continuation` branch (2026-10-04). Decisions: D-048 to D-050.
+
+### What was built, and how it works
+
+**In one sentence:** two adults who do not know each other can talk in text, without their words
+ever being saved, with the tools to leave, report and block, and with the server stopping the
+things that make such chats unsafe.
+
+1. **The gate (RAND-02).** Before anything else a person reads six rules and ticks two boxes: "I
+   am 18 or older" and "I accept the rules". The page says honestly that this is the person's own
+   declaration, not an age check. The rules have a version; the account stores which version was
+   accepted, and a new version asks again. The realtime server looks at that record every time
+   someone tries to start a chat, so the page cannot be skipped.
+2. **The queue and the matcher (RAND-03).** People who press "Start chatting" wait in a queue in
+   the realtime server's memory. Twice a second, and whenever someone joins, the matcher pairs
+   people: those who share an interest first (most shared interests, then longest wait), and
+   people without a shared interest once both have waited 10 seconds or named no interests. It
+   never pairs two people when one blocked the other, the same two again within 10 minutes, or an
+   account with itself. The matcher is a small file with no clock, socket or database of its own
+   (`apps/realtime/src/random/matcher.ts`), so each rule has an exact test.
+3. **The relay (RAND-01, RAND-06, RAND-07).** A message is checked and handed to the other person;
+   it is not written to the database or the logs. The checks, in order: is this person in this
+   chat, in this tab; the rate limit; **links and contact details** (refused, with the rule
+   named); the **strict word filter** from E1 (mild and medium words are masked for both people;
+   the worst are not sent, the chat ends, and the sender's random chat is paused for 1 hour).
+4. **The evidence buffer (RAND-04, RAND-07).** The last 20 messages of a chat stay in memory
+   while it goes on and for 5 minutes after it ends. If someone reports the chat in that time,
+   the buffer is copied into the report: each message as written, who sent it, when, and whether
+   it was delivered. Otherwise it is dropped. This is the only way random-chat text can reach the
+   database.
+5. **Leaving, reporting, blocking (RAND-04).** "Next" ends the chat and looks for another; "End"
+   ends it; "Report" ends it and files the report; "Block" ends it and the two are never matched
+   again (for a signed-in person an ordinary block, for a guest a list in memory). The other
+   person always sees an ordinary ending: nobody is told they were reported or blocked. A lost
+   connection gets 15 seconds to come back (`random:resume`, a new event) before the chat ends;
+   10 minutes of silence end it too.
+6. **Automatic pauses (RAND-05).** One hour after a blocked message; 24 hours when three different
+   people reported someone within 24 hours; 2 minutes after three skips within 3 seconds each.
+   The first two are sanctions like a moderator's (E1): written to the audit log by "the system",
+   shown to the person with the reason and the end time, and visible under Account standing.
+7. **Sharing (RAND-08).** "Share profiles" and "Add contact" do nothing until both people asked
+   for the same thing. Then each sees the other's nickname and picture (never a real name), and
+   for a contact each is stored in the other's contacts.
+8. **Guests (RAND-10).** A visitor without an account can start from the home page: accepting the
+   gate creates a guest account that can only use random chat, at half the message rate and
+   without sharing. A paused guest is also kept out by a keyed hash of their network address, so
+   making a new guest account does not help.
+9. **The way into the community (RAND-09).** When a chat ends, public rooms about the shared
+   interests are suggested (then the busiest rooms). Opening one and joining it raises two
+   counters that hold a day, a name and a number, and nothing about who did it.
+10. **The kill switch (RAND-11).** `RANDOM_MODE_ENABLED=false` in both apps hides the links,
+    shows "Random chat is switched off" and makes the realtime server refuse every random event.
+
+**The web pages:** `/app/random` for signed-in people (on the app's one live connection) and
+`/random` for guests (their own connection). Four screens: the lobby (interests, start, the pause
+notice), the search (time waited, "Widening the search to everyone" after 10 seconds, cancel),
+the chat, and the end screen (why it ended, new chat, report, suggested rooms). The rules of the
+screens are a pure function with tests (`apps/web/src/lib/random/state.ts`). Nothing of a chat
+is kept in the browser.
+
+### Decisions
+
+D-048 (matching, the relay, endings, one tab, one instance), D-049 (what is refused and recorded,
+automatic pauses, network address hash), D-050 (gate, guests, kill switch, counters). All marked
+for the owner's review.
+
+### Problems and fixes
+
+- **A newcomer would have lost their chance of a shared-interest match.** The design said someone
+  who has waited 10 seconds is paired with anyone, which includes a person who joined a second
+  ago. The matcher now pairs two people without a shared interest only when both are open to
+  anyone (D-048).
+- **A filter flag would have stored random-chat text.** The data model gave flags an excerpt. For
+  random mode the flag is stored without the text; the text is only ever in a report (D-049).
+- **Two automatic pauses at the same moment** could both have been stored. The function locks the
+  person's row first and adds nothing when a pause at least as long is in force.
+  `applySanction` was split so the same code runs inside that transaction.
+- **A chat ended by a report had no end time in its evidence**, because the end was written to the
+  database in the background. A report now waits for that write.
+- **Tests opened more connections than one address may** (20 at once, 30 a minute, working as
+  designed): the random-mode test servers raise those caps; the caps keep their own tests.
+- **One test was paired with a person left waiting by an earlier test.** Tests now leave the queue
+  when they are done, and that test checks what it means (never paired with the person who left).
+- **The pause notice said the same thing twice** (seen in a screenshot): "paused until ...
+  Reason: ... paused for 24 hours". The automatic reasons now only say why.
+- **The end screen forgot the contact just added and showed an empty message box** (seen in a
+  screenshot). It now says "You and <name> are now contacts" and hides the box when there were no
+  messages.
+- **A long shell command with apostrophes failed again** (as the notes warned); patch scripts were
+  written as files.
+
+### Tests run, with actual results
+
+| What                                          | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm check`                                  | 13/13 tasks. shared 317, db 181, realtime 124 (+2 Redis tests that run in CI), web 268.                                                                                                                                                                                                                                                                                                                                                                              |
+| The same on PostgreSQL 17.9                   | db 181, realtime 124 (+2 skipped), web 268, with `TEST_DATABASE_URL`.                                                                                                                                                                                                                                                                                                                                                                                                |
+| Links and contact details (`contact.test.ts`) | 66 tests: 19 links with disguises, 20 emails, phone numbers and usernames, 26 ordinary sentences let through, speed on hostile input.                                                                                                                                                                                                                                                                                                                                |
+| Matcher (`matcher.test.ts`)                   | 15 tests: shared interests first, most shared, longest wait, fallback only after 10 seconds, a newcomer keeps their own 10 seconds, blocks, the 10-minute rule, 500 people in a queue.                                                                                                                                                                                                                                                                               |
+| Database (`random.test.ts`, db)               | 25 tests: gate, metadata without a text column, reports and their evidence, counting different reporters, automatic pauses, the network-address pause, contacts, suggestions, counters, deletion after 30 days.                                                                                                                                                                                                                                                      |
+| Live (`random.test.ts`, realtime)             | 37 tests with real sockets on four test servers: gate, matching, relay, refusals, the filter, skip, end, cooldown, reports, three reports, sharing, guests, reconnect, moderators and blocks, metrics, evidence lifetime, silence, shutdown, kill switch.                                                                                                                                                                                                            |
+| Do the tests have teeth?                      | With the link and contact check switched off, 5 tests fail; with the block check in the matcher switched off, 4 tests fail. Both restored.                                                                                                                                                                                                                                                                                                                           |
+| Browser rules (`state.test.ts`, web)          | 18 tests: screens, messages while sending and after, events of another chat ignored, offers, endings, reconnect.                                                                                                                                                                                                                                                                                                                                                     |
+| End-to-end (Playwright, Chromium)             | 21/21 in 2.7 min. Three new tests for journey J7: the gate, a shared-interest match while someone else waits, links refused, a masked word, a report whose evidence is the server's record and no chat text anywhere else in the database; the random match after 9 seconds or more, add contact only when both ask, a suggested room opened and joined with both counters going up, the pause notice with its end time; a guest from the home page with no sharing. |
+| Kill switch in the web app                    | Production build started with `RANDOM_MODE_ENABLED=false`: `/random` shows "Random chat is switched off" and no gate; the home page has no guest link.                                                                                                                                                                                                                                                                                                               |
+| Screenshots inspected (`E2E_SHOTS=1`)         | Gate, lobby, search, chat with refused links and a masked word, report form, end screen with suggestions, pause notice, guest gate and guest chat. Two faults found and fixed (above).                                                                                                                                                                                                                                                                               |
+
+### What E2 leaves for later
+
+- **The daily job that deletes chat metadata after 30 days** is E5; the function it will call
+  (`deleteOldRandomSessions`) exists and is tested.
+- **Reports of random chats are stored but nobody can read them in the app** until the moderation
+  dashboard (E3), which must show the evidence of the new kind (`kind: 'random_session'`).
+- **`random_guest_signed_up`** (a guest who creates an account) is not counted (D-050).
+- **Random mode assumes one realtime instance** (D-048).
+- **The three-reports rule in a real browser:** the rule itself is tested on live connections;
+  the browser journey applies the same pause through the database function and checks what the
+  person sees.
+- **Legal pages** linked from the gate come with E5 (SAFE-03).
+
 ## What comes next
 
-E2: random mode (gate, guests, queue and matcher, relay with the strict filter, evidence buffer,
-offers, cooldowns and timeouts, room suggestions, metrics, kill switch). Then E3, E4 and E5.
+E3: the moderation dashboard (queues for reports and flags, including reports of random chats;
+the actions that call `sanctionUser` and `liftUserSanction`; removing and restoring messages;
+how the first administrator is made). Then E4 (AI moderation) and E5 (legal pages, account
+deletion, export, the daily retention job).

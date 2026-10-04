@@ -14,6 +14,8 @@ everyday example. Terms are in alphabetical order. New terms are added as they a
 The default one works inside one server; the Redis adapter passes messages between several servers.
 _Example:_ a single room's loudspeaker versus a public-address system linking several buildings.
 
+**Age gate (18+ gate)**: A page that must be passed before a feature for adults can be used. In SocketSpace, random chat shows its rules and two boxes to tick ("I am 18 or older", "I accept the rules"); the server remembers which version of the rules was accepted and refuses to start a chat without it. It is a self-declaration, not a check of anyone's age. _Example:_ the sign at a cinema door asking you to confirm your age: it relies on your word.
+
 **Annotated tag (git)**: A permanent, named bookmark on one exact version of the code, with a note
 attached saying what it is. _Example:_ writing "Version 1, as handed in" on the back of a photo of
 your finished project. SocketSpace v1 is tagged `v1.0.0`.
@@ -113,6 +115,8 @@ on any ship, train or lorry.
 
 **Event cursor (gap detection)**: The number of the last change a browser has applied in a conversation. Every change gets the next number, so if change 12 arrives when the cursor is at 10, the browser knows it missed 11 and asks the server for it. _Example:_ numbered pages of a letter: if page 3 follows page 1, you know page 2 is missing.
 
+**Evidence buffer**: The last 20 messages of a random chat, kept only in the realtime server's memory while the chat goes on and for 5 minutes afterwards. If someone reports the chat in that time, the buffer is copied into the report; otherwise it is thrown away. It is the only way random-chat text can ever be stored. _Example:_ a shop's security camera that records over itself every few minutes unless someone presses "keep this".
+
 **Evidence snapshot**: A copy of what was reported, taken by the server at the moment of the report: the message as it was written, the messages around it, or the profile as the reporter saw it. A later edit or deletion does not change it. _Example:_ a dated photo of the damage, taken by the insurer rather than described by the claimant.
 
 **EXIF**: Hidden information stored inside photos, such as the camera model and sometimes the GPS
@@ -139,7 +143,11 @@ over their personal data (see it, correct it, delete it, take it elsewhere).
 
 **Git hook (pre-commit)**: A small script git runs automatically at a certain moment, for example just before saving a commit. _Example:_ a spell-check that runs when you press "send". SocketSpace's pre-commit hook refuses a commit that contains something that looks like a secret.
 
+**Grace period (reconnect)**: A short wait before giving up on someone whose connection dropped. In a random chat the server waits 15 seconds for the tab to come back and pick the chat up again; only then is the other person told the chat ended. _Example:_ holding the lift door for a moment because someone is running towards it.
+
 **Graceful shutdown**: Stopping a server politely: refuse new work, finish what is in progress, tell connected people to reconnect, then exit. _Example:_ a shop that locks the door at closing time but serves the customers already inside.
+
+**Guest account**: A temporary account without an email address or a name, created when a visitor starts random chat without signing up. It can do nothing but random chat, with stricter limits, and cannot exchange contacts. _Example:_ a day pass to a gym: you may use one room, and it is not a membership.
 
 **Have I Been Pwned (k-anonymity)**: A public list of passwords that have leaked in data breaches. SocketSpace sends only the first 5 characters of a password's SHA-1 fingerprint and checks the matching list itself, so the password never leaves the server. _Example:_ asking a librarian for "all books whose titles start with QX" instead of naming the one book you want.
 
@@ -173,6 +181,8 @@ register of official stamps so anyone can check a pass is genuine.
 **JWT / signed token**: A small piece of text containing facts (such as "this is user 42, valid for
 5 minutes") plus a signature proving who issued it. _Example:_ a dated, stamped visitor pass.
 
+**Kill switch**: One setting that turns a whole feature off at once, without changing the code. `RANDOM_MODE_ENABLED=false` hides random chat in the web app and makes the realtime server refuse every random-chat event. _Example:_ the red emergency-stop button on a machine.
+
 **LCP / TBT / Lighthouse**: Page-speed measures. LCP (Largest Contentful Paint) is how long until
 the main content appears; TBT (Total Blocking Time) is how long the page is too busy to respond;
 Lighthouse is Google's free tool that measures them. _Example:_ how long until the curtain rises,
@@ -204,6 +214,8 @@ _Example:_ checking what is actually inside a box rather than trusting the label
 
 **Masking**: Showing mask characters ("••••") in place of a word the filter matched. The stored message keeps the word, so the moderator who reviews it sees what was written. _Example:_ a bleep over a word on the radio.
 
+**Matcher (match queue)**: The part of the realtime server that decides who talks to whom in random chat. People wait in a queue held in memory; every half second the matcher pairs those who share an interest, and after 10 seconds of waiting pairs people with anyone. It never pairs two people when one blocked the other, or the same two again within 10 minutes. _Example:_ a host at a party who introduces guests with something in common first, and anyone still standing alone after a while to each other.
+
 **Migration (database)**: A small, versioned script that changes the database structure (for
 example, adds a table). _Example:_ numbered renovation plans applied to a house in order.
 
@@ -213,6 +225,8 @@ trays instead of three separate toolboxes.
 **MoSCoW**: A way to prioritise: Must have, Should have, Could have, Won't have (this time).
 
 **Mutation check**: Deliberately breaking the code a test protects, to prove the test notices. A test that still passes against broken code was not testing anything. _Example:_ pressing the test button on a smoke alarm.
+
+**Network ban (hashed address)**: Keeping a network address out for a while, used for guests whose random chat was paused (a new guest account would otherwise get round it). The address itself is never stored: only a keyed hash of it (see HMAC), which cannot be turned back into the address. _Example:_ a doorman who remembers a wristband number rather than your name.
 
 **Nonce**: A random value used once. The page's security policy only lets scripts run that carry this request's nonce, so an injected script, which cannot guess it, does not run. _Example:_ a password that changes every time the door opens.
 
@@ -282,6 +296,8 @@ coffee loyalty card that allows a few free refills per hour.
 **Redis**: A very fast in-memory data store, often used to pass messages between servers. SocketSpace can use it to link several realtime servers (the Redis adapter); the free deployment runs one server and does not need it. _Example:_ a shared noticeboard between several office buildings.
 
 **Reducer**: A small function that takes the current state and one event and returns the next state, without side effects, which makes the rules easy to test. The chat screen's rules (ordering, duplicates, gaps) are a reducer. _Example:_ a referee's rule book: given the score and what just happened, it says what the new score is.
+
+**Relay**: Passing a message straight on from one person to the other without storing it. Random chat is relayed: the realtime server checks each message, hands it to the other person, and keeps no copy in the database. _Example:_ someone passing a note across a table: they look at it, hand it on, and do not file it.
 
 **Remote (git)**: The address of the shared copy of the repository. _Example:_ the postal address
 you send your work to.
