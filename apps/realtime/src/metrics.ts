@@ -7,6 +7,7 @@ import { monitorEventLoopDelay } from 'node:perf_hooks';
 
 export class Metrics {
   private readonly counters = new Map<string, number>();
+  private readonly gauges = new Map<string, { help: string; read: () => number }>();
   private readonly loopDelay = monitorEventLoopDelay({ resolution: 20 });
   private readonly startedMs = Date.now();
   connections = 0;
@@ -18,6 +19,11 @@ export class Metrics {
   increment(name: string, labels: Record<string, string> = {}, by = 1): void {
     const key = `${name}${formatLabels(labels)}`;
     this.counters.set(key, (this.counters.get(key) ?? 0) + by);
+  }
+
+  /** A value read when the metrics are asked for (for example the random queue's length). */
+  registerGauge(name: string, help: string, read: () => number): void {
+    this.gauges.set(name, { help, read });
   }
 
   /** Current value of a counter (for tests). */
@@ -40,6 +46,13 @@ export class Metrics {
       '# TYPE ss_memory_rss_bytes gauge',
       `ss_memory_rss_bytes ${String(process.memoryUsage().rss)}`,
     ];
+    for (const [name, gauge] of this.gauges) {
+      lines.push(
+        `# HELP ${name} ${gauge.help}`,
+        `# TYPE ${name} gauge`,
+        `${name} ${String(Math.round(gauge.read()))}`,
+      );
+    }
     const byName = new Map<string, string[]>();
     for (const [key, value] of [...this.counters.entries()].sort()) {
       const name = key.split('{')[0] ?? key;

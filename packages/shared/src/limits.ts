@@ -72,6 +72,35 @@ export const LIMITS = {
     interestsMax: 5,
     interestMinChars: 2,
     interestMaxChars: 24,
+    /** The matcher runs this often while people are waiting (realtime-protocol.md). */
+    matchIntervalMs: 500,
+    /** After waiting this long without a shared interest, a person is paired with anyone. */
+    fallbackAfterMs: 10_000,
+    /** The same two people are not paired again within this time. */
+    rematchAfterMs: 10 * 60_000,
+    /** Messages of a chat kept in memory for a report (both sides together). */
+    evidenceMessages: 20,
+    /** How long that memory is kept after the chat ends; reports are possible until then. */
+    evidenceKeepMs: 5 * 60_000,
+    /** A dropped connection may come back within this time before the chat ends. */
+    reconnectGraceMs: 15_000,
+    /** A chat with no message for this long ends. */
+    silenceMs: 10 * 60_000,
+    /** Skipping a chat younger than this counts as a "fast skip" (security.md 4.3). */
+    fastSkipMs: 3000,
+    /** This many fast skips in a row pause matching for `skipCooldownMs`. */
+    fastSkipsBeforeCooldown: 3,
+    skipCooldownMs: 2 * 60_000,
+    /** Automatic random-mode timeout after a high-severity filter hit. */
+    filterTimeoutSeconds: 60 * 60,
+    /** Reports from this many different people within the window bring an automatic timeout. */
+    reportsForTimeout: 3,
+    reportWindowSeconds: 24 * 60 * 60,
+    reportTimeoutSeconds: 24 * 60 * 60,
+    /** Rooms suggested when a chat ends. */
+    suggestedRooms: 5,
+    /** Random-chat metadata is deleted after this many days (data-model.md, "Retention"). */
+    sessionRetentionDays: 30,
   },
 
   report: {
@@ -131,7 +160,15 @@ export const RATE_LIMITS = {
   'read:update': { burst: 30, perSecond: 2 },
   'delivery:ack': { burst: 10, perSecond: 1 },
   'presence:set': { burst: 5, perSecond: 0.2 },
+  'random:join': { burst: 6, perSecond: 6 / 60 },
+  'random:next': { burst: 20, perSecond: 20 / 600 },
+  'random:message': { burst: 3, perSecond: 1 },
+  'random:typing': { burst: 1, perSecond: 0.5 },
+  'random:resume': { burst: 6, perSecond: 6 / 60 },
 } as const satisfies Record<string, BucketSpec>;
+
+/** Guests in random mode send at half the rate of signed-in people (RAND-10, D-025). */
+export const RANDOM_GUEST_MESSAGE_LIMIT: BucketSpec = { burst: 3, perSecond: 0.5 };
 
 /** 20 rate-limit violations within this window disconnects the socket. */
 export const ABUSE = {

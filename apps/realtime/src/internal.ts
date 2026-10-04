@@ -24,6 +24,7 @@ import { sendPresenceSnapshot } from './handlers/presence';
 import type { Logger } from './logger';
 import type { Metrics } from './metrics';
 import type { PresenceTracker } from './presence';
+import type { RandomManager } from './random/manager';
 import { rooms, type IoServer } from './types';
 
 export interface InternalEventDeps {
@@ -31,6 +32,8 @@ export interface InternalEventDeps {
   db: Queryable;
   /** When given, profile changes also update invisible mode (PROF-02). */
   presence?: PresenceTracker;
+  /** When given, sanctions and blocks also reach random mode (RAND-04, RAND-05). */
+  random?: RandomManager | null;
 }
 
 /** How each sanction is named in the notice the person receives. */
@@ -93,6 +96,8 @@ export async function applyInternalEvent(
         reason: event.reason,
         until: event.until,
       });
+      // Anything but a warning also stops random mode: out of the queue, chat ended.
+      if (event.kind !== 'warn') deps.random?.removeUser(event.userId);
       if (event.kind === 'suspend' || event.kind === 'ban') {
         await endSockets(
           io,
@@ -223,6 +228,8 @@ export async function applyInternalEvent(
       return;
     }
     case 'block.created': {
+      // They leave any random chat with each other and are not matched again (RAND-04).
+      deps.random?.blockCreated(event.blockerId, event.blockedId);
       // Their DM can no longer be written to: both people's pages re-read it (SAFE-01).
       const dmId = await findDmBetween(db, event.blockerId, event.blockedId);
       if (!dmId) return;
@@ -276,6 +283,7 @@ export class OutboxDrainer {
       logger: Logger;
       metrics: Metrics;
       presence?: PresenceTracker;
+      random?: RandomManager | null;
     },
     private readonly minIntervalMs = 10_000,
   ) {}

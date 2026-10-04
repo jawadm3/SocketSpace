@@ -25,7 +25,7 @@ import type { LiftableSanctionKind, SanctionKind, SanctionScope } from '@sockets
 import { LIMITS } from '@socketspace/shared/limits';
 import { codePointLength } from '@socketspace/shared/text';
 
-import type { Database, Queryable } from '../client';
+import type { Database, Queryable, Transaction } from '../client';
 import { dbNow } from '../clock';
 import { newId } from '../schema/_common';
 import { session, user } from '../schema/auth';
@@ -146,6 +146,14 @@ export async function applySanction(
   db: Database,
   input: ApplySanctionInput,
 ): Promise<ApplySanctionResult> {
+  return db.transaction((tx) => applySanctionIn(tx, input));
+}
+
+/** `applySanction` inside a transaction the caller already opened (automatic timeouts). */
+export async function applySanctionIn(
+  tx: Transaction,
+  input: ApplySanctionInput,
+): Promise<ApplySanctionResult> {
   const refuse = (reason: SanctionRefusal) => ({ ok: false, reason }) as const;
   const reason = input.reason.trim();
   const invalid = checkReason(reason) ?? checkDuration(input.kind, input.durationSeconds);
@@ -153,83 +161,81 @@ export async function applySanction(
   const clock = dbNow(input.now);
   const seconds = input.kind === 'warn' ? WARNING_SHOWN_SECONDS : input.durationSeconds;
 
-  return db.transaction(async (tx) => {
-    if (input.actor.type === 'system') {
-      if (input.kind !== 'random_timeout') return refuse('system_not_allowed');
-    } else {
-      if (!(await isAdmin(tx, input.actor.id))) return refuse('not_admin');
-      if (input.actor.id === input.targetUserId) return refuse('self');
-    }
-    const [target] = await tx
-      .select({ id: user.id, role: user.role, status: user.status })
-      .from(user)
-      .where(eq(user.id, input.targetUserId))
-      .for('update');
-    if (!target || target.status === 'deleted') return refuse('target_not_found');
-    if (target.role === 'admin') return refuse('target_is_admin');
+  if (input.actor.type === 'system') {
+    if (input.kind !== 'random_timeout') return refuse('system_not_allowed');
+  } else {
+    if (!(await isAdmin(tx, input.actor.id))) return refuse('not_admin');
+    if (input.actor.id === input.targetUserId) return refuse('self');
+  }
+  const [target] = await tx
+    .select({ id: user.id, role: user.role, status: user.status })
+    .from(user)
+    .where(eq(user.id, input.targetUserId))
+    .for('update');
+  if (!target || target.status === 'deleted') return refuse('target_not_found');
+  if (target.role === 'admin') return refuse('target_is_admin');
 
-    const scope = SCOPE[input.kind];
-    const actionId = newId();
-    const [action] = await tx
-      .insert(moderationAction)
-      .values({
-        id: actionId,
-        actorId: input.actor.type === 'system' ? SYSTEM_ACTOR_ID : input.actor.id,
-        action: input.kind,
-        targetUserId: target.id,
-        reportId: input.reportId ?? null,
-        reason,
-        expiresAt:
-          seconds === undefined || input.kind === 'warn'
-            ? null
-            : sql`${clock} + make_interval(secs => ${seconds})`,
-        metadata: { scope, automatic: input.actor.type === 'system' },
-        ...(input.now && { createdAt: input.now }),
-      })
-      .returning({ id: moderationAction.id });
-    if (!action) throw new Error('INSERT ... RETURNING returned no row');
+  const scope = SCOPE[input.kind];
+  const actionId = newId();
+  const [action] = await tx
+    .insert(moderationAction)
+    .values({
+      id: actionId,
+      actorId: input.actor.type === 'system' ? SYSTEM_ACTOR_ID : input.actor.id,
+      action: input.kind,
+      targetUserId: target.id,
+      reportId: input.reportId ?? null,
+      reason,
+      expiresAt:
+        seconds === undefined || input.kind === 'warn'
+          ? null
+          : sql`${clock} + make_interval(secs => ${seconds})`,
+      metadata: { scope, automatic: input.actor.type === 'system' },
+      ...(input.now && { createdAt: input.now }),
+    })
+    .returning({ id: moderationAction.id });
+  if (!action) throw new Error('INSERT ... RETURNING returned no row');
 
-    const [row] = await tx
-      .insert(userSanction)
-      .values({
-        id: newId(),
-        userId: target.id,
-        kind: input.kind,
-        scope,
-        reason,
-        actionId,
-        startsAt: clock,
-        expiresAt: seconds === undefined ? null : sql`${clock} + make_interval(secs => ${seconds})`,
-      })
-      .returning();
-    if (!row) throw new Error('INSERT ... RETURNING returned no row');
+  const [row] = await tx
+    .insert(userSanction)
+    .values({
+      id: newId(),
+      userId: target.id,
+      kind: input.kind,
+      scope,
+      reason,
+      actionId,
+      startsAt: clock,
+      expiresAt: seconds === undefined ? null : sql`${clock} + make_interval(secs => ${seconds})`,
+    })
+    .returning();
+  if (!row) throw new Error('INSERT ... RETURNING returned no row');
 
-    let sessionsRevoked = false;
-    if (input.kind === 'suspend' || input.kind === 'ban') {
-      // A ban outranks a suspension; neither touches a deleted account (refused above).
-      const status = input.kind === 'ban' || target.status === 'banned' ? 'banned' : 'suspended';
-      await tx.update(user).set({ status }).where(eq(user.id, target.id));
-      await tx.delete(session).where(eq(session.userId, target.id));
-      sessionsRevoked = true;
-    }
-    // The person finds the reason on their account page, also if they were offline (ADMIN-03).
-    await tx.insert(notification).values({ id: newId(), userId: target.id, type: 'moderation' });
+  let sessionsRevoked = false;
+  if (input.kind === 'suspend' || input.kind === 'ban') {
+    // A ban outranks a suspension; neither touches a deleted account (refused above).
+    const status = input.kind === 'ban' || target.status === 'banned' ? 'banned' : 'suspended';
+    await tx.update(user).set({ status }).where(eq(user.id, target.id));
+    await tx.delete(session).where(eq(session.userId, target.id));
+    sessionsRevoked = true;
+  }
+  // The person finds the reason on their account page, also if they were offline (ADMIN-03).
+  await tx.insert(notification).values({ id: newId(), userId: target.id, type: 'moderation' });
 
-    return {
-      ok: true,
-      sanction: {
-        id: row.id,
-        userId: row.userId,
-        kind: row.kind,
-        scope: row.scope,
-        reason: row.reason,
-        // A warning has nothing that ends: its date only says how long it is shown.
-        expiresAt: input.kind === 'warn' ? null : row.expiresAt,
-        actionId,
-      },
-      sessionsRevoked,
-    } as const;
-  });
+  return {
+    ok: true,
+    sanction: {
+      id: row.id,
+      userId: row.userId,
+      kind: row.kind,
+      scope: row.scope,
+      reason: row.reason,
+      // A warning has nothing that ends: its date only says how long it is shown.
+      expiresAt: input.kind === 'warn' ? null : row.expiresAt,
+      actionId,
+    },
+    sessionsRevoked,
+  } as const;
 }
 
 export interface LiftSanctionInput {

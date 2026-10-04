@@ -96,6 +96,9 @@ export const webEnvSchema = z.object({
    */
   LINK_PREVIEW_DEV_HOSTS: optional,
 
+  /** The kill switch for random-match mode (RAND-11): `false` hides and refuses it. */
+  RANDOM_MODE_ENABLED: envBoolean.default(true),
+
   LOG_LEVEL: envLogLevel.default('info'),
 });
 

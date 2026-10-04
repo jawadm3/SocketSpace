@@ -97,7 +97,7 @@ export class InFlight {
  * beyond the rate are dropped silently and invalid payloads ignored (realtime-protocol.md, rate
  * limits). A failure in an asynchronous handler is logged by name and code only.
  */
-export function registerSignal<E extends 'typing:set' | 'delivery:ack'>(
+export function registerSignal<E extends 'typing:set' | 'delivery:ack' | 'random:typing'>(
   socket: IoSocket,
   ctx: HandlerContext,
   event: E,
@@ -130,8 +130,11 @@ export function registerHandler<E extends AckedClientEventName>(
   inFlight: InFlight,
   event: E,
   handler: Handler<E>,
+  /** A different rate for this connection (for example guests in random mode). */
+  bucketFor?: (socket: IoSocket) => BucketSpec | undefined,
 ): void {
-  const spec: BucketSpec = (RATE_LIMITS as Record<string, BucketSpec>)[event] ?? DEFAULT_BUCKET;
+  const spec: BucketSpec =
+    bucketFor?.(socket) ?? (RATE_LIMITS as Record<string, BucketSpec>)[event] ?? DEFAULT_BUCKET;
   const schema = CLIENT_EVENTS[event].payload;
 
   // The typed event maps describe what well-behaved browsers send; at run time anything can

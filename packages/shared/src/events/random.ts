@@ -97,6 +97,15 @@ export const randomEndedSchema = z.strictObject({
   sessionId: uuid,
   reason: z.enum(RANDOM_END_REASONS),
 });
+/**
+ * Answer to `random:resume`: the chat is still going, and these are its recent messages as this
+ * person may see them (oldest first), so anything missed while reconnecting can be filled in.
+ */
+export const randomResumeAckSchema = z.strictObject({
+  sessionId: uuid,
+  sharedInterests: z.array(z.string()),
+  messages: z.array(randomMessageEventSchema).max(LIMITS.random.evidenceMessages),
+});
 export const randomSuggestionSchema = z.strictObject({
   rooms: z
     .array(

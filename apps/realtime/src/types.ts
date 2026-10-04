@@ -7,6 +7,7 @@ import type { TokenBuckets, ViolationCounter } from './limits';
 import type { Logger } from './logger';
 import type { Metrics } from './metrics';
 import type { PresenceTracker } from './presence';
+import type { RandomManager } from './random/manager';
 
 /** What the server knows about each authenticated connection. */
 export interface SocketData {
@@ -43,6 +44,8 @@ export interface HandlerContext {
   metrics: Metrics;
   buckets: TokenBuckets;
   presence: PresenceTracker;
+  /** Random-match mode; null when it is switched off (RANDOM_MODE_ENABLED=false). */
+  random: RandomManager | null;
   /** Called after database work, so the outbox is drained opportunistically (never on a timer). */
   afterDatabaseWork: () => void;
 }

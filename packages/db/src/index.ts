@@ -29,6 +29,7 @@ export * from './queries/attachments';
 export * from './queries/link-previews';
 export * from './queries/reports';
 export * from './queries/sanctions';
+export * from './queries/random';
 export { loadMessageWires, toMessageWire } from './wire';
 export { visibleBody } from './masking';
 export { isUniqueViolation } from './errors';

@@ -19,6 +19,7 @@
     "./media": "./src/media.ts",
     "./primitives": "./src/primitives.ts",
     "./profile": "./src/profile.ts",
+    "./random": "./src/random.ts",
     "./realtime-token": "./src/realtime-token.ts",
     "./reports": "./src/reports.ts",
     "./rooms": "./src/rooms.ts",

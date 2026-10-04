@@ -5,7 +5,7 @@
  */
 import { createClient } from 'redis';
 
-import { createPgDatabase } from '@socketspace/db';
+import { closeOpenRandomSessions, createPgDatabase } from '@socketspace/db';
 import { EnvError } from '@socketspace/shared/env';
 
 import { createRealtimeServer, type RedisClients } from './app';
@@ -77,6 +77,13 @@ async function main(): Promise<void> {
     'realtime server listening',
   );
   void server.outbox.drain();
+  // Random chats live in memory, so chats a crashed server left open can never continue. With one
+  // instance (no Redis) every open chat is such a leftover and is recorded as ended.
+  if (!redis && env.RANDOM_MODE_ENABLED) {
+    closeOpenRandomSessions(database.db).catch((error: unknown) => {
+      logger.warn({ error: describeError(error) }, 'open random chats not closed');
+    });
+  }
 
   let exiting = false;
   const shutdown = (signal: string) => {

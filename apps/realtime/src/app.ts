@@ -38,6 +38,7 @@ import { ABUSE, LIMITS } from '@socketspace/shared/limits';
 import type { RealtimeEnv } from './env';
 import { describeError, InFlight } from './handlers/define';
 import { registerMessageHandlers } from './handlers/messages';
+import { registerRandomHandlers } from './handlers/random';
 import {
   announcePresence,
   conversationRoomsOf,
@@ -50,6 +51,7 @@ import type { Logger } from './logger';
 import { Metrics } from './metrics';
 import { PresenceTracker } from './presence';
 import { clientIp, isAllowedOrigin } from './network';
+import { RandomManager, type RandomTimings } from './random/manager';
 import { verifyConnectionToken, type KeySource } from './token';
 import { rooms, type HandlerContext, type IoServer } from './types';
 
@@ -67,6 +69,8 @@ export interface RealtimeDeps {
   logger: Logger;
   closeDb?: () => Promise<void>;
   redis?: RedisClients;
+  /** Shorter waits for tests (random mode's timers). */
+  randomTimings?: Partial<RandomTimings>;
 }
 
 export interface RealtimeServer {
@@ -172,7 +176,22 @@ export function createRealtimeServer(deps: RealtimeDeps): RealtimeServer {
   });
   if (deps.redis) io.adapter(createAdapter(deps.redis.pub, deps.redis.sub));
 
-  const outbox = new OutboxDrainer({ db, io, logger, metrics, presence });
+  // Random-match mode, unless the kill switch is off (RAND-11). Network addresses are hashed with
+  // a key derived from a secret this server already has, so no raw address is ever stored.
+  const random = env.RANDOM_MODE_ENABLED
+    ? new RandomManager({
+        io,
+        db,
+        logger,
+        metrics,
+        ipHashSecret: env.INTERNAL_EVENTS_SECRET,
+        afterDatabaseWork: () => {
+          outbox.maybeDrain();
+        },
+        ...(deps.randomTimings && { timings: deps.randomTimings }),
+      })
+    : null;
+  const outbox = new OutboxDrainer({ db, io, logger, metrics, presence, random });
   const ctx: HandlerContext = {
     db,
     io,
@@ -180,6 +199,7 @@ export function createRealtimeServer(deps: RealtimeDeps): RealtimeServer {
     metrics,
     buckets,
     presence,
+    random,
     afterDatabaseWork: () => {
       outbox.maybeDrain();
     },
@@ -284,6 +304,7 @@ export function createRealtimeServer(deps: RealtimeDeps): RealtimeServer {
     logger.debug({ socketId: socket.id, userId: socket.data.userId }, 'connection accepted');
     registerMessageHandlers(socket, ctx, inFlight);
     registerPresenceHandlers(socket, ctx, inFlight);
+    registerRandomHandlers(socket, ctx, inFlight);
 
     // Presence: tell people who share a conversation, and show this tab who is online.
     const conversationRooms = conversationRoomsOf(socket);
@@ -301,6 +322,7 @@ export function createRealtimeServer(deps: RealtimeDeps): RealtimeServer {
     );
     socket.on('disconnecting', () => {
       // Rooms are still known here (they are gone by 'disconnect').
+      random?.socketClosed(socket);
       const left = presence.disconnect(socket.data.userId, socket.id);
       if (!left) return;
       announcePresence(io, conversationRoomsOf(socket), left, new Date().toISOString());
@@ -394,7 +416,7 @@ export function createRealtimeServer(deps: RealtimeDeps): RealtimeServer {
         sendJson(res, 409, { error: 'replayed' });
         return;
       }
-      await applyInternalEvent({ io, db, presence }, event.data);
+      await applyInternalEvent({ io, db, presence, random }, event.data);
       metrics.increment('ss_internal_events_total', { result: 'applied', type: event.data.type });
       res.writeHead(204, { 'Cache-Control': 'no-store' });
       res.end();
@@ -408,6 +430,7 @@ export function createRealtimeServer(deps: RealtimeDeps): RealtimeServer {
   const sweeper = setInterval(() => {
     buckets.sweep();
     tracker.sweep();
+    random?.sweep();
   }, 60_000);
   sweeper.unref();
 
@@ -432,6 +455,8 @@ export function createRealtimeServer(deps: RealtimeDeps): RealtimeServer {
       io.emit('session:ended', { reason: 'server_shutdown', reconnectAfterMs: 2_000 });
       // 2. Let in-flight messages finish saving, so nothing acknowledged is lost.
       await inFlight.idle(Math.floor(env.SHUTDOWN_GRACE_MS / 2));
+      // Random chats cannot outlive this server's memory: they are recorded as ended.
+      await random?.stop();
       // 3. Close connections and the HTTP server.
       await new Promise<void>((done) => {
         void io.close(() => {

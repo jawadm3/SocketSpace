@@ -104,6 +104,21 @@ function fold(raw: string, oneAs: 'i' | 'l', inWord = false): string {
   return out;
 }
 
+/**
+ * Case, width, accents, invisible characters and look-alike letters undone, with digits and
+ * punctuation kept as they are (no leet-speak). Used where digits matter: links, phone numbers.
+ */
+export function foldPlain(raw: string): string {
+  const plain = raw
+    .normalize('NFKC')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(MARKS_AND_INVISIBLE, '');
+  let out = '';
+  for (const char of plain) out += LOOK_ALIKE_MAP.get(char) ?? char;
+  return out;
+}
+
 /** One character of a spaced-out word ("s h 1 t"): read as part of a word, so leet applies. */
 export function foldLetter(raw: string, oneAs: 'i' | 'l'): string {
   return fold(raw, oneAs, true);

@@ -106,7 +106,29 @@ export type ReportEvidence = EvidenceBase &
         };
         owners: { id: string; nickname: string | null }[];
       }
+    | {
+        kind: 'random_session';
+        session: {
+          id: string;
+          startedAt: string;
+          endedAt: string | null;
+          endReason: string | null;
+          sharedInterestCount: number;
+        };
+        /** The chat's last messages as the server relayed them (at most 20), oldest first. */
+        messages: RandomEvidenceMessage[];
+      }
   );
+
+/** One message of a reported random chat, copied from the realtime server's memory. */
+export interface RandomEvidenceMessage {
+  from: 'reporter' | 'reported';
+  /** As written (the other person may have seen it masked). */
+  text: string;
+  at: string;
+  /** False: stopped by the filter, so the other person never saw it. */
+  delivered: boolean;
+}
 
 const OPEN_STATUSES = ['open', 'in_review'] as const;
 
@@ -348,9 +370,13 @@ export interface WordListFlagInput {
   /** `medium`: the message was stored and masked. `high`: it was blocked and never stored. */
   severity: 'medium' | 'high';
   categories: readonly string[];
-  /** The flagged message's own text. */
+  /**
+   * The flagged message's own text. Empty for random mode: its text is never stored outside a
+   * report (RAND-07), so the flag says who, when, how severe and which categories.
+   */
   text: string;
   messageId?: string | null;
+  randomSessionId?: string | null;
 }
 
 /**
@@ -380,6 +406,7 @@ export async function recordWordListFlag(
     severity: input.severity,
     categories: [...input.categories],
     messageId: input.messageId ?? null,
+    randomSessionId: input.randomSessionId ?? null,
     excerpt: Array.from(input.text).slice(0, LIMITS.flag.excerptMax).join(''),
     userId: input.userId,
   });

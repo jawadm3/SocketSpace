@@ -126,6 +126,7 @@ describe('event tables', () => {
         'random:block',
         'random:offer',
         'random:accept',
+        'random:resume',
       ].sort(),
     );
   });
